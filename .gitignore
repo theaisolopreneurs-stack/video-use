@@ -58,3 +58,14 @@ master.srt
 takes_packed.md
 edl.json
 project.md
+
+# Our project: raw footage and renders stay local (too big for GitHub)
+footage/
+renders/
+*.mp4
+*.mov
+*.mkv
+*.m4v
+*.avi
+*.wav
+*.mp3
