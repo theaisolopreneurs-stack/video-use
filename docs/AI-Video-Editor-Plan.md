@@ -15,7 +15,7 @@ Updated 2026-10-28 with features seen in @justyn.ai's viral reel (Oct 10, 2026).
 5. **Self-review**: pull frames at every cut and overlay, check for problems, re-render (max 3 rounds).
 6. **You give notes in plain English** ("bigger captions", "cut the second story") and it revises.
 
-Starting point: fork **video-use** (MIT), swap its paid ElevenLabs transcription for local **whisper.cpp**, then add our own skills.
+Starting point: fork **video-use** (MIT), swap its paid ElevenLabs transcription for local **faster-whisper**, then add our own skills.
 
 ---
 
@@ -25,7 +25,7 @@ Starting point: fork **video-use** (MIT), swap its paid ElevenLabs transcription
 |---|---|
 | Brain / orchestration | Claude Code (existing plan) |
 | Cut, render, audio, color | FFmpeg |
-| Transcription | whisper.cpp (local, native on Snapdragon/ARM) |
+| Transcription | faster-whisper (local, `base.en` model to start) |
 | Quick silence removal | auto-editor |
 | Motion graphics, titles, UI mockups | HyperFrames (Apache 2.0) + GSAP — needs Node 22 + Chrome |
 | Captions | Styled .ass subtitles burned in with FFmpeg |
@@ -36,7 +36,7 @@ Starting point: fork **video-use** (MIT), swap its paid ElevenLabs transcription
 | Optional final polish | DaVinci Resolve (free) via exported timeline |
 | Comment-to-DM (distribution, not editing) | ManyChat free tier — check current limits |
 
-**Machine notes:** Snapdragon X Elite, 16 GB RAM, no NVIDIA GPU. Python + Git installed; FFmpeg, Node, uv not yet. If a Python AI package has no Windows-ARM build, install x64 Python and run it under emulation.
+**Machine notes:** Snapdragon X Elite, 16 GB RAM, no NVIDIA GPU. The project venv uses **x64 Python 3.12** (runs under Windows emulation) because several audio/AI packages have no Windows-ARM builds.
 
 ---
 
@@ -76,8 +76,11 @@ Starting point: fork **video-use** (MIT), swap its paid ElevenLabs transcription
 
 Each phase works on its own. Phase 2 = first useful version.
 
-**Phase 0 — Setup**
-Install FFmpeg, Node 22, uv, whisper.cpp, auto-editor, Chrome. Smoke test on a sample clip.
+**Phase 0 — Setup** ✅ done 2026-10-28
+Installed via winget: FFmpeg 9.0.2 (Gyan), uv, Node.js LTS (v26). Chrome already present.
+`uv sync` builds `.venv` on x64 Python 3.12 with video-use deps + faster-whisper. auto-editor installed as a uv tool.
+Test: `uv run python scripts/smoke_test.py` — TTS clip → FFmpeg video → local word-level transcript → silence cut. Passes.
+Notes: whisper.cpp dropped (no prebuilt ARM binary, no C++ compiler here); faster-whisper is decoded via FFmpeg because its PyAV path breaks on current PyAV.
 
 **Phase 1 — Ingest and transcribe**
 Word-level transcript, packed transcript file, contact sheets/filmstrips so Claude can "see" footage. Supports multiple clips/angles per project.
@@ -115,6 +118,6 @@ One-command recipes: "YouTube video", "Short/Reel", "Podcast clip", and *new* "J
 
 ## Open items
 
-- Confirm whisper.cpp word timestamps are accurate enough for word-by-word captions.
+- Confirm faster-whisper word timestamps on real footage are tight enough for word-by-word captions (try `small.en` if `base.en` drifts).
 - Check Herk Edit Kit's license before borrowing from it.
 - Confirm which Python packages (rembg, MediaPipe, OpenCV) have Windows-ARM builds.
