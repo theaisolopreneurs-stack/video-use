@@ -138,7 +138,9 @@ def build_source(name: str, words: list[dict], src_dur: float, max_gap: float):
         kinds = sorted({drop[i][0] for i in inside if i in drop})
         reasons = list(dict.fromkeys(drop[i][1] for i in inside if i in drop))
         dead_air = (e - s) - sum(words[i]["end"] - words[i]["start"] for i in inside)
-        if dead_air > max_gap and "retake" not in kinds:
+        # Padding eats into a pause, so a gap that triggered the split can be shorter
+        # than max_gap once cut; a cut with no dropped words is a pause either way.
+        if (dead_air > max_gap and "retake" not in kinds) or not kinds:
             kinds.append("silence")
             reasons.append(f"{dead_air:.1f}s pause")
         cuts.append({
