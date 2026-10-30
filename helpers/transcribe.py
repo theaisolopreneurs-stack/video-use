@@ -1,16 +1,24 @@
-"""Transcribe a video with ElevenLabs Scribe.
+"""Transcribe a video with word-level timestamps.
 
-Extracts mono 16kHz audio via ffmpeg, uploads to Scribe with verbatim +
-diarize + audio events + word-level timestamps, writes the full response
-to <edit_dir>/transcripts/<video_stem>.json.
+Extracts mono 16kHz audio via ffmpeg, then transcribes it with one of two engines
+and writes a Scribe-shaped JSON to <edit_dir>/transcripts/<video_stem>.json:
 
-Cached: if the output file already exists, the upload is skipped.
+- local (default): faster-whisper on this machine. Free, offline. No speaker
+  diarization or audio-event tags; every word is speaker_0.
+- scribe: ElevenLabs Scribe (paid, needs ELEVENLABS_API_KEY). Adds diarization
+  and audio events.
+
+Both produce `words` entries of type 'word' / 'spacing' with start/end in
+seconds, so pack_transcripts.py, render.py and timeline_view.py read either.
+
+Cached: if the output file already exists, transcription is skipped.
 
 Usage:
     python helpers/transcribe.py <video_path>
     python helpers/transcribe.py <video_path> --edit-dir /custom/edit
     python helpers/transcribe.py <video_path> --language en
-    python helpers/transcribe.py <video_path> --num-speakers 2
+    python helpers/transcribe.py <video_path> --model small.en
+    python helpers/transcribe.py <video_path> --engine scribe --num-speakers 2
 """
 
 from __future__ import annotations
@@ -23,6 +31,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import wave
 from pathlib import Path
@@ -31,6 +40,15 @@ import requests
 
 
 SCRIBE_URL = "https://api.elevenlabs.io/v1/speech-to-text"
+
+DEFAULT_MODEL = "small.en"
+
+# Whisper tends to tidy speech into clean prose and drop "um"/"uh". A disfluent
+# prompt nudges it to keep them, which the editor needs to find filler cuts.
+FILLER_PROMPT = "Umm, let me think, like, hmm... Okay, uh, so here's what I'm, you know, thinking."
+
+_models: dict[str, object] = {}
+_models_lock = threading.Lock()
 
 
 def load_api_key() -> str:
@@ -113,6 +131,64 @@ def call_scribe(
     return resp.json()
 
 
+def load_local_model(model_name: str):
+    """Load a faster-whisper model once per process; batch workers share it."""
+    with _models_lock:
+        if model_name not in _models:
+            from faster_whisper import WhisperModel
+            _models[model_name] = WhisperModel(
+                model_name, device="cpu", compute_type="int8",
+                cpu_threads=os.cpu_count() or 4,
+            )
+        return _models[model_name]
+
+
+def call_local(audio_path: Path, model_name: str, language: str | None = None) -> dict:
+    """Transcribe with faster-whisper and return a Scribe-shaped payload."""
+    import numpy as np
+
+    # Hand faster-whisper raw samples; its own PyAV decoder breaks on current PyAV.
+    with wave.open(str(audio_path), "rb") as w:
+        pcm = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+    audio = pcm.astype(np.float32) / 32768.0
+
+    model = load_local_model(model_name)
+    if model_name.endswith(".en"):
+        language = "en"
+    segments, info = model.transcribe(
+        audio,
+        language=language,
+        word_timestamps=True,
+        initial_prompt=FILLER_PROMPT,
+        condition_on_previous_text=False,
+        vad_filter=False,
+    )
+
+    words: list[dict] = []
+    prev_end: float | None = None
+    for seg in segments:
+        for wd in seg.words or []:
+            text = wd.word.strip()
+            if not text:
+                continue
+            start, end = round(float(wd.start), 3), round(float(wd.end), 3)
+            if prev_end is not None and start > prev_end:
+                words.append({"text": " ", "start": prev_end, "end": start,
+                              "type": "spacing", "speaker_id": "speaker_0"})
+            words.append({"text": text, "start": start, "end": end, "type": "word",
+                          "speaker_id": "speaker_0",
+                          "logprob": round(float(np.log(max(wd.probability, 1e-6))), 4)})
+            prev_end = end
+
+    return {
+        "language_code": info.language,
+        "language_probability": round(float(info.language_probability), 4),
+        "text": " ".join(w["text"] for w in words if w["type"] == "word"),
+        "words": words,
+        "engine": f"faster-whisper/{model_name}",
+    }
+
+
 def transcript_path(edit_dir: Path, video: Path, audio_track: int = 0) -> Path:
     """Where a video's transcript lands.
 
@@ -128,11 +204,13 @@ def transcript_path(edit_dir: Path, video: Path, audio_track: int = 0) -> Path:
 def transcribe_one(
     video: Path,
     edit_dir: Path,
-    api_key: str,
+    api_key: str | None = None,
     language: str | None = None,
     num_speakers: int | None = None,
     verbose: bool = True,
     audio_track: int = 0,
+    engine: str = "local",
+    model: str = DEFAULT_MODEL,
 ) -> Path:
     """Transcribe a single video. Returns path to transcript JSON.
 
@@ -160,22 +238,27 @@ def transcribe_one(
         audio = Path(tmp) / f"{video.stem}.wav"
         extract_audio(video, audio, audio_track)
 
-        # Uploading silence costs the same as uploading speech and returns
-        # nothing, so catch the wrong-track case before paying for it.
+        # A silent track returns nothing (and costs money on Scribe), so catch
+        # the wrong-track case before transcribing.
         peak = peak_dbfs(audio)
         if peak < -60.0:
             raise RuntimeError(
                 f"track {audio_track + 1} of {video.name} is silent "
-                f"(peak {peak:.1f} dBFS) - not uploading. "
+                f"(peak {peak:.1f} dBFS) - not transcribing. "
                 + (f"The file has {n_tracks} audio tracks; try --audio-track "
                    + " or ".join(str(i) for i in range(n_tracks) if i != audio_track) + "."
                    if n_tracks > 1 else "Check the source audio.")
             )
 
-        size_mb = audio.stat().st_size / (1024 * 1024)
-        if verbose:
-            print(f"  uploading {video.stem}.wav ({size_mb:.1f} MB)", flush=True)
-        payload = call_scribe(audio, api_key, language, num_speakers)
+        if engine == "scribe":
+            size_mb = audio.stat().st_size / (1024 * 1024)
+            if verbose:
+                print(f"  uploading {video.stem}.wav ({size_mb:.1f} MB)", flush=True)
+            payload = call_scribe(audio, api_key or load_api_key(), language, num_speakers)
+        else:
+            if verbose:
+                print(f"  transcribing locally with {model}", flush=True)
+            payload = call_local(audio, model, language)
 
     out_path.write_text(json.dumps(payload, indent=2))
     dt = time.time() - t0
@@ -190,8 +273,13 @@ def transcribe_one(
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Transcribe a video with ElevenLabs Scribe")
+    ap = argparse.ArgumentParser(description="Transcribe a video with word-level timestamps")
     ap.add_argument("video", type=Path, help="Path to video file")
+    ap.add_argument("--engine", choices=["local", "scribe"], default="local",
+                    help="local = faster-whisper, free (default). scribe = ElevenLabs, paid.")
+    ap.add_argument("--model", default=DEFAULT_MODEL,
+                    help=f"faster-whisper model for --engine local (default {DEFAULT_MODEL}; "
+                         "base.en is faster, medium.en more accurate).")
     ap.add_argument(
         "--edit-dir",
         type=Path,
@@ -208,7 +296,7 @@ def main() -> None:
         "--num-speakers",
         type=int,
         default=None,
-        help="Optional number of speakers when known. Improves diarization accuracy.",
+        help="Optional number of speakers when known (scribe only). Improves diarization accuracy.",
     )
     ap.add_argument(
         "--audio-track",
@@ -225,7 +313,7 @@ def main() -> None:
         sys.exit(f"video not found: {video}")
 
     edit_dir = (args.edit_dir or (video.parent / "edit")).resolve()
-    api_key = load_api_key()
+    api_key = load_api_key() if args.engine == "scribe" else None
 
     transcribe_one(
         video=video,
@@ -234,6 +322,8 @@ def main() -> None:
         language=args.language,
         num_speakers=args.num_speakers,
         audio_track=args.audio_track,
+        engine=args.engine,
+        model=args.model,
     )
 
 

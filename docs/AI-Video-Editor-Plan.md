@@ -87,8 +87,11 @@ Installed via winget: FFmpeg 9.0.2 (Gyan), uv, Node.js LTS (v26). Chrome already
 Test: `uv run python scripts/smoke_test.py` — TTS clip → FFmpeg video → local word-level transcript → silence cut. Passes.
 Notes: whisper.cpp dropped (no prebuilt ARM binary, no C++ compiler here); faster-whisper is decoded via FFmpeg because its PyAV path breaks on current PyAV.
 
-**Phase 1 — Ingest and transcribe**
-Word-level transcript, packed transcript file, contact sheets/filmstrips so Claude can "see" footage. Supports multiple clips/angles per project.
+**Phase 1 — Ingest and transcribe** ✅ done 2026-10-29
+`helpers/transcribe.py` now defaults to local faster-whisper (`small.en`), writing the same Scribe-shaped JSON so every existing helper reads it unchanged; `--engine scribe` keeps the paid path. A disfluent prompt makes Whisper keep "um / uh / like" for filler cuts.
+`helpers/ingest.py <videos_dir>` = inventory (ffprobe) → transcripts → `takes_packed.md` → timestamped contact sheet per source (`edit/storyboard/`) → `edit/inventory.md`.
+Tested on two synthetic takes (37 s): fillers, pauses, and the retake all show up in `takes_packed.md`; word timing lines up with the waveform in `timeline_view`.
+Speed: ~1 s of processing per 1 s of footage with `small.en` on this laptop (~1 hour for 1 hour of raw footage; `base.en` is ~3× faster). Limits: no speaker labels locally; numbers may come out as digits ("54 -second").
 
 **Phase 2 — Edit plan + cuts**
 `plan.json` format (extends video-use's EDL — see Review Studio below), FFmpeg renderer, silence/filler/retake removal, audio fades, multi-clip best-take selection.

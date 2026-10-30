@@ -59,9 +59,9 @@ The skill lives in `video-use/`. User footage lives wherever they put it. All se
 
 First-time install lives in `install.md` (clone, deps, ffmpeg, skill registration, API key). Don't re-run it every session; on cold start just verify:
 
-- `ELEVENLABS_API_KEY` resolves — either in the environment or in `.env` at the video-use repo root. If missing, ask the user to paste one and write it to `.env` (never to the user's `<videos_dir>`).
+- Transcription is **local and free by default** (faster-whisper, `--engine local`). No API key needed. `ELEVENLABS_API_KEY` is only needed if the user explicitly asks for `--engine scribe` (paid; adds speaker diarization and audio-event tags).
 - `ffmpeg` + `ffprobe` on PATH.
-- Python deps installed (`uv sync` or `pip install -e .` inside the repo).
+- Python deps installed (`uv sync` inside the repo). Run helpers with `uv run python helpers/<name>.py` so they use the repo's `.venv`.
 - Node.js + npm available if the session needs HyperFrames or Remotion slots. HyperFrames currently requires Node.js 22+.
 - `yt-dlp`, HyperFrames, Remotion, Manim installed only on first use.
 - First-use animation setup happens inside the slot directory, never at the video-use repo root. HyperFrames can be invoked with `npx --yes hyperframes ...`; Remotion can be scaffolded with `npx create-video@latest` or installed as a project-local dependency before using its `remotion render` command.
@@ -71,8 +71,9 @@ Helpers (`helpers/transcribe.py`, `helpers/render.py`, etc.) live alongside this
 
 ## Helpers
 
-- **`transcribe.py <video>`** — single-file Scribe call. `--num-speakers N` optional. Cached.
-- **`transcribe_batch.py <videos_dir>`** — 4-worker parallel transcription. Use for multi-take.
+- **`ingest.py <videos_dir>`** — **start here.** Inventory (ffprobe) → `transcribe_batch` → `pack_transcripts` → one timestamped contact sheet per source in `<edit>/storyboard/`. Writes `<edit>/inventory.md`. Cached; safe to re-run.
+- **`transcribe.py <video>`** — single file, word-level. Local faster-whisper by default (`--model small.en`; `base.en` faster, `medium.en` more accurate). Keeps fillers (um/uh/like) for filler cuts. No diarization locally — all words are `speaker_0`. `--engine scribe --num-speakers N` for paid ElevenLabs. Cached.
+- **`transcribe_batch.py <videos_dir>`** — every source in a folder. 1 worker locally (the model already uses all cores), 4 for Scribe.
 - **`pack_transcripts.py --edit-dir <dir>`** — `transcripts/*.json` → `takes_packed.md` (phrase-level, break on silence ≥ 0.5s).
 - **`timeline_view.py <video> <start> <end>`** — filmstrip + waveform PNG. On-demand visual drill-down. **Not a scan tool** — use it at decision points, not constantly.
 - **`render.py <edl.json> -o <out>`** — per-segment extract → concat → overlays (PTS-shifted) → subtitles LAST. `--preview` for 720p fast. `--build-subtitles` to generate master.srt inline.
@@ -82,7 +83,7 @@ For animations, create `<edit>/animations/slot_<id>/` with `Bash` and spawn a su
 
 ## The process
 
-1. **Inventory.** `ffprobe` every source. `transcribe_batch.py` on the directory. `pack_transcripts.py` to produce `takes_packed.md`. Sample one or two `timeline_view`s for a visual first impression.
+1. **Inventory.** `ingest.py` on the directory (ffprobe + transcripts + `takes_packed.md` + contact sheets). Look at the contact sheets for a visual first impression; sample a `timeline_view` only where something is unclear.
 2. **Pre-scan for problems.** One pass over `takes_packed.md` to note verbal slips, obvious mis-speaks, or phrasings to avoid. Plain list, feed into the editor brief.
 3. **Converse.** Describe what you see in plain English. Ask questions *shaped by the material*. Collect: content type, target length/aspect, aesthetic/brand direction, pacing feel, must-preserve moments, must-cut moments, animation and grade preferences, subtitle needs. Do not use a fixed checklist — the right questions are different every time.
 4. **Propose strategy.** 4–8 sentences: shape, take choices, cut direction, animation plan, grade direction, subtitle style, length estimate. **Wait for confirmation.**

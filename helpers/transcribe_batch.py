@@ -1,14 +1,18 @@
-"""Batch-transcribe every video in a directory with 4 parallel workers.
+"""Batch-transcribe every video in a directory.
 
-Walks <videos_dir> for common video extensions, runs ElevenLabs Scribe on
-each, writes transcripts to <videos_dir>/edit/transcripts/<name>.json.
+Walks <videos_dir> for common video extensions, transcribes each (local
+faster-whisper by default, ElevenLabs Scribe with --engine scribe), writes
+transcripts to <videos_dir>/edit/transcripts/<name>.json.
+
+Local runs one file at a time by default: the model already uses every CPU
+core, so parallel workers only fight over them. Scribe uses 4 workers.
 
 Cached per-file: any source that already has a transcript is skipped.
 
 Usage:
     python helpers/transcribe_batch.py <videos_dir>
-    python helpers/transcribe_batch.py <videos_dir> --workers 4
-    python helpers/transcribe_batch.py <videos_dir> --num-speakers 2
+    python helpers/transcribe_batch.py <videos_dir> --model base.en
+    python helpers/transcribe_batch.py <videos_dir> --engine scribe --num-speakers 2
     python helpers/transcribe_batch.py <videos_dir> --edit-dir /custom/edit
 """
 
@@ -20,7 +24,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from transcribe import load_api_key, transcribe_one, transcript_path
+from transcribe import DEFAULT_MODEL, load_api_key, transcribe_one, transcript_path
 
 
 VIDEO_EXTS = {".mp4", ".MP4", ".mov", ".MOV", ".mkv", ".MKV", ".avi", ".AVI", ".m4v"}
@@ -43,7 +47,12 @@ def main() -> None:
         default=None,
         help="Edit output directory (default: <videos_dir>/edit)",
     )
-    ap.add_argument("--workers", type=int, default=4, help="Parallel workers (default: 4)")
+    ap.add_argument("--engine", choices=["local", "scribe"], default="local",
+                    help="local = faster-whisper, free (default). scribe = ElevenLabs, paid.")
+    ap.add_argument("--model", default=DEFAULT_MODEL,
+                    help=f"faster-whisper model for --engine local (default {DEFAULT_MODEL}).")
+    ap.add_argument("--workers", type=int, default=None,
+                    help="Parallel workers (default: 1 for local, 4 for scribe)")
     ap.add_argument(
         "--language",
         type=str,
@@ -54,7 +63,7 @@ def main() -> None:
         "--num-speakers",
         type=int,
         default=None,
-        help="Optional number of speakers. Improves diarization when known.",
+        help="Optional number of speakers (scribe only). Improves diarization when known.",
     )
     ap.add_argument(
         "--audio-track",
@@ -84,13 +93,15 @@ def main() -> None:
         print("nothing to do")
         return
 
-    api_key = load_api_key()
+    api_key = load_api_key() if args.engine == "scribe" else None
+    workers = args.workers or (4 if args.engine == "scribe" else 1)
 
-    print(f"transcribing {len(pending)} files with {args.workers} parallel workers")
+    engine_desc = "ElevenLabs Scribe" if args.engine == "scribe" else f"faster-whisper {args.model}"
+    print(f"transcribing {len(pending)} files with {engine_desc}, {workers} worker(s)")
     t0 = time.time()
 
     errors: list[tuple[Path, str]] = []
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
             pool.submit(
                 transcribe_one,
@@ -101,6 +112,8 @@ def main() -> None:
                 num_speakers=args.num_speakers,
                 verbose=False,
                 audio_track=args.audio_track,
+                engine=args.engine,
+                model=args.model,
             ): v
             for v in pending
         }
