@@ -10,7 +10,7 @@ Drop raw footage in a folder, chat with Claude Code, get `final.mp4` back. Works
 
 Cloud-hosted video-use is coming. [Join the waitlist at video-use.com](https://video-use.com?utm_source=github).
 
-> **About this fork:** transcription runs locally and free with faster-whisper — no ElevenLabs key needed (`--engine scribe` still works if you want it). Start with `uv run python helpers/ingest.py <videos_dir>`. Build plan: [docs/AI-Video-Editor-Plan.md](docs/AI-Video-Editor-Plan.md). The upstream docs below still describe Scribe as the default.
+> **About this fork:** transcription runs locally and free with faster-whisper — no ElevenLabs key needed (`--engine scribe` still works if you want it). Start with `uv run python helpers/ingest.py <videos_dir>`, then review edits in the Review Studio (`helpers/review_server.py <videos_dir>/edit`). Build plan: [docs/AI-Video-Editor-Plan.md](docs/AI-Video-Editor-Plan.md). The upstream docs below still describe Scribe as the default.
 
 ## What it does
 

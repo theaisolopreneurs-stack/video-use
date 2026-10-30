@@ -806,6 +806,13 @@ def main() -> None:
         apply_loudnorm_two_pass(tmp_composite, out_path, preview=args.draft)
         tmp_composite.unlink(missing_ok=True)
 
+    # For plan.json renders, record which cut this file shows, so the Review Studio
+    # can tell when the plan has moved on (rough.mp4 -> rough.json).
+    if status is not None:
+        from plan import cut_signature
+        out_path.with_suffix(".json").write_text(
+            json.dumps({"cut": cut_signature(edl), "version": edl.get("version")}), encoding="utf-8")
+
     size_mb = out_path.stat().st_size / (1024 * 1024)
     print(f"\ndone: {out_path} ({size_mb:.1f} MB)")
 

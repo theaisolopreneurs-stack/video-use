@@ -101,8 +101,12 @@ Speed: ~1 s of processing per 1 s of footage with `small.en` on this laptop (~1 
 Tested on the two synthetic takes: 37 s → 13.7 s; fillers, the retake and pauses removed; re-transcribing the rough cut confirms the right lines remain.
 Watch on real footage: one cut start may clip a word onset (Whisper heard "Comment edit" as "I meant edit" in the rough cut) — if it recurs, widen `PAD_BEFORE` from 50 ms toward 100 ms.
 
-**Phase 3 — Review Studio v1 (minimum useful version = Phases 1–3)**
-Local review page with Gate 1 (storyboard) and Gate 2 (rough-cut draft). Covers cuts first; each later phase adds its own preview to the Studio (caption samples, graphic mockups, zoom markers, music bed).
+**Phase 3 — Review Studio v1 (minimum useful version = Phases 1–3)** ✅ done 2026-10-29
+`uv run python helpers/review_server.py footage/<project>/edit` → http://127.0.0.1:8765 (stdlib only, local only).
+Built: summary bar (version, status, length vs target, aspect), "What changed" (Claude's notes + diff vs previous version), timeline strip coloured by beat, storyboard cards (3 thumbnails, quote, reason, planned graphics/zooms, ±0.1 s nudges, keep toggle, beat label, reorder, ▶ jump to rough cut, card note), struck-through cuts with reasons and **Restore**, overall notes, rough-cut player with **Make rough cut** and timestamped notes, two-click **Approve plan / Approve rough cut**.
+Direct edits auto-snapshot to a new version; switched-off sections become restorable cuts. Notes go to `review_notes.json` for Claude ("check my notes"). Rough cut is "stale" only when the cut itself changed (`rough.json` stamp from `render.py`).
+Tested end to end in the browser on the synthetic takes: edit → save (v2) → approve plan → make rough cut → timestamped note → approve rough. Works at phone width.
+Later phases add their previews here: caption samples (4), music audition (5), grade stills / crop box (6), graphic mockups (7).
 
 **Phase 4 — Brand kit + captions**
 *New:* `brand.json` — colors, fonts, caption style, logo, CTA wording. Every later phase reads it, so videos look consistent without re-asking.
@@ -130,7 +134,7 @@ One-command recipes: "YouTube video", "Short/Reel", "Podcast clip", and *new* "J
 
 Why: rendering animations and full-res video takes the longest. If the plan is wrong, that time is wasted. The Studio catches it while changes are still cheap.
 
-**What it is:** a local web page (`uv run python helpers/review_server.py <project>` → opens in Chrome at `http://localhost:8765`). Free, offline, footage never leaves your laptop. Built with Python's standard library + plain HTML/JS — no new installs.
+**What it is:** a local web page (`uv run python helpers/review_server.py footage/<project>/edit` → opens in your browser at `http://127.0.0.1:8765`). Free, offline, footage never leaves your laptop. Built with Python's standard library + plain HTML/JS — no new installs.
 
 ### Gate 1 — Plan review (storyboard, seconds to generate)
 
@@ -153,7 +157,7 @@ Why: rendering animations and full-res video takes the longest. If the plan is w
 
 ### Gate 2 — Rough-cut review (fast draft, ~seconds to a minute)
 
-- 540p draft with real cuts, real captions in the planned style, and **labeled placeholder boxes** where graphics will go ("CHART: 3 tools · 2.0 s").
+- 720p draft with real cuts, real captions in the planned style, and **labeled placeholder boxes** where graphics will go ("CHART: 3 tools · 2.0 s").
 - Plays in the Studio next to the storyboard; clicking a card jumps the player to that moment.
 - Timestamped notes ("0:12 — cut is too abrupt"), then **Save notes** or **Approve rough cut**.
 

@@ -116,6 +116,12 @@ def summary(plan: dict) -> str:
     return "\n".join(lines)
 
 
+def cut_signature(plan: dict) -> list:
+    """The part of a plan that decides what a render looks like: which source, which seconds."""
+    return [[r["source"], round(float(r["start"]), 3), round(float(r["end"]), 3)]
+            for r in plan.get("ranges", [])]
+
+
 def range_key(r: dict) -> tuple:
     return (r.get("source"), round(float(r["start"]), 2), round(float(r["end"]), 2))
 

@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review Studio</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e1db;
+    --accent: #1f5c4a; --accent-ink: #ffffff; --warn: #a3471c; --cut: #9b9890; --ok: #2e7d4f;
+    --beat-0: #2f6f9f; --beat-1: #8a5a9e; --beat-2: #b0702a; --beat-3: #2e8a6e; --beat-4: #a8434f; --beat-5: #5a6b2f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151514; --panel: #1f1f1d; --ink: #ecebe6; --muted: #a09e97; --line: #33322f;
+      --accent: #5fb394; --accent-ink: #0f1a16; --warn: #e08a5e; --cut: #77756f; --ok: #6cc38f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 18px 20px 10px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: baseline; }
+  h1 { font-size: 20px; margin: 0; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 13px; background: var(--line); }
+  .pill.draft { background: #f1e3c8; color: #6b4a12; }
+  .pill.plan_approved { background: #d9e8f5; color: #1d4a72; }
+  .pill.rough_approved, .pill.final { background: #d6eedd; color: #1d5a33; }
+  .meta { color: var(--muted); font-size: 14px; }
+  .over { color: var(--warn); font-weight: 600; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; padding: 0 20px 110px; }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } aside { order: -1; } }
+  @media (max-width: 600px) { main { padding: 0 16px 200px; } header { padding: 16px 16px 8px; } }
+  section.box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+  ul.changes { margin: 0; padding-left: 18px; }
+  .problems { color: var(--warn); }
+  .timeline { display: flex; height: 34px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+  .timeline div { color: #fff; font-size: 11px; padding: 2px 4px; overflow: hidden; white-space: nowrap; cursor: pointer; border-right: 1px solid rgba(255,255,255,.4); }
+  .timeline div.off { background: repeating-linear-gradient(45deg, var(--cut), var(--cut) 4px, transparent 4px, transparent 8px) !important; color: var(--ink); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-left: 6px solid var(--beat-0); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .card.off { opacity: .5; }
+  .card.dirty { box-shadow: 0 0 0 2px var(--accent); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .thumbs { display: flex; gap: 6px; margin: 8px 0; }
+  .thumbs img { height: 120px; border-radius: 6px; background: var(--line); }
+  .quote { font-size: 16px; margin: 4px 0; }
+  .reason { color: var(--muted); font-size: 13px; }
+  .times { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); }
+  input.beat { width: 120px; font: inherit; font-weight: 700; text-transform: uppercase; border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; background: transparent; color: inherit; }
+  textarea { width: 100%; min-height: 44px; font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--bg); color: inherit; resize: vertical; }
+  button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; padding: 8px 16px; font-size: 14px; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .cut { margin: 0 0 10px 24px; padding: 6px 10px; border-left: 2px dashed var(--cut); color: var(--cut); font-size: 14px; }
+  .cut s { color: var(--cut); }
+  .cut .kind { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-right: 6px; }
+  .planned { font-size: 13px; margin-top: 6px; }
+  .planned span { display: inline-block; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; margin: 2px 4px 0 0; }
+  video { width: 100%; max-height: 60vh; background: #000; border-radius: 8px; }
+  .tnotes li { margin-bottom: 4px; }
+  footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 12px 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  footer .spacer { flex: 1; }
+  .toast { color: var(--ok); font-size: 14px; }
+  .toast.err { color: var(--warn); }
+  .legend { font-size: 13px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Review Studio</h1>
+  <span id="status" class="pill">…</span>
+  <span id="meta" class="meta"></span>
+</header>
+<main>
+  <div>
+    <section class="box" id="changesBox" hidden>
+      <h2>What changed</h2>
+      <ul class="changes" id="changes"></ul>
+    </section>
+    <section class="box" id="problemsBox" hidden>
+      <h2>Problems</h2>
+      <ul class="problems" id="problems"></ul>
+    </section>
+    <section class="box">
+      <h2>Timeline</h2>
+      <div class="timeline" id="timeline"></div>
+      <div class="legend">Each block is a kept section, sized by length. Click to jump to its card. Striped = you've switched it off.</div>
+    </section>
+    <div id="board"></div>
+  </div>
+  <aside>
+    <section class="box">
+      <h2>Rough cut</h2>
+      <div id="roughArea"></div>
+      <div class="row" style="margin-top:8px">
+        <button id="roughBtn">Make rough cut</button>
+        <button id="tnoteBtn" disabled>Note at current time</button>
+        <span id="roughMsg" class="meta"></span>
+      </div>
+      <form id="tnoteForm" hidden style="margin-top:8px">
+        <div id="tnoteLabel" class="meta"></div>
+        <div class="row"><input id="tnoteText" style="flex:1;font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:inherit" placeholder="e.g. cut feels abrupt here">
+        <button type="submit">Add</button></div>
+      </form>
+      <ul class="tnotes" id="tnotes"></ul>
+    </section>
+    <section class="box">
+      <h2>Overall notes for Claude</h2>
+      <textarea id="overall" rows="5" placeholder="e.g. Hook is too slow. Keep it under 45 seconds. Lead with the 'one hour of footage' line."></textarea>
+    </section>
+    <section class="box">
+      <h2>How this works</h2>
+      <div class="meta">
+        1. Read the storyboard: kept sections in order, <s>cut words</s> in between with reasons.<br>
+        2. Change things directly (switch sections off, nudge edges, restore cuts, relabel, reorder) and/or leave notes.<br>
+        3. <b>Save</b> — then tell Claude "check my notes".<br>
+        4. When it looks right: <b>Approve plan</b>, make the rough cut, watch it, <b>Approve rough cut</b>.
+      </div>
+    </section>
+  </aside>
+</main>
+<footer>
+  <span id="dirtyMsg" class="meta">No unsaved changes</span>
+  <span id="toast" class="toast"></span>
+  <span class="spacer"></span>
+  <button id="saveBtn" class="primary">Save changes &amp; notes</button>
+  <button id="approveBtn" class="primary">Approve</button>
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let S = null;          // server state
+let ranges = [];       // working copy of plan.ranges, each with _on flag
+let cardNotes = {};    // index -> note
+let tnotes = [];       // timestamped notes
+let dirty = false;
+
+const fmt = (t) => { const m = Math.floor(t / 60); return `${m}:${(t - m * 60).toFixed(2).padStart(5, "0")}`; };
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const beatColor = (() => { const map = {}; let n = 0; return (b) => { const k = (b || "").toUpperCase(); if (!(k in map)) map[k] = `var(--beat-${n++ % 6})`; return map[k]; }; })();
+
+async function load() {
+  S = await (await fetch("/api/state")).json();
+  ranges = S.plan.ranges.map((r) => ({ ...r, _on: true }));
+  const n = S.notes && S.notes.version_reviewed === S.plan.version ? S.notes : null;
+  cardNotes = {}; tnotes = n?.timestamped || [];
+  (n?.cards || []).forEach((c) => (cardNotes[c.index] = c.note));
+  $("overall").value = n?.overall || "";
+  setDirty(false);
+  render();
+}
+
+function setDirty(v) { dirty = v; $("dirtyMsg").textContent = v ? "Unsaved changes" : "No unsaved changes"; updateApprove(); }
+function toast(msg, err) { const t = $("toast"); t.textContent = msg; t.className = "toast" + (err ? " err" : ""); setTimeout(() => (t.textContent = ""), 6000); }
+
+function totals() {
+  const on = ranges.filter((r) => r._on);
+  return on.reduce((a, r) => a + (r.end - r.start), 0);
+}
+
+function render() {
+  const p = S.plan;
+  $("title").textContent = `Review Studio — ${S.project}`;
+  $("status").textContent = p.status.replace("_", " ");
+  $("status").className = `pill ${p.status}`;
+  const total = totals(), target = p.target?.max_duration_s;
+  $("meta").innerHTML = `v${p.version} · ${ranges.filter((r) => r._on).length} sections · ` +
+    `<span class="${target && total > target ? "over" : ""}">${total.toFixed(1)}s${target ? ` of ${target}s target` : ""}</span>` +
+    (p.target?.aspect ? ` · ${esc(p.target.aspect)}` : "") + ` · ${p.cuts?.length || 0} cuts`;
+
+  const changes = [...(p.changes || [])];
+  $("changesBox").hidden = !changes.length && !S.diff_prev.length;
+  $("changes").innerHTML = changes.map((c) => `<li>${esc(c)}</li>`).join("") +
+    (S.diff_prev.length ? `<li class="meta">vs v${S.versions.at(-1)}: ${S.diff_prev.map(esc).join("; ")}</li>` : "");
+  $("problemsBox").hidden = !S.problems.length;
+  $("problems").innerHTML = S.problems.map((x) => `<li>${esc(x)}</li>`).join("");
+
+  // timeline
+  const all = ranges.reduce((a, r) => a + (r.end - r.start), 0) || 1;
+  $("timeline").innerHTML = ranges.map((r, i) =>
+    `<div class="${r._on ? "" : "off"}" style="flex:${(r.end - r.start) / all};background:${beatColor(r.beat)}" title="${esc(r.quote)}" onclick="document.getElementById('card${i}').scrollIntoView({behavior:'smooth',block:'center'})">${esc(r.beat || r.source)}</div>`).join("");
+
+  // storyboard: cuts sit before the section they lead into (same source), trailing cuts after the last
+  const cuts = visibleCuts();
+  const placed = new Set();
+  let html = "", outT = 0;
+  ranges.forEach((r, i) => {
+    cuts.forEach((c, ci) => { if (!placed.has(ci) && c.source === r.source && c.end <= r.start + 0.06) { html += cutHtml(c, ci, i); placed.add(ci); } });
+    html += cardHtml(r, i, outT);
+    if (r._on) outT += r.end - r.start;
+    const lastOfSource = !ranges.slice(i + 1).some((x) => x.source === r.source);
+    if (lastOfSource) cuts.forEach((c, ci) => { if (!placed.has(ci) && c.source === r.source && c.start >= r.end - 0.06) { html += cutHtml(c, ci, i + 1); placed.add(ci); } });
+  });
+  cuts.forEach((c, ci) => { if (!placed.has(ci)) html += cutHtml(c, ci, ranges.length); });
+  $("board").innerHTML = html;
+  renderRough();
+}
+
+function plannedFor(r, outStart) {
+  const outEnd = outStart + (r.end - r.start);
+  const inWin = (t) => t !== undefined && t >= outStart - 0.01 && t < outEnd;
+  const items = [];
+  (S.plan.graphics || []).forEach((g) => { if (inWin(g.start_in_output)) items.push(`🎨 ${esc(g.type || "graphic")}${g.text ? `: “${esc(g.text)}”` : ""}`); });
+  (S.plan.zooms || []).forEach((z) => { if (inWin(z.start_in_output)) items.push(`🔍 zoom ${esc(z.style || "")}`); });
+  return items.length ? `<div class="planned">${items.map((x) => `<span>${x}</span>`).join("")}</div>` : "";
+}
+
+function cardHtml(r, i, outT) {
+  const mid = (r.start + r.end) / 2, d = r.end - r.start;
+  const orig = S.plan.ranges[i];
+  const changed = !orig || orig.start !== r.start || orig.end !== r.end || orig.beat !== r.beat || orig.source !== r.source || !r._on;
+  const th = (t) => `<img loading="lazy" src="/thumb?source=${encodeURIComponent(r.source)}&t=${t.toFixed(2)}" alt="">`;
+  return `<div class="card ${r._on ? "" : "off"} ${changed ? "dirty" : ""}" id="card${i}" style="border-left-color:${beatColor(r.beat)}">
+    <div class="row">
+      <label><input type="checkbox" ${r._on ? "checked" : ""} onchange="toggle(${i}, this.checked)"> keep</label>
+      <input class="beat" value="${esc(r.beat)}" placeholder="BEAT" onchange="setBeat(${i}, this.value)">
+      <span class="times">${esc(r.source)} ${fmt(r.start)}–${fmt(r.end)} · ${d.toFixed(2)}s · plays at ${fmt(outT)}</span>
+      <span style="flex:1"></span>
+      <button onclick="seek(${outT})" title="Play this section in the rough cut">▶</button>
+      <button onclick="move(${i},-1)" title="Move earlier">↑</button>
+      <button onclick="move(${i},1)" title="Move later">↓</button>
+    </div>
+    <div class="thumbs">${th(r.start + 0.15)}${th(mid)}${th(Math.max(r.start, r.end - 0.15))}</div>
+    <div class="quote">“${esc(r.quote)}”</div>
+    <div class="reason">${esc(r.reason)}</div>
+    ${plannedFor(r, outT)}
+    <div class="row" style="margin:8px 0">
+      <span class="meta">Start</span><button onclick="nudge(${i},'start',-0.1)">−0.1s</button><button onclick="nudge(${i},'start',0.1)">+0.1s</button>
+      <span class="meta" style="margin-left:10px">End</span><button onclick="nudge(${i},'end',-0.1)">−0.1s</button><button onclick="nudge(${i},'end',0.1)">+0.1s</button>
+    </div>
+    <textarea placeholder="Note on this section (optional)" oninput="cardNotes[${i}]=this.value; setDirty(true)">${esc(cardNotes[i] || "")}</textarea>
+  </div>`;
+}
+
+function cutHtml(c, ci, insertAt) {
+  return `<div class="cut"><span class="kind">cut · ${esc(c.kind)}</span>${c.text ? `<s>${esc(c.text)}</s> ` : ""}
+    <span class="meta">${esc(c.reason)} · ${fmt(c.start)}–${fmt(c.end)}</span>
+    <button style="margin-left:8px" onclick="restore(${ci}, ${insertAt})">Restore</button></div>`;
+}
+
+function toggle(i, on) { ranges[i]._on = on; setDirty(true); render(); }
+function setBeat(i, v) { ranges[i].beat = v.toUpperCase(); setDirty(true); render(); }
+function nudge(i, edge, dt) {
+  const r = ranges[i];
+  r[edge] = Math.max(0, Math.round((r[edge] + dt) * 1000) / 1000);
+  if (r.end - r.start < 0.2) r[edge] -= dt;
+  setDirty(true); render();
+}
+function move(i, dir) {
+  const j = i + dir; if (j < 0 || j >= ranges.length) return;
+  [ranges[i], ranges[j]] = [ranges[j], ranges[i]];
+  [cardNotes[i], cardNotes[j]] = [cardNotes[j], cardNotes[i]];
+  setDirty(true); render();
+}
+function visibleCuts() {
+  return (S.plan.cuts || [])
+    .filter((c) => !ranges.some((r) => r._on && r.source === c.source && r.start < c.end - 0.05 && c.start < r.end - 0.05))
+    .sort((a, b) => a.source.localeCompare(b.source) || a.start - b.start);
+}
+
+function restore(ci, at) {
+  const c = visibleCuts()[ci];
+  ranges.splice(at, 0, { source: c.source, start: c.start, end: c.end, beat: "", quote: c.text || "(pause)", reason: "restored in Review Studio", _on: true });
+  setDirty(true); render();
+}
+
+function renderRough() {
+  const r = S.rough;
+  const area = $("roughArea");
+  if (r.exists) {
+    const src = `/media/rough.mp4?v=${r.mtime}`;
+    const v = area.querySelector("video");
+    if (!v || v.dataset.src !== src) area.innerHTML = `<video id="player" controls preload="metadata" src="${src}" data-src="${src}"></video>`;
+    $("tnoteBtn").disabled = false;
+  } else {
+    area.innerHTML = `<div class="meta">No rough cut yet. It's a fast 720p draft of the current plan — graphics show as placeholders later on.</div>`;
+    $("tnoteBtn").disabled = true;
+  }
+  $("roughMsg").textContent = r.state === "running" ? "Rendering…" : r.state === "failed" ? "Render failed" :
+    r.stale ? "Plan changed since this rough cut" : "";
+  $("roughBtn").disabled = r.state === "running" || dirty;
+  $("roughBtn").title = dirty ? "Save first" : "";
+  $("tnotes").innerHTML = tnotes.map((n, k) => `<li><button onclick="seekRaw(${n.t})">${fmt(n.t)}</button> ${esc(n.note)} <button onclick="tnotes.splice(${k},1);setDirty(true);renderRough()">✕</button></li>`).join("");
+  updateApprove();
+}
+
+function seek(t) { const v = $("player"); if (!v) return toast("Make a rough cut first", true); v.currentTime = t; v.play(); v.scrollIntoView({ behavior: "smooth", block: "center" }); }
+function seekRaw(t) { const v = $("player"); if (v) { v.currentTime = t; v.pause(); } }
+
+function updateApprove() {
+  if (!S) return;
+  const b = $("approveBtn"), st = S.plan.status;
+  if (st === "draft") { b.textContent = "Approve plan"; b.disabled = dirty || S.problems.length > 0; b.dataset.gate = "plan"; }
+  else if (st === "plan_approved") { b.textContent = "Approve rough cut"; b.disabled = dirty || !S.rough.exists || S.rough.stale; b.dataset.gate = "rough";
+    b.title = !S.rough.exists ? "Make and watch the rough cut first" : S.rough.stale ? "Rough cut is out of date — make a new one" : ""; }
+  else { b.textContent = st === "final" ? "Final" : "Rough cut approved ✓"; b.disabled = true; }
+}
+
+$("overall").addEventListener("input", () => setDirty(true));
+
+$("tnoteBtn").onclick = () => {
+  const v = $("player"); if (!v) return; v.pause();
+  const t = Math.round(v.currentTime * 100) / 100;
+  $("tnoteForm").hidden = false; $("tnoteLabel").textContent = `Note at ${fmt(t)}:`;
+  $("tnoteForm").dataset.t = t; $("tnoteText").value = ""; $("tnoteText").focus();
+};
+$("tnoteForm").onsubmit = (e) => {
+  e.preventDefault();
+  const note = $("tnoteText").value.trim();
+  if (note) { tnotes.push({ t: +$("tnoteForm").dataset.t, note }); tnotes.sort((a, b) => a.t - b.t); setDirty(true); }
+  $("tnoteForm").hidden = true; renderRough();
+};
+
+$("saveBtn").onclick = async () => {
+  const kept = ranges.filter((r) => r._on).map(({ _on, ...r }) => r);
+  const cards = Object.entries(cardNotes).filter(([, n]) => n && n.trim()).map(([i, n]) => {
+    const r = ranges[i]; return { index: +i, source: r.source, start: r.start, end: r.end, quote: r.quote, note: n.trim() };
+  });
+  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
+  await load();
+  toast(res.direct_edits.length ? `Saved as v${res.version}. ${res.notes_saved ? 'Now tell Claude "check my notes".' : ""}` :
+    res.notes_saved ? 'Notes saved. Tell Claude "check my notes".' : "Nothing to save.");
+};
+
+let armTimer = null;
+$("approveBtn").onclick = async () => {
+  const b = $("approveBtn"), gate = b.dataset.gate;
+  if (!b.dataset.armed) {   // first click arms, second click (within 5 s) approves
+    b.dataset.armed = "1"; b.textContent = gate === "plan" ? "Click again to approve plan" : "Click again to approve rough cut";
+    armTimer = setTimeout(() => { delete b.dataset.armed; updateApprove(); }, 5000);
+    return;
+  }
+  clearTimeout(armTimer); delete b.dataset.armed;
+  const res = await (await fetch("/api/approve", { method: "POST", body: JSON.stringify({ gate }) })).json();
+  if (!res.ok) return toast(res.error, true);
+  await load(); toast(`Approved — status is now ${res.status.replace("_", " ")}.`);
+};
+
+$("roughBtn").onclick = async () => {
+  const res = await (await fetch("/api/rough", { method: "POST", body: "{}" })).json();
+  if (!res.ok) return toast(res.error, true);
+  S.rough.state = "running"; renderRough();
+  const poll = setInterval(async () => {
+    const st = await (await fetch("/api/state")).json();
+    if (st.rough.state !== "running") { clearInterval(poll); S = { ...S, rough: st.rough }; renderRough();
+      toast(st.rough.state === "done" ? "Rough cut ready." : "Rough cut failed: " + (st.rough.error || ""), st.rough.state !== "done"); }
+  }, 1500);
+};
+
+window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+load();
+</script>
+</body>
+</html>

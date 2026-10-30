@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -94,7 +95,9 @@ def contact_sheet(video: Path, duration: float, out_path: Path, n_frames: int, c
 
 
 def run_helper(script: str, *args: str) -> None:
-    subprocess.run([sys.executable, str(HELPERS / script), *args], check=True)
+    # Helpers print "→"; on Windows a piped stdout defaults to cp1252 and crashes on it.
+    subprocess.run([sys.executable, str(HELPERS / script), *args], check=True,
+                   env={**os.environ, "PYTHONUTF8": "1"})
 
 
 def main() -> None:

@@ -69,3 +69,6 @@ renders/
 *.avi
 *.wav
 *.mp3
+
+# Local preview configs (point at local test footage)
+.claude/launch.json
