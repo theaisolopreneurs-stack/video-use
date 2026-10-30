@@ -75,6 +75,9 @@ def resolve_grade_filter(grade_field: str | None) -> str:
         return ""
     if grade_field == "auto":
         return "__AUTO__"
+    if grade_field.startswith("lut:") or grade_field.endswith(".cube"):
+        from grade import lut_filter
+        return lut_filter(grade_field)
     # Preset names are short identifiers, filter strings contain '=' or ','.
     if re.fullmatch(r"[a-zA-Z0-9_\-]+", grade_field):
         try:
@@ -254,6 +257,7 @@ def extract_segment(
     preview: bool = False,
     draft: bool = False,
     rate: str | None = None,
+    crop: str | None = None,
 ) -> None:
     """Extract a cut range as its own MP4 with grade + 30ms audio fades baked in.
 
@@ -267,7 +271,8 @@ def extract_segment(
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    portrait = is_portrait_source(source)
+    # A reframe crop (landscape -> vertical, framing.py) makes the output portrait.
+    portrait = is_portrait_source(source) or crop is not None
     if draft:
         scale = "scale=-2:1280" if portrait else "scale=1280:-2"
     else:
@@ -276,6 +281,8 @@ def extract_segment(
     vf_parts: list[str] = []
     if is_hdr_source(source):
         vf_parts.append(TONEMAP_CHAIN)
+    if crop:
+        vf_parts.append(crop)
     vf_parts.append(scale)
     if grade_filter:
         vf_parts.append(grade_filter)
@@ -369,11 +376,19 @@ def extract_all_segments(
         else:
             seg_filter = resolved
 
+        crop = None
+        aspect = (edl.get("target") or {}).get("aspect")
+        if "status" in edl and aspect:
+            from framing import reframe_crop
+            crop = reframe_crop(src_path, start, end, aspect)
+
         note = r.get("beat") or r.get("note") or ""
-        print(f"  [{i:02d}] {src_name}  {start:7.2f}-{end:7.2f}  ({duration:5.2f}s)  {note}")
+        print(f"  [{i:02d}] {src_name}  {start:7.2f}-{end:7.2f}  ({duration:5.2f}s)  {note}"
+              + (f"  reframe {crop}" if crop else ""))
         if is_auto:
             print(f"        grade: {seg_filter or '(none)'}")
-        extract_segment(src_path, start, duration, seg_filter, out_path, preview=preview, draft=draft, rate=out_rate)
+        extract_segment(src_path, start, duration, seg_filter, out_path, preview=preview, draft=draft,
+                        rate=out_rate, crop=crop)
         seg_paths.append(out_path)
 
     return seg_paths
@@ -636,15 +651,16 @@ def build_final_composite(
     subtitles_path: Path | None,
     out_path: Path,
     edit_dir: Path,
+    base_filter: str | None = None,
 ) -> None:
-    """Final pass: base → overlays (PTS-shifted) → subtitles LAST → out.
+    """Final pass: base → zooms (base_filter) → overlays (PTS-shifted) → subtitles LAST → out.
 
-    If there are no overlays and no subtitles, just copy base to out.
+    If there are no zooms, overlays or subtitles, just copy base to out.
     """
     has_overlays = bool(overlays)
     has_subs = subtitles_path is not None and subtitles_path.exists()
 
-    if not has_overlays and not has_subs:
+    if not has_overlays and not has_subs and not base_filter:
         # Nothing to do — just rename/copy base to final name
         run(["ffmpeg", "-y", "-i", str(base_path), "-c", "copy", str(out_path)], quiet=True)
         return
@@ -660,8 +676,13 @@ def build_final_composite(
         t = float(ov["start_in_output"])
         filter_parts.append(f"[{idx}:v]setpts=PTS-STARTPTS+{t}/TB[a{idx}]")
 
-    # Chain overlays on top of base
+    # Zooms act on the picture only, before overlays and captions, so text stays put.
     current = "[0:v]"
+    if base_filter:
+        filter_parts.append(f"[0:v]{base_filter}[zoomed]")
+        current = "[zoomed]"
+
+    # Chain overlays on top of base
     for idx, ov in enumerate(overlays, start=1):
         t = float(ov["start_in_output"])
         dur = float(ov["duration"])
@@ -685,8 +706,8 @@ def build_final_composite(
         )
         out_label = "[outv]"
     else:
-        # Rename the last overlay output to [outv] for consistency
-        if has_overlays:
+        # Rename the last overlay/zoom output to [outv] for consistency
+        if has_overlays or base_filter:
             filter_parts.append(f"{current}null[outv]")
             out_label = "[outv]"
         else:
@@ -812,15 +833,26 @@ def main() -> None:
         elif edl.get("subtitles"):
             subs_path = resolve_subtitles_path(edl["subtitles"], edit_dir)
 
-    # 4. Composite (overlays + subtitles LAST) → intermediate (pre-loudnorm) path
-    overlays = edl.get("overlays") or []
+    # 4. Composite (zooms → overlays → subtitles LAST) → intermediate (pre-loudnorm) path
+    overlays = list(edl.get("overlays") or [])
+    zoom = None
+    if status is not None:
+        from framing import probe_size, zoom_filter
+        bw, bh = probe_size(base_path)
+        zoom = zoom_filter(edl, edit_dir, bw, bh, probe_source_fps(base_path) or "30")
+        # Hook titles (title.py) render as alpha overlays; built here so the rough cut shows them.
+        if edl.get("title"):
+            from title import build_title_overlay
+            ov = build_title_overlay(edl, edit_dir, base_path)
+            if ov:
+                overlays.append(ov)
     if args.no_loudnorm:
         # Composite directly to final output
-        build_final_composite(base_path, overlays, subs_path, out_path, edit_dir)
+        build_final_composite(base_path, overlays, subs_path, out_path, edit_dir, zoom)
     else:
         # Composite to a temp file, then run loudnorm → final output
         tmp_composite = out_path.with_suffix(".prenorm.mp4")
-        build_final_composite(base_path, overlays, subs_path, tmp_composite, edit_dir)
+        build_final_composite(base_path, overlays, subs_path, tmp_composite, edit_dir, zoom)
         print("loudness normalization → social-ready (-14 LUFS / -1 dBTP / LRA 11)")
         apply_loudnorm_two_pass(tmp_composite, out_path, preview=args.draft)
         tmp_composite.unlink(missing_ok=True)

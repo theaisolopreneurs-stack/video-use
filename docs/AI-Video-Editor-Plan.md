@@ -123,9 +123,13 @@ Studio: Audio panel — voice cleanup toggle, music picker with ▶ Listen, volu
 Measured on the Texans clip: final mix -14.2 LUFS; music ducks 8.2 dB under speech; voice noise floor -46.7 → -48.0 dB (recording was already clean, so the cleanup stays gentle).
 Not yet: per-section music changes, beat-synced cuts, AI music generation.
 
-**Phase 6 — Framing and color**
-Zooms, face-tracked reframes, LUTs.
-*New:* person segmentation for text-behind-subject hook titles. Studio shows before/after grade stills and the vertical crop box.
+**Phase 6 — Framing and color** ✅ done 2026-10-29
+`helpers/framing.py`: MediaPipe face detection (tiled for wide frames) → **punch** / **push** zooms centred on the face (FFmpeg zoompan, before captions), and automatic **landscape → 9:16 / 4:5 / 1:1 reframe** around the face per segment. MediaPipe selfie segmentation for person masks. Models (~250 KB each, Google) download once into git-ignored `models/`.
+`helpers/title.py`: **hook title behind the speaker** — brand serif/sans text, per-frame person cut-out, fades, alpha overlay included in the rough cut.
+Looks: upstream presets (subtle, punchy, cinematic, auto-fix) + **LUT support** (`luts/*.cube`); ships `warm_soft.cube` (generated here, free to use). Fixed an upstream Windows bug that broke the auto-fix look.
+Studio: **Look** panel (every look previewed on your footage), **Hook title** panel (text, behind-me, font, length, position, live preview); zooms show on the storyboard cards. All save as new plan versions and are part of the stale check.
+Tested on the Texans clip (v4: title behind you for 2.5 s, punch-ins on "0 and 4" and "give it to Claude") and on a synthetic landscape clip (reframe found the face at 27% across and cropped around it). Draft render with everything: ~27 s.
+Not yet: moving-camera face *tracking* within a segment (crop is per segment), auto-suggested zooms from emphasis words, 16:9 export from vertical.
 
 **Phase 7 — Motion-graphics template library (HyperFrames)**
 Charts, checklists, pop-outs, progress bar, plus *new* templates: prompt box, chat bubbles, app window, timer/stat card, PiP proof insert, collage grid, CTA end card. Triggered by keywords in the transcript or by request. Studio shows a still mockup of each graphic in brand style before it's animated.

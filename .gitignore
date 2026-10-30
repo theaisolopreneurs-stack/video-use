@@ -75,3 +75,6 @@ renders/
 
 # Generated SFX kit (helpers/audio.py --make-sfx)
 sfx/
+
+# Downloaded MediaPipe models (helpers/framing.py)
+models/

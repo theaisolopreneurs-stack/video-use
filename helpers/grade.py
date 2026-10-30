@@ -63,6 +63,27 @@ PRESETS: dict[str, str] = {
 }
 
 
+LUT_DIR = Path(__file__).resolve().parent.parent / "luts"
+
+
+def list_luts(edit_dir: Path | None = None) -> list[Path]:
+    """.cube LUTs in <repo>/luts/ and the project folder."""
+    dirs = [LUT_DIR] + ([edit_dir.parent, edit_dir.parent / "luts"] if edit_dir else [])
+    return sorted(p for d in dirs if d.is_dir() for p in d.glob("*.cube"))
+
+
+def lut_filter(name: str, edit_dir: Path | None = None) -> str:
+    """'lut:<file>.cube' -> lut3d filter (file looked up in luts/ and the project)."""
+    want = name[4:] if name.startswith("lut:") else name
+    p = Path(want)
+    if not p.is_absolute():
+        p = next((c for c in list_luts(edit_dir) if c.name == p.name), LUT_DIR / p.name)
+    if not p.exists():
+        raise FileNotFoundError(f"LUT not found: {want} (put .cube files in {LUT_DIR})")
+    esc = str(p.resolve()).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
+    return f"lut3d=file='{esc}':interp=tetrahedral"
+
+
 def get_preset(name: str) -> str:
     """Return the ffmpeg filter string for a preset name. Empty string for 'none'."""
     if name not in PRESETS:
@@ -100,13 +121,16 @@ def _sample_frame_stats(
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".txt", delete=False) as f:
         metadata_path = f.name
 
+    # Inside a filter string ':' separates options, so a Windows "C:\..." path must be escaped.
+    filter_path = metadata_path.replace("\\", "/").replace(":", r"\:")
+
     try:
         cmd = [
             "ffmpeg", "-y", "-hide_banner", "-nostats",
             "-ss", f"{start:.3f}",
             "-i", str(video),
             "-t", f"{duration:.3f}",
-            "-vf", f"fps={fps:.2f},signalstats,metadata=print:file={metadata_path}",
+            "-vf", f"fps={fps:.2f},signalstats,metadata=print:file='{filter_path}'",
             "-f", "null", "-",
         ]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

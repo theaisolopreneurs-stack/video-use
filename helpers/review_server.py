@@ -80,6 +80,7 @@ class Studio:
             "brand_captions": self.brand_captions(),
             "music": [self.music_name(p) for p in self.music_files()],
             "sfx_kit": sorted(__import__("audio").SFX_KIT),
+            "looks": self.looks(),
         }
 
     def music_files(self) -> list[Path]:
@@ -108,8 +109,12 @@ class Studio:
             plan = planlib.load(self.plan_path)
             new_ranges = body.get("ranges")
             changed: list[str] = []
-            settings_changed: dict[str, dict] = {}
-            for field in ("captions", "audio"):
+            settings_changed: dict[str, object] = {}
+            new_grade = body.get("grade", plan.get("grade"))
+            if new_grade != plan.get("grade"):
+                settings_changed["grade"] = new_grade
+                changed.append(f"look: {plan.get('grade') or 'none'} -> {new_grade or 'none'}")
+            for field in ("captions", "audio", "title"):
                 new = body.get(field)
                 old = plan.get(field) or {}
                 if new is None or new == old:
@@ -205,6 +210,67 @@ class Studio:
                 return None
         return out
 
+    def looks(self) -> list[str]:
+        import grade
+        return ["none", "subtle", "neutral_punch", "warm_cinematic", "auto"] + \
+               [f"lut:{p.name}" for p in grade.list_luts(self.edit_dir)]
+
+    def _first_frame(self, width: int = 360):
+        """A frame half a second into the first kept section, plus its source/time."""
+        import framing
+        plan = planlib.load(self.plan_path)
+        r = plan["ranges"][0]
+        src = planlib.resolve(plan["sources"][r["source"]], self.edit_dir)
+        t = float(r["start"]) + min(0.5, (float(r["end"]) - float(r["start"])) / 2)
+        return plan, src, t, framing.grab(src, t, width)
+
+    def look_sample(self, look: str) -> Path | None:
+        """Still frame with a colour look applied (cached per look)."""
+        import grade
+        if look not in self.looks():
+            return None
+        safe = look.replace(":", "_").replace(".", "_")
+        out = self.edit_dir / "storyboard" / f"look_{safe}.jpg"
+        if out.exists():
+            return out
+        plan, src, t, _ = self._first_frame()
+        if look == "auto":
+            r = plan["ranges"][0]
+            vf, _ = grade.auto_grade_for_clip(src, float(r["start"]), float(r["end"]) - float(r["start"]))
+        elif look.startswith("lut:"):
+            vf = grade.lut_filter(look, self.edit_dir)
+        else:
+            vf = grade.get_preset(look)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.3f}", "-i", str(src), "-frames:v", "1",
+                        "-vf", ",".join(x for x in (vf, "scale=-2:640") if x), str(out)], check=False)
+        return out if out.exists() else None
+
+    def title_sample(self) -> Path | None:
+        """Still of the planned hook title over the first frame (behind the speaker if set)."""
+        import numpy as np
+        from PIL import Image
+        import framing
+        import title as titlelib
+        from captions import load_brand
+        plan = planlib.load(self.plan_path)
+        t = plan.get("title") or {}
+        if not t.get("text"):
+            return None
+        out = self.edit_dir / "storyboard" / "title_sample.jpg"
+        if out.exists() and out.stat().st_mtime >= self.plan_path.stat().st_mtime:
+            return out
+        _, _, _, frame = self._first_frame(width=540)
+        H, W = frame.shape[:2]
+        layer = np.asarray(titlelib.title_image(t, load_brand(self.edit_dir), W, H), dtype=np.float32)
+        alpha = layer[..., 3:4] / 255.0
+        if t.get("behind_subject", True):
+            alpha = alpha * (1.0 - framing.person_mask(frame)[..., None])
+        mixed = frame.astype(np.float32) * (1 - alpha) + layer[..., :3] * alpha
+        out.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(mixed.astype(np.uint8)).save(out, quality=88)
+        return out
+
     def thumb(self, source: str, t: float) -> Path | None:
         plan = planlib.load(self.plan_path)
         src = plan.get("sources", {}).get(source)
@@ -282,6 +348,12 @@ def make_handler(studio: Studio):
                 import audio
                 name = parse_qs(url.query).get("name", [""])[0]
                 p = audio.make_sfx().get(name)
+                return self.send_file(p) if p else self.send_error(404)
+            if url.path == "/look-sample":
+                p = studio.look_sample(parse_qs(url.query).get("look", [""])[0])
+                return self.send_file(p) if p else self.send_error(404)
+            if url.path == "/title-sample":
+                p = studio.title_sample()
                 return self.send_file(p) if p else self.send_error(404)
             if url.path == "/caption-sample":
                 p = studio.caption_sample(parse_qs(url.query).get("style", [""])[0])

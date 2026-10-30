@@ -118,9 +118,10 @@ def summary(plan: dict) -> str:
 
 def cut_signature(plan: dict) -> list:
     """The part of a plan that decides what a render looks like: which source, which
-    seconds, how it's captioned, and how it sounds."""
+    seconds, and every setting that changes how it looks or sounds."""
     return [[r["source"], round(float(r["start"]), 3), round(float(r["end"]), 3)]
-            for r in plan.get("ranges", [])] + [plan.get("captions") or {}, plan.get("audio") or {}]
+            for r in plan.get("ranges", [])] + [plan.get(k) or {} for k in
+                                                ("captions", "audio", "title", "zooms", "grade", "target")]
 
 
 def range_key(r: dict) -> tuple:

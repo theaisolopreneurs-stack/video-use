@@ -67,7 +67,8 @@
   .capopt { border: 2px solid var(--line); border-radius: 10px; padding: 4px; cursor: pointer; text-align: center; font-size: 12px; background: var(--bg); }
   .capimg { position: relative; aspect-ratio: 9 / 16; border-radius: 6px; background: var(--line); overflow: hidden; }
   .capimg span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 6px; color: var(--muted); font-size: 11px; }
-  .capopt img { position: relative; width: 100%; height: 100%; object-fit: cover; object-position: center 72%; display: block; }
+  .capimg img { position: relative; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .capopt img { object-position: center 72%; }
   .capopt .off { aspect-ratio: 9 / 16; display: flex; align-items: center; justify-content: center; color: var(--muted); }
   .capopt.sel { border-color: var(--accent); font-weight: 700; }
   select { font: inherit; font-size: 13px; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: inherit; }
@@ -125,6 +126,23 @@
         <input id="capEmph" style="width:100%;font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:inherit" placeholder="e.g. 0 and 4, Super Bowl">
       </label>
       <div class="meta" id="capNote" style="margin-top:6px"></div>
+    </section>
+    <section class="box">
+      <h2>Look</h2>
+      <div class="capgrid" id="lookgrid"></div>
+      <div class="meta" style="margin-top:6px">Add your own looks by dropping .cube LUT files into the luts/ folder.</div>
+    </section>
+    <section class="box">
+      <h2>Hook title</h2>
+      <input id="ttlText" style="width:100%;font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:inherit" placeholder="e.g. How to fix the Texans (leave empty for none)">
+      <div class="row" style="margin-top:8px">
+        <label class="meta"><input type="checkbox" id="ttlBehind"> Behind me</label>
+        <label class="meta">Font <select id="ttlFont"><option value="serif">Serif</option><option value="sans">Sans</option></select></label>
+        <label class="meta">For <select id="ttlDur"><option value="1.5">1.5s</option><option value="2">2s</option><option value="2.5">2.5s</option><option value="3">3s</option></select></label>
+        <label class="meta">At <select id="ttlPos"><option value="upper">Top</option><option value="middle">Middle</option></select></label>
+      </div>
+      <div class="capimg" id="ttlPreview" style="margin-top:8px;max-width:220px" hidden><span>Rendering preview…</span><img alt="Title preview"></div>
+      <div class="meta" id="ttlNote" style="margin-top:6px"></div>
     </section>
     <section class="box">
       <h2>Audio</h2>
@@ -197,11 +215,42 @@ async function load() {
   $("overall").value = n?.overall || "";
   caps = JSON.parse(JSON.stringify(S.plan.captions || {}));
   aud = JSON.parse(JSON.stringify(S.plan.audio || {}));
+  look = S.plan.grade || "none";
+  ttl = JSON.parse(JSON.stringify(S.plan.title || {}));
   setDirty(false);
   render();
   renderCaptions();
   renderAudio();
+  renderLook();
+  renderTitle();
 }
+
+let look = "none", ttl = {};
+const lookName = (k) => ({ none: "None", subtle: "Subtle", neutral_punch: "Punchy", warm_cinematic: "Cinematic", auto: "Auto-fix" }[k] ||
+  k.replace(/^lut:/, "").replace(/\.cube$/, "").replace(/_/g, " "));
+function renderLook() {
+  $("lookgrid").innerHTML = S.looks.map((k) => `<div class="capopt ${look === k ? "sel" : ""}" onclick="look='${k}';setDirty(true);renderLook()">
+    <div class="capimg"><span>Rendering…</span><img src="/look-sample?look=${encodeURIComponent(k)}" alt="${esc(lookName(k))}"></div>${esc(lookName(k))}</div>`).join("");
+}
+function renderTitle() {
+  const saved = JSON.stringify(ttl) === JSON.stringify(S.plan.title || {});
+  if (document.activeElement !== $("ttlText")) $("ttlText").value = ttl.text || "";
+  $("ttlBehind").checked = ttl.behind_subject !== false;
+  $("ttlFont").value = ttl.font || "serif";
+  $("ttlDur").value = String(ttl.duration ?? 2.5);
+  $("ttlPos").value = ttl.position || "upper";
+  const prev = $("ttlPreview");
+  prev.hidden = !(S.plan.title && S.plan.title.text);
+  if (!prev.hidden) prev.querySelector("img").src = `/title-sample?v=${S.plan.version}`;
+  $("ttlNote").textContent = !ttl.text ? "Big text over the opening seconds. With “Behind me”, you stay in front of the words." :
+    saved ? "Preview shows the saved title on your first frame." : "Save to update the preview.";
+}
+function setTtl(fn) { fn(ttl); if (!ttl.text) ttl = {}; else ttl = { start_in_output: 0, duration: 2.5, behind_subject: true, ...ttl }; setDirty(true); renderTitle(); }
+$("ttlText").onchange = (e) => setTtl((t) => (t.text = e.target.value.trim()));
+$("ttlBehind").onchange = (e) => setTtl((t) => (t.behind_subject = e.target.checked));
+$("ttlFont").onchange = (e) => setTtl((t) => (t.font = e.target.value));
+$("ttlDur").onchange = (e) => setTtl((t) => (t.duration = +e.target.value));
+$("ttlPos").onchange = (e) => setTtl((t) => (t.position = e.target.value));
 
 let aud = {};
 function setAud(fn) { fn(aud); setDirty(true); renderAudio(); }
@@ -421,7 +470,7 @@ $("saveBtn").onclick = async () => {
   const cards = Object.entries(cardNotes).filter(([, n]) => n && n.trim()).map(([i, n]) => {
     const r = ranges[i]; return { index: +i, source: r.source, start: r.start, end: r.end, quote: r.quote, note: n.trim() };
   });
-  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
+  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, title: ttl, grade: look === "none" ? null : look, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
   await load();
   toast(res.direct_edits.length ? `Saved as v${res.version}. ${res.notes_saved ? 'Now tell Claude "check my notes".' : ""}` :
     res.notes_saved ? 'Notes saved. Tell Claude "check my notes".' : "Nothing to save.");
