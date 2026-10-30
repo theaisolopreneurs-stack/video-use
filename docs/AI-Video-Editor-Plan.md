@@ -114,6 +114,7 @@ Later phases add their previews here: caption samples (4), music audition (5), g
 `render.py` burns captions into every `plan.json` render automatically, including the rough cut. Captions are part of the rough-cut "stale" check.
 Studio: Captions panel with live previews of each style on your footage, position, ALL CAPS, words-to-pop; changes save as a new plan version.
 Tested on the Texans clip: pill captions, "0 and 4" / "Super Bowl" / "Claude" popped, "drive" → "derive" fixed.
+**Caption styles v2 (2026-10-29):** researched the most-used short-form caption looks (word-by-word highlight dominates; bold high-contrast sans; tools ship Hormozi / MrBeast / Bold / Karaoke / Classic / Minimal / Neon / Typewriter presets) and rebuilt captions around 13 presets: clean, karaoke, pill, hormozi, beast, bold, highlight box, classic, minimal, neon, typewriter, one word, stacked. All use fonts that ship with Windows (Arial Black, Segoe UI Black, Impact, Consolas). Widths are now measured the way libass draws text, so boxes fit their words exactly. The Studio's Captions panel previews all 13 on your footage.
 Not yet: custom brand font files (any installed Windows font works; dropping .ttf files into a fonts folder is a small follow-up), logo.
 
 **Phase 5 — Audio polish** ✅ done 2026-10-29

@@ -116,6 +116,7 @@
     <section class="box">
       <h2>Captions</h2>
       <div class="capgrid" id="capgrid"></div>
+      <div class="meta" id="capDesc" style="margin-top:6px"></div>
       <div class="row" style="margin-top:10px">
         <label class="meta">Position
           <select id="capPos"><option value="lower">Lower (clear of app buttons)</option><option value="middle">Middle</option><option value="upper">Upper</option></select>
@@ -290,9 +291,11 @@ function setCap(k, v) {
 }
 function renderCaptions() {
   const style = capEff("style"), v = S.plan.version;
-  const opts = [["clean", "Clean"], ["karaoke", "Karaoke"], ["pill", "Pill"], ["none", "Off"]];
-  $("capgrid").innerHTML = opts.map(([k, label]) => `<div class="capopt ${style === k ? "sel" : ""}" onclick="setCap('style','${k}')">
-    ${k === "none" ? `<div class="off">No captions</div>` : `<div class="capimg"><span>Rendering preview…</span><img src="/caption-sample?style=${k}&v=${v}" alt="${label} captions" onerror="this.previousElementSibling.textContent='Preview failed'"></div>`}${label}</div>`).join("");
+  const opts = [...S.caption_styles.map((c) => [c.id, c.label, c.blurb]), ["none", "Off", "No captions"]];
+  $("capgrid").innerHTML = opts.map(([k, label, blurb]) => `<div class="capopt ${style === k ? "sel" : ""}" title="${esc(blurb)}" onclick="setCap('style','${k}')">
+    ${k === "none" ? `<div class="off">No captions</div>` : `<div class="capimg"><span>Rendering preview…</span><img loading="lazy" src="/caption-sample?style=${k}&v=${v}" alt="${esc(label)} captions" onerror="this.previousElementSibling.textContent='Preview failed'"></div>`}${esc(label)}</div>`).join("");
+  const cur = S.caption_styles.find((c) => c.id === style);
+  $("capDesc").textContent = cur ? cur.blurb : style === "none" ? "Captions off." : "";
   $("capPos").value = capEff("position");
   $("capUpper").checked = !!capEff("uppercase");
   if (document.activeElement !== $("capEmph")) $("capEmph").value = (caps.emphasis || []).join(", ");

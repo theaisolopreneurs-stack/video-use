@@ -4,9 +4,10 @@ Caption settings come from the brand kit and can be overridden per project in
 plan.json "captions":
 
     "captions": {
-      "style": "pill",              # clean | karaoke | pill | none
+      "style": "pill",              # see PRESETS: clean, karaoke, pill, hormozi, beast, bold,
+                                    # highlight, classic, minimal, neon, typewriter, one_word, stacked, none
       "position": "lower",          # lower (clear of Reels/TikTok UI) | middle | upper
-      "max_words": 3,
+      "max_words": 3,               # optional: overrides the style's own words-per-caption
       "uppercase": false,
       "size": 72,                   # px at 1080-wide portrait / 1080-tall landscape
       "emphasis": ["0 and 4"],      # phrases to make pop
@@ -14,10 +15,9 @@ plan.json "captions":
       "corrections": [{"from": "drive", "to": "derive", "source": "clip", "at": 24.6}]
     }
 
-Styles:
-  clean    white bold text, dark outline
-  karaoke  clean, with the word being spoken in the accent colour
-  pill     1-3 words on a rounded box in the brand's primary colour
+Styles: 13 presets (PRESETS below) modelled on the caption looks short-form tools ship
+most - word-by-word highlight (karaoke, hormozi, beast, highlight box), clean/bold/minimal,
+boxed (pill, classic bar), neon glow, typewriter, one word at a time, stacked two-liners.
 
 Brand kit lookup: <videos_dir>/brand.json, else <repo>/brand/brand.json.
 
@@ -38,7 +38,6 @@ from PIL import ImageFont
 
 REPO = Path(__file__).resolve().parent.parent
 FONTS_DIR = "C:/Windows/Fonts"
-STYLES = ("clean", "karaoke", "pill", "none")
 POSITIONS = {"lower": 0.70, "middle": 0.50, "upper": 0.25}
 PUNCT_BREAK = set(".,!?;:")
 
@@ -173,23 +172,112 @@ def clean_text(w: dict, upper: bool) -> str:
     return t.replace("{", "(").replace("}", ")")
 
 
+# System fonts the presets can use (all ship with Windows). "sans"/"serif" come from the brand kit.
+SYSTEM_FONTS = {
+    "heavy": {"family": "Arial Black", "bold": False, "file": f"{FONTS_DIR}/ariblk.ttf"},
+    "black": {"family": "Segoe UI Black", "bold": False, "file": f"{FONTS_DIR}/seguibl.ttf"},
+    "impact": {"family": "Impact", "bold": False, "file": f"{FONTS_DIR}/impact.ttf"},
+    "semibold": {"family": "Segoe UI Semibold", "bold": False, "file": f"{FONTS_DIR}/seguisb.ttf"},
+    "mono": {"family": "Consolas", "bold": True, "file": f"{FONTS_DIR}/consolab.ttf"},
+}
+
+# Caption presets, modelled on the styles short-form tools ship most (Submagic, Opus, CapCut).
+# Colours: a brand colour name (text, accent, primary, pill_text, outline) or "#RRGGBB".
+#   size: multiplier on the caption size     outline: (colour, width as fraction of size)
+#   shadow: fraction of size                 plate: (colour, alpha) = box behind the line
+#   box: "pill" behind the cue               active: how the word being spoken is shown
+#   anim: pop | fade | none | type           emph: colour for popped phrases
+PRESETS: dict[str, dict] = {
+    "clean": dict(label="Clean", blurb="White bold text, dark outline. Safe everywhere.",
+                  font="sans", size=1.0, max_words=3, fill="text", outline=("outline", 0.09),
+                  shadow=0.03, anim="pop"),
+    "karaoke": dict(label="Karaoke", blurb="Each word lights up as it's spoken.",
+                    font="sans", size=1.0, max_words=3, fill="text", outline=("outline", 0.09),
+                    shadow=0.03, active=dict(color="accent"), anim="pop"),
+    "pill": dict(label="Pill", blurb="Words on a rounded brand-colour box.",
+                 font="sans", size=1.0, max_words=3, fill="pill_text", box="pill", anim="pop"),
+    "hormozi": dict(label="Hormozi", blurb="Heavy caps, thick outline, spoken word in yellow, key words green.",
+                    font="heavy", upper=True, size=1.15, max_words=3, fill="#FFFFFF",
+                    outline=("#000000", 0.13), active=dict(color="#FFE135", scale=1.12),
+                    emph="#3DDC5A", anim="pop"),
+    "beast": dict(label="MrBeast", blurb="Huge Impact caps, 1-2 words, bouncing coloured words.",
+                  font="impact", upper=True, size=1.4, max_words=2, fill="#FFFFFF",
+                  outline=("#000000", 0.14), shadow=0.07, active=dict(color="#FFE135", bounce=True),
+                  emph_cycle=["#FFE135", "#3DDC5A", "#FF4D4D", "#4DB8FF"], tilt=True, anim="pop"),
+    "bold": dict(label="Bold", blurb="Extra-black white text with a soft shadow. Business-clean.",
+                 font="black", size=1.12, max_words=3, fill="#FFFFFF", shadow=0.06,
+                 shadow_alpha=0x60, anim="fade"),
+    "highlight": dict(label="Highlight box", blurb="A brand-colour box jumps to each spoken word.",
+                      font="sans", size=1.08, max_words=3, fill="#FFFFFF", outline=("#000000", 0.05),
+                      active=dict(box="accent", color="#111111"), anim="pop"),
+    "classic": dict(label="Classic", blurb="White on a dark bar, like TikTok's auto-captions.",
+                    font="semibold", size=0.82, max_words=6, fill="#FFFFFF", plate=("#000000", 0x55),
+                    anim="none"),
+    "minimal": dict(label="Minimal", blurb="Small, light, no outline. Lets your face lead.",
+                    font="semibold", size=0.78, max_words=5, fill="#FFFFFF", shadow=0.04,
+                    shadow_alpha=0x70, blur=True, anim="fade"),
+    "neon": dict(label="Neon", blurb="Glowing text in your accent colour.",
+                 font="sans", size=1.05, max_words=3, fill="#FFFFFF", glow="accent", emph="#FFF6D6",
+                 anim="pop"),
+    "typewriter": dict(label="Typewriter", blurb="Monospace letters typed out as you speak.",
+                       font="mono", size=0.85, max_words=5, fill="#FFFFFF", plate=("#000000", 0x40),
+                       anim="type"),
+    "one_word": dict(label="One word", blurb="One big word at a time. Maximum punch.",
+                     font="black", upper=True, size=1.55, max_words=1, fill="#FFFFFF",
+                     outline=("#000000", 0.09), shadow=0.05, anim="pop"),
+    "stacked": dict(label="Stacked", blurb="Two lines, more words. Good for teaching.",
+                    font="sans", size=0.82, max_words=8, lines=2, fill="#FFFFFF",
+                    outline=("#000000", 0.08), active=dict(color="accent"), anim="fade"),
+}
+STYLES = tuple(PRESETS) + ("none",)
+
+
+def style_list() -> list[dict]:
+    """For UIs: id, label, one-line description of every style."""
+    return [{"id": k, "label": p["label"], "blurb": p["blurb"]} for k, p in PRESETS.items()]
+
+
 class Writer:
     def __init__(self, brand: dict, s: dict, W: int, H: int):
         self.b, self.s, self.W, self.H = brand, s, W, H
+        self.p = PRESETS.get(s["style"], PRESETS["clean"])
         c = brand.get("colors", {})
         self.col = {k: c.get(k, d) for k, d in
                     {"primary": "#1F5C4A", "accent": "#F2C14E", "text": "#FFFFFF",
                      "pill_text": "#F6F1E7", "outline": "#000000"}.items()}
         f = brand.get("fonts", {})
-        self.sans = f.get("sans") or {"family": "Segoe UI", "bold": True, "file": f"{FONTS_DIR}/segoeuib.ttf"}
-        self.serif = f.get("serif") or {"family": "Georgia", "bold": True, "italic": True, "file": f"{FONTS_DIR}/georgiaz.ttf"}
-        self.size = int(s["size"] * (W / 1080 if H > W else H / 1080))
+        self.fonts = {
+            "sans": f.get("sans") or {"family": "Segoe UI", "bold": True, "file": f"{FONTS_DIR}/segoeuib.ttf"},
+            "serif": f.get("serif") or {"family": "Georgia", "bold": True, "italic": True,
+                                        "file": f"{FONTS_DIR}/georgiaz.ttf"},
+            **SYSTEM_FONTS,
+        }
+        self.font = self.fonts[self.p["font"]]
+        unit = W / 1080 if H > W else H / 1080
+        self.size = int(s["size"] * self.p.get("size", 1.0) * unit)
+        self.upper = self.p["upper"] if "upper" in self.p else bool(s["uppercase"])
         self.y = int(H * POSITIONS.get(s["position"], 0.70))
         self.events: list[str] = []
+        self.n_cue = 0
+
+    def c(self, name_or_hex: str, alpha: int = 0) -> str:
+        return ass_color(self.col.get(name_or_hex, name_or_hex), alpha)
 
     def header(self) -> str:
-        sans, col = self.sans, self.col
-        bold = -1 if sans.get("bold") else 0
+        p, font = self.p, self.font
+        bold = -1 if font.get("bold") else 0
+        italic = -1 if font.get("italic") else 0
+        if p.get("plate"):
+            # BorderStyle 3 = opaque box; libass paints it in OutlineColour, Outline = padding.
+            pc, pa = p["plate"]
+            border, outline_c, outline_w = 3, self.c(pc, pa), max(6, int(self.size * 0.22))
+        else:
+            oc, ow = p.get("outline") or ("outline", 0)
+            border, outline_c, outline_w = 1, self.c(oc), round(self.size * ow, 1)
+        shadow_w = round(self.size * p.get("shadow", 0), 1)
+        back = self.c("#000000", p.get("shadow_alpha", 0x40))
+        fill = self.c(p["fill"])
+        pc = self.col["primary"]
         return "\n".join([
             "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {self.W}", f"PlayResY: {self.H}",
             "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
@@ -197,71 +285,151 @@ class Writer:
             "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
             "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
             "Alignment, MarginL, MarginR, MarginV, Encoding",
-            f"Style: Clean,{sans['family']},{self.size},{ass_color(col['text'])},{ass_color(col['accent'])},"
-            f"{ass_color(col['outline'])},{ass_color(col['outline'], 0x80)},{bold},0,0,0,100,100,0,0,1,"
-            f"{max(3, self.size // 12)},{max(1, self.size // 30)},5,40,40,0,1",
-            f"Style: PillText,{sans['family']},{self.size},{ass_color(col['pill_text'])},{ass_color(col['accent'])},"
-            f"{ass_color(col['primary'])},{ass_color(col['primary'])},{bold},0,0,0,100,100,0,0,1,0,0,5,40,40,0,1",
-            f"Style: PillBox,{sans['family']},{self.size},{ass_color(col['primary'], 0x10)},{ass_color(col['primary'])},"
-            f"{ass_color(col['primary'])},{ass_color('#000000', 0xB0)},0,0,0,0,100,100,0,0,1,0,"
-            f"{max(2, self.size // 20)},5,0,0,0,1",
+            f"Style: Cap,{font['family']},{self.size},{fill},{fill},{outline_c},{back},{bold},{italic},0,0,"
+            f"100,100,0,0,{border},{outline_w},{shadow_w},5,40,40,0,1",
+            f"Style: Box,{font['family']},{self.size},{ass_color(pc, 0x10)},{ass_color(pc)},{ass_color(pc)},"
+            f"{ass_color('#000000', 0xB0)},0,0,0,0,100,100,0,0,1,0,{max(2, self.size // 20)},5,0,0,0,1",
             "", "[Events]",
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
         ])
 
-    # Emphasis is either bigger+accent colour, or a switch to italic serif.
-    def run_tags(self, w: dict, base_color: str) -> tuple[str, str, float, dict]:
-        if not w.get("emph"):
-            return "", "", 1.0, self.sans
-        if self.s["emphasis_look"] == "serif":
-            return (f"{{\\fn{self.serif['family']}\\i1\\fscx115\\fscy115}}",
-                    f"{{\\fn{self.sans['family']}\\i0\\fscx100\\fscy100}}", 1.15, self.serif)
-        return (f"{{\\c{ass_color(self.col['accent'])}\\fscx120\\fscy120}}",
-                f"{{\\c{base_color}\\fscx100\\fscy100}}", 1.2, self.sans)
+    # ---- per-word looks ----
 
-    def line(self, cue: list[dict], base_color: str, active: int | None = None) -> str:
-        parts = []
-        for i, w in enumerate(cue):
-            pre, post, _, _ = self.run_tags(w, base_color)
-            if active is not None and i == active and not w.get("emph"):
-                pre, post = f"{{\\c{ass_color(self.col['accent'])}}}", f"{{\\c{base_color}}}"
-            parts.append(pre + clean_text(w, self.s["uppercase"]) + post)
+    def emph_look(self, w: dict) -> tuple[str, str, float, dict]:
+        """(open tags, close tags, scale, font) for a popped word."""
+        if not w.get("emph"):
+            return "", "", 1.0, self.font
+        base = self.c(self.p["fill"])
+        if self.s["emphasis_look"] == "serif":
+            sf = self.fonts["serif"]
+            return (f"{{\\fn{sf['family']}\\i1\\fscx115\\fscy115}}",
+                    f"{{\\fn{self.font['family']}\\i0\\fscx100\\fscy100}}", 1.15, sf)
+        cycle = self.p.get("emph_cycle")
+        colour = cycle[(int(w["emph"]) - 1) % len(cycle)] if cycle else self.p.get("emph", "accent")
+        return (f"{{\\c{self.c(colour)}\\fscx118\\fscy118}}",
+                f"{{\\c{base}\\fscx100\\fscy100}}", 1.18, self.font)
+
+    def word_text(self, w: dict, active: bool, since_ms: int = 0) -> str:
+        pre, post, _, _ = self.emph_look(w)
+        a = self.p.get("active") or {}
+        if active and a and not a.get("box"):
+            colour = self.c(a.get("color", "accent"))
+            scale = int(100 * a.get("scale", 1.0))
+            base = self.c(self.p["fill"])
+            if a.get("bounce"):
+                pre = f"{{\\c{colour}\\fscx128\\fscy128\\t(0,140,\\fscx108\\fscy108)}}"
+                post = f"{{\\c{base}\\fscx100\\fscy100}}"
+            elif not w.get("emph"):
+                pre = f"{{\\c{colour}\\fscx{scale}\\fscy{scale}}}"
+                post = f"{{\\c{base}\\fscx100\\fscy100}}"
+        elif active and a.get("box"):
+            # Box text colour goes last so it beats an emphasis colour (else the word vanishes).
+            pre = pre + f"{{\\c{self.c(a.get('color', '#111111'))}\\bord0\\shad0}}"
+            post = post + f"{{\\c{self.c(self.p['fill'])}\\bord{round(self.size * (self.p.get('outline') or ('', 0))[1], 1)}}}"
+        return pre + clean_text(w, self.upper) + post
+
+    def line(self, cue: list[dict], active: int | None = None) -> str:
+        parts = [self.word_text(w, i == active) for i, w in enumerate(cue)]
+        if self.p.get("lines", 1) == 2 and len(parts) > 3:
+            half = (len(parts) + 1) // 2
+            return " ".join(parts[:half]) + "\\N" + " ".join(parts[half:])
         return " ".join(parts)
 
-    def text_width(self, cue: list[dict]) -> float:
-        total = 0.0
-        for i, w in enumerate(cue):
-            _, _, scale, font = self.run_tags(w, "")
-            try:
-                f = ImageFont.truetype(font.get("file", ""), max(8, int(self.size * scale)))
-            except OSError:
-                f = ImageFont.load_default(size=max(8, int(self.size * scale)))
-            total += f.getlength(clean_text(w, self.s["uppercase"]) + (" " if i < len(cue) - 1 else ""))
-        return total
+    @staticmethod
+    def _measure(font: dict, size: float, text: str) -> float:
+        """Width of `text` as libass draws it. libass sizes a font so ascent+descent equals the
+        font size, while PIL sizes by the em square, so scale PIL's width by size/(asc+desc)."""
+        try:
+            f = ImageFont.truetype(font.get("file", ""), 200)
+            asc, desc = f.getmetrics()
+            return f.getlength(text) * size / (asc + desc)
+        except OSError:
+            return len(text) * size * 0.5
+
+    def widths(self, cue: list[dict]) -> tuple[list[float], float]:
+        """Width of each word and of one space, in canvas pixels."""
+        out = []
+        for w in cue:
+            _, _, scale, font = self.emph_look(w)
+            out.append(self._measure(font, self.size * scale, clean_text(w, self.upper)))
+        return out, self._measure(self.font, self.size, " ")
 
     def add(self, layer: int, a: float, b: float, style: str, text: str) -> None:
         self.events.append(f"Dialogue: {layer},{ts(a)},{ts(b)},{style},,0,0,0,,{text}")
 
+    # ---- events ----
+
     def cue(self, cue: list[dict], end: float) -> None:
-        a = cue[0]["start"]
-        pop = "\\fscx92\\fscy92\\t(0,90,\\fscx100\\fscy100)"
-        pos = f"\\an5\\pos({self.W // 2},{self.y})"
-        style = self.s["style"]
-        if style == "clean":
-            self.add(1, a, end, "Clean", f"{{{pos}{pop}}}" + self.line(cue, ass_color(self.col["text"])))
-        elif style == "karaoke":
+        self.n_cue += 1
+        if self.p.get("active"):
             for i, w in enumerate(cue):
+                a = cue[0]["start"] if i == 0 else w["start"]
                 b = cue[i + 1]["start"] if i + 1 < len(cue) else end
-                self.add(1, w["start"], b, "Clean",
-                         f"{{{pos}{pop if i == 0 else ''}}}" + self.line(cue, ass_color(self.col["text"]), active=i))
-        elif style == "pill":
-            tw = self.text_width(cue)
-            pad_x, pad_y = self.size * 0.45, self.size * 0.28
-            bw, bh = tw + 2 * pad_x, self.size * 1.25 + 2 * pad_y * 0.6
+                self.emit(cue, a, b, active=i, first=(i == 0))
+        else:
+            self.emit(cue, cue[0]["start"], end, active=None, first=True)
+
+    def emit(self, cue: list[dict], a: float, b: float, active: int | None, first: bool) -> None:
+        p = self.p
+        pos = f"\\an5\\pos({self.W // 2},{self.y})"
+        anim = ""
+        if first and p["anim"] == "pop":
+            anim = "\\fscx90\\fscy90\\t(0,90,\\fscx100\\fscy100)"
+        elif first and p["anim"] == "fade":
+            anim = "\\fad(120,0)"
+        if p.get("tilt"):
+            anim += f"\\frz{(-2.5, 2.0, -1.5, 2.5)[self.n_cue % 4]}"
+        if p.get("blur"):
+            anim += "\\be1"
+
+        if p.get("box") == "pill":
+            ws, sp = self.widths(cue)
+            bw = sum(ws) + sp * (len(ws) - 1) + self.size * 0.9
+            bh = self.size * 1.25 + self.size * 0.34
             r = min(bh / 2, self.size * 0.35)
-            # \an5 centres the drawing on \pos, so the pop scales from the middle like the text.
-            self.add(0, a, end, "PillBox", f"{{{pos}{pop}\\p1}}{rounded_rect(bw, bh, r)}{{\\p0}}")
-            self.add(1, a, end, "PillText", f"{{{pos}{pop}}}" + self.line(cue, ass_color(self.col["pill_text"])))
+            self.add(0, a, b, "Box", f"{{{pos}{anim}\\p1}}{rounded_rect(bw, bh, r)}{{\\p0}}")
+
+        if active is not None and (p.get("active") or {}).get("box"):
+            # Place every word ourselves so the box and its word share exact coordinates
+            # (libass word spacing differs slightly from PIL's, which would misalign the box).
+            ws, sp = self.widths(cue)
+            sp += self.size * 0.12  # room for the box padding between words
+            x = self.W / 2 - (sum(ws) + sp * (len(ws) - 1)) / 2
+            colour = self.col.get(p["active"]["box"], p["active"]["box"])
+            for j, w in enumerate(cue):
+                cx = x + ws[j] / 2
+                if j == active:
+                    bw, bh = ws[j] + self.size * 0.36, self.size * 1.22
+                    self.add(0, a, b, "Box", f"{{\\an5\\pos({cx:.0f},{self.y}){anim}\\1c{ass_color(colour)}"
+                                             f"\\shad0\\p1}}{rounded_rect(bw, bh, self.size * 0.22)}{{\\p0}}")
+                self.add(1, a, b, "Cap", f"{{\\an5\\pos({cx:.0f},{self.y}){anim}}}" + self.word_text(w, j == active))
+                x += ws[j] + sp
+            return
+
+        if p.get("glow"):
+            glow = self.c(p["glow"])
+            self.add(0, a, b, "Cap", f"{{{pos}{anim}\\1a&HFF&\\3c{glow}\\bord{self.size * 0.16:.0f}"
+                                     f"\\blur{self.size * 0.2:.0f}\\shad0}}" + self.line(cue, active))
+            text = f"{{{pos}{anim}\\3c{glow}\\bord{max(1, self.size // 28)}\\shad0}}" + self.line(cue, active)
+        elif p["anim"] == "type":
+            text = f"{{{pos}}}" + self.typed(cue, a)
+        else:
+            text = f"{{{pos}{anim}}}" + self.line(cue, active)
+        self.add(1, a, b, "Cap", text)
+
+    def typed(self, cue: list[dict], a: float) -> str:
+        """Each letter starts invisible and appears as its word is spoken."""
+        out = []
+        for i, w in enumerate(cue):
+            t0 = max(0.0, w["start"] - a)
+            t1 = max(t0 + 0.05, w["end"] - a)
+            chars = clean_text(w, self.upper)
+            for k, ch in enumerate(chars):
+                ms = int(1000 * (t0 + (t1 - t0) * k / max(1, len(chars))))
+                out.append(f"{{\\alpha&HFF&\\t({ms},{ms + 1},\\alpha&H00&)}}{ch}")
+            if i < len(cue) - 1:
+                out.append(" ")
+        return "".join(out)
 
     def text(self) -> str:
         return self.header() + "\n" + "\n".join(self.events) + "\n"
@@ -275,6 +443,12 @@ def rounded_rect(w: float, h: float, r: float) -> str:
             f"l 0 {r:.0f} b 0 {k:.0f} {k:.0f} 0 {r:.0f} 0")
 
 
+def words_per_cue(plan: dict, s: dict) -> int:
+    """The style's own count, unless this plan sets max_words explicitly."""
+    explicit = (plan.get("captions") or {}).get("max_words")
+    return int(explicit or PRESETS.get(s["style"], PRESETS["clean"])["max_words"])
+
+
 def build_ass(plan: dict, edit_dir: Path, out_path: Path, style: str | None = None,
               words: list[dict] | None = None) -> int:
     """Write captions for the plan (or for `words`, already on the output timeline). Returns cue count."""
@@ -286,7 +460,7 @@ def build_ass(plan: dict, edit_dir: Path, out_path: Path, style: str | None = No
         if words is None:
             words = output_words(plan, edit_dir, s.get("corrections") or [])
         mark_emphasis(words, s["emphasis"])
-        cues = chunk(words, int(s["max_words"]))
+        cues = chunk(words, words_per_cue(plan, s))
         for i, c in enumerate(cues):
             nxt = cues[i + 1][0]["start"] if i + 1 < len(cues) else c[-1]["end"] + 0.3
             # Hold a cue until the next one unless there's a real pause.
@@ -308,7 +482,7 @@ def sample_frame(plan: dict, edit_dir: Path, style: str, out_jpg: Path, height: 
     s = settings(plan, load_brand(edit_dir), style)
     words = output_words(plan, edit_dir, s.get("corrections") or [])
     mark_emphasis(words, s["emphasis"])
-    cues = chunk(words, int(s["max_words"]))
+    cues = chunk(words, words_per_cue(plan, s))
     # Show a multi-word caption, ideally one with a popped word so the whole look shows.
     first = next((c for c in cues if len(c) >= 2 and any(w.get("emph") for w in c)),
                  next((c for c in cues if len(c) >= 2), cues[0] if cues else []))

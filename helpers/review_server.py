@@ -81,6 +81,7 @@ class Studio:
             "music": [self.music_name(p) for p in self.music_files()],
             "sfx_kit": sorted(__import__("audio").SFX_KIT),
             "looks": self.looks(),
+            "caption_styles": __import__("captions").style_list(),
         }
 
     def music_files(self) -> list[Path]:
