@@ -74,9 +74,11 @@ Helpers (`helpers/transcribe.py`, `helpers/render.py`, etc.) live alongside this
 - **`ingest.py <videos_dir>`** — **start here.** Inventory (ffprobe) → `transcribe_batch` → `pack_transcripts` → one timestamped contact sheet per source in `<edit>/storyboard/`. Writes `<edit>/inventory.md`. Cached; safe to re-run.
 - **`transcribe.py <video>`** — single file, word-level. Local faster-whisper by default (`--model small.en`; `base.en` faster, `medium.en` more accurate). Keeps fillers (um/uh/like) for filler cuts. No diarization locally — all words are `speaker_0`. `--engine scribe --num-speakers N` for paid ElevenLabs. Cached.
 - **`transcribe_batch.py <videos_dir>`** — every source in a folder. 1 worker locally (the model already uses all cores), 4 for Scribe.
+- **`suggest_cuts.py --edit-dir <dir>`** — draft `plan.json` from transcripts: cuts silences > 0.35s, fillers, retakes ("let me start that again" + the flubbed sentence), and restarts. Every cut records text + reason. Leaves "like"/"so" for you to judge. Won't overwrite without `--force`.
+- **`plan.py validate|snapshot|diff|approve`** — check a plan renders, save `plan_vN.json` before revising, list what changed between versions, and move `status` through draft → plan_approved → rough_approved → final.
 - **`pack_transcripts.py --edit-dir <dir>`** — `transcripts/*.json` → `takes_packed.md` (phrase-level, break on silence ≥ 0.5s).
 - **`timeline_view.py <video> <start> <end>`** — filmstrip + waveform PNG. On-demand visual drill-down. **Not a scan tool** — use it at decision points, not constantly.
-- **`render.py <edl.json> -o <out>`** — per-segment extract → concat → overlays (PTS-shifted) → subtitles LAST. `--preview` for 720p fast. `--build-subtitles` to generate master.srt inline.
+- **`render.py <edl.json|plan.json> -o <out>`** — per-segment extract → concat → overlays (PTS-shifted) → subtitles LAST. `--draft` for 720p in seconds (Gate 2 rough cut), `--preview` for 1080p QC. `--build-subtitles` to generate master.srt inline. Refuses `--preview`/final on a `plan.json` whose status isn't `rough_approved` (override: `--force`).
 - **`grade.py <in> -o <out>`** — ffmpeg filter chain grade. Presets + `--filter '<raw>'` for custom.
 
 For animations, create `<edit>/animations/slot_<id>/` with `Bash` and spawn a sub-agent via the `Agent` tool.
@@ -87,9 +89,11 @@ For animations, create `<edit>/animations/slot_<id>/` with `Bash` and spawn a su
 2. **Pre-scan for problems.** One pass over `takes_packed.md` to note verbal slips, obvious mis-speaks, or phrasings to avoid. Plain list, feed into the editor brief.
 3. **Converse.** Describe what you see in plain English. Ask questions *shaped by the material*. Collect: content type, target length/aspect, aesthetic/brand direction, pacing feel, must-preserve moments, must-cut moments, animation and grade preferences, subtitle needs. Do not use a fixed checklist — the right questions are different every time.
 4. **Propose strategy.** 4–8 sentences: shape, take choices, cut direction, animation plan, grade direction, subtitle style, length estimate. **Wait for confirmation.**
-5. **Execute.** Produce `edl.json` via the editor sub-agent brief. Drill into `timeline_view` at ambiguous moments. Build animations in parallel sub-agents. Apply grade per-segment. Compose via `render.py`.
-6. **Preview.** `render.py --preview`.
-7. **Self-eval (before showing the user).** Run `timeline_view` on the **rendered output** (not the sources) at every cut boundary (±1.5s window). Check each image for:
+5. **Draft the plan.** `suggest_cuts.py --edit-dir <edit> [--target S --aspect 9:16]` writes a mechanical `plan.json` (silences, fillers, retakes, restarts — each cut with its text and reason). Then refine it as the editor: pick takes across sources, set `beat` / `reason` on every range, reorder, trim to length, and *describe* planned graphics/zooms/captions in their fields — don't build them yet. `plan.py validate` must pass.
+6. **🛑 Gate 1 — plan review.** Show the user the plan (Review Studio once built; until then a readable summary: kept lines in order, cut lines with reasons, length vs target, planned graphics). Revise on notes: `plan.py snapshot --change "..."` before each revision, one `--change` per note answered, then `plan.py diff plan_vN.json plan.json` to show what changed. On approval: `plan.py approve <plan> plan`.
+7. **🛑 Gate 2 — rough cut.** `render.py <edit>/plan.json -o <edit>/rough.mp4 --draft` (720p, seconds). Graphics are still placeholders. Same notes → snapshot → revise loop. On approval: `plan.py approve <plan> rough`. `render.py` refuses non-draft renders before this.
+8. **Execute.** Build animations in parallel sub-agents, apply grade, compose via `render.py` (`--preview`, then final). Drill into `timeline_view` at ambiguous moments. Structural changes requested now go back to Gate 1.
+9. **Self-eval (before showing the user).** Run `timeline_view` on the **rendered output** (not the sources) at every cut boundary (±1.5s window). Check each image for:
    - Visual discontinuity / flash / jump at the cut
    - Waveform spike at the boundary (audio pop that slipped past the 30ms fade)
    - Subtitle hidden behind an overlay (Rule 1 violation)
@@ -102,7 +106,7 @@ For animations, create `<edit>/animations/slot_<id>/` with `Bash` and spawn a su
    For anything the user will publish (launch, promo, ad), also spawn one **critic sub-agent** with the rendered file, the EDL, and any reference videos the user gave. Brief it to roast, not to praise: a verdict, ranked problems with timecodes and evidence (frames, levels), and the 5 fixes to do first. Fresh eyes catch what the author stopped seeing — cut-off payoff lines, 0.5s memes, unreadable 28px text at phone size.
 
    If anything fails: fix → re-render → re-eval. **Cap at 3 self-eval passes** — if issues remain after 3, flag them to the user rather than looping forever. Only present the preview once the self-eval passes.
-8. **Iterate + persist.** Natural-language feedback, re-plan, re-render. Never re-transcribe. Final render on confirmation. Append to `project.md`.
+10. **Iterate + persist.** Natural-language feedback, re-plan, re-render. Never re-transcribe. Final render on confirmation (`plan.py approve <plan> final`). Append to `project.md`.
 
 ## Cut craft (techniques)
 
@@ -329,7 +333,8 @@ Things that consistently fail regardless of style:
 - **Hierarchical pre-computed codec formats** with USABILITY / tone tags / shot layers. Over-engineering. Derive from the transcript at decision time.
 - **Hand-tuned moment-scoring functions.** The LLM picks better than any heuristic you'll write.
 - **Whisper SRT / phrase-level output.** Loses sub-second gap data. Always word-level verbatim.
-- **Running Whisper locally on CPU.** Slow and it normalizes fillers. Use hosted Scribe.
+- **Running plain Whisper without the filler prompt.** It normalizes fillers away. `transcribe.py` already primes faster-whisper to keep them — use it rather than calling Whisper directly.
+- **Rendering above draft quality before the rough cut is approved.** Wasted time if the plan is wrong. `render.py` enforces this for `plan.json`.
 - **Burning subtitles into base before compositing overlays.** Overlays hide them. (Hard Rule 1.)
 - **Single-pass filtergraph when you have overlays.** Double re-encodes. Use per-segment extract → concat.
 - **Linear animation easing.** Looks robotic. Always cubic.

@@ -746,15 +746,28 @@ def main() -> None:
              "(falls back to 24 if it can't be probed). Pass e.g. --fps 30 or "
              "--fps 30000/1001 to force.",
     )
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="Render above draft quality even if plan.json status is not rough_approved.",
+    )
     args = ap.parse_args()
 
     edl_path = args.edl.resolve()
     if not edl_path.exists():
         sys.exit(f"edl not found: {edl_path}")
 
-    edl = json.loads(edl_path.read_text())
+    edl = json.loads(edl_path.read_text(encoding="utf-8"))
     edit_dir = edl_path.parent
     out_path = args.output.resolve()
+
+    # Review gates (plan.json): only the fast draft renders before the user has
+    # approved the rough cut. Plain EDLs without a status are not gated.
+    status = edl.get("status")
+    if status is not None and not args.draft and status not in ("rough_approved", "final") \
+            and not args.force:
+        sys.exit(f"plan status is '{status}': only --draft renders are allowed until the rough cut "
+                 "is approved (helpers/plan.py approve <plan> rough). Use --force to override.")
 
     # 1. Extract per-segment (auto-grade per range if EDL grade is "auto")
     segment_paths = extract_all_segments(

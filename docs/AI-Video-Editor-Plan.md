@@ -93,8 +93,13 @@ Notes: whisper.cpp dropped (no prebuilt ARM binary, no C++ compiler here); faste
 Tested on two synthetic takes (37 s): fillers, pauses, and the retake all show up in `takes_packed.md`; word timing lines up with the waveform in `timeline_view`.
 Speed: ~1 s of processing per 1 s of footage with `small.en` on this laptop (~1 hour for 1 hour of raw footage; `base.en` is ~3× faster). Limits: no speaker labels locally; numbers may come out as digits ("54 -second").
 
-**Phase 2 — Edit plan + cuts**
-`plan.json` format (extends video-use's EDL — see Review Studio below), FFmpeg renderer, silence/filler/retake removal, audio fades, multi-clip best-take selection.
+**Phase 2 — Edit plan + cuts** ✅ done 2026-10-29
+`plan.json` = video-use EDL + `version`, `status`, `target`, `cuts`, `captions`, `graphics`, `zooms`, `audio`, `changes`; `render.py` reads it directly.
+`helpers/suggest_cuts.py`: mechanical draft — silences > 0.35 s, fillers (um/uh/erm…), retakes ("let me start that again" + the flubbed sentence), restarts; every cut stores its text + reason for the Studio. "like"/"so" left for Claude to judge. Multi-take selection, beat labels and ordering are Claude's job on top of this draft (per SKILL.md).
+`helpers/plan.py`: `validate`, `snapshot` (plan_vN.json + change notes), `diff` (plain-English "what changed"), `approve plan|rough|final`.
+`render.py` gate: refuses `--preview`/final renders of a plan until `rough_approved` (`--force` overrides). `--draft` rough cut: 720p in ~4 s for a 14 s cut.
+Tested on the two synthetic takes: 37 s → 13.7 s; fillers, the retake and pauses removed; re-transcribing the rough cut confirms the right lines remain.
+Watch on real footage: one cut start may clip a word onset (Whisper heard "Comment edit" as "I meant edit" in the rough cut) — if it recurs, widen `PAD_BEFORE` from 50 ms toward 100 ms.
 
 **Phase 3 — Review Studio v1 (minimum useful version = Phases 1–3)**
 Local review page with Gate 1 (storyboard) and Gate 2 (rough-cut draft). Covers cuts first; each later phase adds its own preview to the Studio (caption samples, graphic mockups, zoom markers, music bed).
