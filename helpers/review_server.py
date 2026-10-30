@@ -78,7 +78,21 @@ class Studio:
                       **self.render},
             "project": self.edit_dir.parent.name,
             "brand_captions": self.brand_captions(),
+            "music": [self.music_name(p) for p in self.music_files()],
+            "sfx_kit": sorted(__import__("audio").SFX_KIT),
         }
+
+    def music_files(self) -> list[Path]:
+        import audio
+        return audio.list_music(self.edit_dir)
+
+    def music_name(self, p: Path) -> str:
+        """How a music file is written in plan.json: repo-relative if possible, else absolute."""
+        import audio
+        try:
+            return p.relative_to(audio.REPO).as_posix()
+        except ValueError:
+            return str(p)
 
     def brand_captions(self) -> dict:
         import captions
@@ -93,13 +107,23 @@ class Studio:
         with self.lock:
             plan = planlib.load(self.plan_path)
             new_ranges = body.get("ranges")
-            new_captions = body.get("captions")
             changed: list[str] = []
-            if new_captions is not None and new_captions != (plan.get("captions") or {}):
-                old = plan.get("captions") or {}
-                for k in sorted(set(old) | set(new_captions)):
-                    if old.get(k) != new_captions.get(k):
-                        changed.append(f"captions {k}: {old.get(k, '(brand default)')} -> {new_captions.get(k, '(brand default)')}")
+            settings_changed: dict[str, dict] = {}
+            for field in ("captions", "audio"):
+                new = body.get(field)
+                old = plan.get(field) or {}
+                if new is None or new == old:
+                    continue
+                settings_changed[field] = new
+                def show(v):
+                    if isinstance(v, dict):
+                        return ", ".join(f"{a} {Path(str(b)).name if a == 'file' else b}" for a, b in v.items())
+                    if isinstance(v, list):
+                        return ", ".join(map(str, v)) or "(none)"
+                    return "(default)" if v is None else str(v)
+                for k in sorted(set(old) | set(new)):
+                    if old.get(k) != new.get(k):
+                        changed.append(f"{field} {k}: {show(old.get(k))} -> {show(new.get(k))}")
             if new_ranges is not None:
                 candidate = dict(plan, ranges=new_ranges)
                 changed += planlib.diff(plan, candidate)
@@ -121,8 +145,7 @@ class Studio:
                             "reason": "switched off in Review Studio"})
                 if new_ranges is not None:
                     plan["ranges"] = new_ranges
-                if new_captions is not None:
-                    plan["captions"] = new_captions
+                plan.update(settings_changed)
                 plan["version"] = v + 1
                 plan["status"] = "draft"
                 plan["changes"] = [f"v{v + 1} (you, in Review Studio): {c}" for c in changed]
@@ -250,6 +273,15 @@ def make_handler(studio: Studio):
             if url.path == "/thumb":
                 q = parse_qs(url.query)
                 p = studio.thumb(q.get("source", [""])[0], float(q.get("t", ["0"])[0]))
+                return self.send_file(p) if p else self.send_error(404)
+            if url.path == "/music-file":
+                want = parse_qs(url.query).get("f", [""])[0]
+                p = next((m for m in studio.music_files() if studio.music_name(m) == want), None)
+                return self.send_file(p) if p else self.send_error(404)
+            if url.path == "/sfx":
+                import audio
+                name = parse_qs(url.query).get("name", [""])[0]
+                p = audio.make_sfx().get(name)
                 return self.send_file(p) if p else self.send_error(404)
             if url.path == "/caption-sample":
                 p = studio.caption_sample(parse_qs(url.query).get("style", [""])[0])

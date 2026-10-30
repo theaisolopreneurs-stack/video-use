@@ -116,8 +116,12 @@ Studio: Captions panel with live previews of each style on your footage, positio
 Tested on the Texans clip: pill captions, "0 and 4" / "Super Bowl" / "Claude" popped, "drive" → "derive" fixed.
 Not yet: custom brand font files (any installed Windows font works; dropping .ttf files into a fonts folder is a small follow-up), logo.
 
-**Phase 5 — Audio polish**
-Noise removal, loudness, music ducking, SFX. Studio lets you audition the music bed before render.
+**Phase 5 — Audio polish** ✅ done 2026-10-29
+`helpers/audio.py`, run by `render.py` on every plan render: voice cleanup (on by default; high-pass, gentle denoise, de-esser, light compression), music bed (loops, fades, sidechain-ducked under the voice), SFX at set times or automatically on popped caption words. Loudness normalisation to -14 LUFS (from upstream) runs last.
+SFX kit (pop, click, ding, whoosh, riser) is synthesised by FFmpeg — free, no licensing. Music is yours: `music/` folder (git-ignored audio) with a README of free sources.
+Studio: Audio panel — voice cleanup toggle, music picker with ▶ Listen, volume, duck toggle, sound-on-popped-words with preview. Audio changes save as a new version and mark the rough cut stale.
+Measured on the Texans clip: final mix -14.2 LUFS; music ducks 8.2 dB under speech; voice noise floor -46.7 → -48.0 dB (recording was already clean, so the cleanup stays gentle).
+Not yet: per-section music changes, beat-synced cuts, AI music generation.
 
 **Phase 6 — Framing and color**
 Zooms, face-tracked reframes, LUTs.

@@ -72,3 +72,6 @@ renders/
 
 # Local preview configs (point at local test footage)
 .claude/launch.json
+
+# Generated SFX kit (helpers/audio.py --make-sfx)
+sfx/

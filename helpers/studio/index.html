@@ -127,6 +127,32 @@
       <div class="meta" id="capNote" style="margin-top:6px"></div>
     </section>
     <section class="box">
+      <h2>Audio</h2>
+      <label class="meta" style="display:block"><input type="checkbox" id="audVoice"> Clean up voice (rumble, hiss, harsh "s", even levels)</label>
+      <div class="row" style="margin-top:8px">
+        <label class="meta">Music
+          <select id="audMusic"></select>
+        </label>
+        <button id="audPlay" title="Listen to this track">▶ Listen</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label class="meta">Music volume
+          <select id="audVol">
+            <option value="-28">Very quiet</option><option value="-24">Quiet</option><option value="-20">Medium</option><option value="-16">Loud</option>
+          </select>
+        </label>
+        <label class="meta"><input type="checkbox" id="audDuck"> Duck under voice</label>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label class="meta">Sound on popped words
+          <select id="audSfx"></select>
+        </label>
+        <button id="sfxPlay" title="Listen to this sound">▶</button>
+      </div>
+      <audio id="audPlayer" hidden></audio>
+      <div class="meta" id="audNote" style="margin-top:6px">Make a new rough cut after saving to hear the full mix.</div>
+    </section>
+    <section class="box">
       <h2>Overall notes for Claude</h2>
       <textarea id="overall" rows="5" placeholder="e.g. Hook is too slow. Keep it under 45 seconds. Lead with the 'one hour of footage' line."></textarea>
     </section>
@@ -170,10 +196,43 @@ async function load() {
   (n?.cards || []).forEach((c) => (cardNotes[c.index] = c.note));
   $("overall").value = n?.overall || "";
   caps = JSON.parse(JSON.stringify(S.plan.captions || {}));
+  aud = JSON.parse(JSON.stringify(S.plan.audio || {}));
   setDirty(false);
   render();
   renderCaptions();
+  renderAudio();
 }
+
+let aud = {};
+function setAud(fn) { fn(aud); setDirty(true); renderAudio(); }
+function renderAudio() {
+  const m = aud.music || {};
+  $("audVoice").checked = (aud.voice || "clean") !== "off";
+  $("audMusic").innerHTML = `<option value="">No music</option>` +
+    S.music.map((f) => `<option value="${esc(f)}" ${m.file === f ? "selected" : ""}>${esc(f.split(/[\\/]/).pop())}</option>`).join("");
+  if (m.file && !S.music.includes(m.file)) $("audMusic").innerHTML += `<option selected value="${esc(m.file)}">${esc(m.file)} (missing)</option>`;
+  $("audVol").value = String(m.volume_db ?? -20);
+  $("audDuck").checked = m.duck !== false;
+  ["audVol", "audDuck", "audPlay"].forEach((id) => ($(id).disabled = !m.file));
+  $("audSfx").innerHTML = `<option value="">None</option>` +
+    S.sfx_kit.map((s) => `<option value="${s}" ${aud.sfx_on_emphasis === s ? "selected" : ""}>${s}</option>`).join("");
+  $("sfxPlay").disabled = !aud.sfx_on_emphasis;
+  if (!S.music.length) $("audNote").textContent = "No music yet: put tracks in the music/ folder (see music/README.md for free sources).";
+}
+$("audVoice").onchange = (e) => setAud((a) => { if (e.target.checked) delete a.voice; else a.voice = "off"; });
+$("audMusic").onchange = (e) => setAud((a) => { if (e.target.value) a.music = { volume_db: -20, duck: true, ...(a.music || {}), file: e.target.value }; else delete a.music; });
+$("audVol").onchange = (e) => setAud((a) => (a.music.volume_db = +e.target.value));
+$("audDuck").onchange = (e) => setAud((a) => (a.music.duck = e.target.checked));
+$("audSfx").onchange = (e) => setAud((a) => { if (e.target.value) a.sfx_on_emphasis = e.target.value; else delete a.sfx_on_emphasis; });
+function playAudio(src, btn) {
+  const p = $("audPlayer");
+  if (!p.paused && p.dataset.src === src) { p.pause(); btn.textContent = btn.textContent.replace("■", "▶"); return; }
+  p.src = src; p.dataset.src = src; p.play();
+  btn.textContent = btn.textContent.replace("▶", "■");
+  p.onended = p.onpause = () => (btn.textContent = btn.textContent.replace("■", "▶"));
+}
+$("audPlay").onclick = () => playAudio(`/music-file?f=${encodeURIComponent(aud.music.file)}`, $("audPlay"));
+$("sfxPlay").onclick = () => playAudio(`/sfx?name=${encodeURIComponent(aud.sfx_on_emphasis)}`, $("sfxPlay"));
 
 const capEff = (k) => (caps[k] !== undefined ? caps[k] : S.brand_captions[k]);
 function setCap(k, v) {
@@ -362,7 +421,7 @@ $("saveBtn").onclick = async () => {
   const cards = Object.entries(cardNotes).filter(([, n]) => n && n.trim()).map(([i, n]) => {
     const r = ranges[i]; return { index: +i, source: r.source, start: r.start, end: r.end, quote: r.quote, note: n.trim() };
   });
-  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
+  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
   await load();
   toast(res.direct_edits.length ? `Saved as v${res.version}. ${res.notes_saved ? 'Now tell Claude "check my notes".' : ""}` :
     res.notes_saved ? 'Notes saved. Tell Claude "check my notes".' : "Nothing to save.");

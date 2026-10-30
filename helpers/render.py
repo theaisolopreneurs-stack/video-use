@@ -789,6 +789,13 @@ def main() -> None:
     base_path = edit_dir / base_name
     concat_segments(segment_paths, base_path, edit_dir)
 
+    # 2b. plan.json: audio polish on the continuous voice track (cleanup, music, SFX).
+    if status is not None:
+        import audio
+        if audio.has_work(edl):
+            base_path = audio.mix(base_path, edl, edit_dir,
+                                  base_path.with_name(base_path.stem + "_mixed.mp4"))
+
     # 3. Subtitles: build if requested, resolve final path
     subs_path: Path | None = None
     if not args.no_subtitles:
