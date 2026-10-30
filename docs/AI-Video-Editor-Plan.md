@@ -180,6 +180,27 @@ Only after both approvals: build animations, grade, mix audio, render full quali
 - The "one sentence" claim is generous — the reel itself shows several plain-English revision rounds. Plan for draft → notes → revise.
 - A tight, consistent **brand look** (two colors, one serif) does more than lots of effects.
 
+## Limitations and risks
+
+### HDR vs SDR (checked 2026-10-29 on this Surface Pro 11)
+
+- **Today the pipeline is SDR-only — by design, not hardware.** Upstream `render.py` detects HDR sources (iPhone HLG, PQ cameras) and tone-maps them to 8-bit SDR H.264 on purpose, because a half-converted HDR file looks washed out on most phones/platforms.
+- **The hardware can do HDR.** Our FFmpeg build has libx265 (10-bit HEVC) plus zscale/tonemap. Tested a 10-bit HLG (BT.2020) encode with correct HDR metadata: 1080×1920 at ~0.66× real time (60 s reel ≈ 1.5 min), 4K at ~0.27× (60 s ≈ 3.7 min). Software encoding, so it runs on any CPU.
+- **No hardware HDR encoder.** Windows' Media Foundation HEVC encoder (`hevc_mf`) failed a quick 10-bit test, so HDR renders use the CPU (slower, but fine for short-form).
+- **HDR output needs work in Phase 2/6 — "HDR mode":**
+  - `render.py --hdr`: skip tone-mapping, encode libx265 10-bit, keep HLG (or PQ) + BT.2020 tags.
+  - Graphics (HyperFrames renders in Chrome as SDR) and burned-in captions must be converted into the HDR color space before compositing, or they'll look dim/grey. Set a "graphics white" brightness so text doesn't blind on HDR screens.
+  - Color grading: SDR LUTs/`eq` presets don't apply to HDR; need HDR-aware grades or grade in linear light.
+  - **Dolby Vision** (iPhone's default) metadata is not preserved — output would be HLG or HDR10, which all major platforms accept.
+- **Default stays SDR.** Most Reels/TikTok viewers see SDR anyway, and SDR is the safe choice for consistent graphics. HDR is opt-in per project (mainly YouTube/iPhone-shot content).
+- **Previewing HDR:** the Review Studio plays in Chrome. Surface Pro 11's OLED model shows HDR; the LCD model shows a tone-mapped version — judge HDR on a phone too.
+
+### Other limits
+
+- **Speed:** transcription ~1× real time (`small.en`); x64 Python/FFmpeg run under Windows emulation on Snapdragon.
+- **No speaker labels** with free local transcription.
+- **Claude usage:** long footage uses a lot of your plan's allowance; transcripts and contact sheets keep it down.
+
 ## Open items
 
 - Confirm faster-whisper word timestamps on real footage are tight enough for word-by-word captions (try `small.en` if `base.en` drifts).
