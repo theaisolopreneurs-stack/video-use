@@ -77,7 +77,12 @@ class Studio:
                       "stale": rough.exists() and rendered_cut != self.cut_signature(plan),
                       **self.render},
             "project": self.edit_dir.parent.name,
+            "brand_captions": self.brand_captions(),
         }
+
+    def brand_captions(self) -> dict:
+        import captions
+        return captions.settings({}, captions.load_brand(self.edit_dir))
 
     @staticmethod
     def cut_signature(plan: dict) -> list:
@@ -88,10 +93,16 @@ class Studio:
         with self.lock:
             plan = planlib.load(self.plan_path)
             new_ranges = body.get("ranges")
+            new_captions = body.get("captions")
             changed: list[str] = []
+            if new_captions is not None and new_captions != (plan.get("captions") or {}):
+                old = plan.get("captions") or {}
+                for k in sorted(set(old) | set(new_captions)):
+                    if old.get(k) != new_captions.get(k):
+                        changed.append(f"captions {k}: {old.get(k, '(brand default)')} -> {new_captions.get(k, '(brand default)')}")
             if new_ranges is not None:
                 candidate = dict(plan, ranges=new_ranges)
-                changed = planlib.diff(plan, candidate)
+                changed += planlib.diff(plan, candidate)
                 old_beats = {planlib.range_key(r): r.get("beat", "") for r in plan["ranges"]}
                 for r in new_ranges:
                     old = old_beats.get(planlib.range_key(r))
@@ -101,14 +112,17 @@ class Studio:
                 v = int(plan.get("version", 1))
                 shutil.copyfile(self.plan_path, self.edit_dir / f"plan_v{v}.json")
                 # Sections you switched off become cuts, so they stay visible (and restorable).
-                for r in plan["ranges"]:
+                for r in (plan["ranges"] if new_ranges is not None else []):
                     if not any(n["source"] == r["source"] and n["start"] < r["end"] and r["start"] < n["end"]
                                for n in new_ranges):
                         plan.setdefault("cuts", []).append({
                             "source": r["source"], "start": r["start"], "end": r["end"],
                             "text": r.get("quote", ""), "kind": "removed",
                             "reason": "switched off in Review Studio"})
-                plan["ranges"] = new_ranges
+                if new_ranges is not None:
+                    plan["ranges"] = new_ranges
+                if new_captions is not None:
+                    plan["captions"] = new_captions
                 plan["version"] = v + 1
                 plan["status"] = "draft"
                 plan["changes"] = [f"v{v + 1} (you, in Review Studio): {c}" for c in changed]
@@ -151,6 +165,22 @@ class Studio:
                                error=None if proc.returncode == 0 else proc.stderr[-1500:])
         threading.Thread(target=work, daemon=True).start()
         return {"ok": True}
+
+    def caption_sample(self, style: str) -> Path | None:
+        """Still frame showing a caption style on this footage; rebuilt when plan or brand change."""
+        import captions
+        if style not in captions.STYLES or style == "none":
+            return None
+        out = self.edit_dir / "storyboard" / f"caption_{style}.jpg"
+        deps = [self.plan_path, self.edit_dir.parent / "brand.json", captions.REPO / "brand" / "brand.json"]
+        newest = max((p.stat().st_mtime for p in deps if p.exists()), default=0)
+        if not out.exists() or out.stat().st_mtime < newest:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                captions.sample_frame(planlib.load(self.plan_path), self.edit_dir, style, out, height=640)
+            except Exception:
+                return None
+        return out
 
     def thumb(self, source: str, t: float) -> Path | None:
         plan = planlib.load(self.plan_path)
@@ -220,6 +250,9 @@ def make_handler(studio: Studio):
             if url.path == "/thumb":
                 q = parse_qs(url.query)
                 p = studio.thumb(q.get("source", [""])[0], float(q.get("t", ["0"])[0]))
+                return self.send_file(p) if p else self.send_error(404)
+            if url.path == "/caption-sample":
+                p = studio.caption_sample(parse_qs(url.query).get("style", [""])[0])
                 return self.send_file(p) if p else self.send_error(404)
             if url.path.startswith("/media/"):
                 p = (studio.edit_dir / unquote(url.path[len("/media/"):])).resolve()

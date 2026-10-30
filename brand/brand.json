@@ -1,0 +1,25 @@
+{
+  "name": "Default brand (edit me)",
+  "colors": {
+    "primary": "#1F5C4A",
+    "accent": "#F2C14E",
+    "text": "#FFFFFF",
+    "pill_text": "#F6F1E7",
+    "outline": "#000000"
+  },
+  "fonts": {
+    "sans": {"family": "Segoe UI", "bold": true, "italic": false, "file": "C:/Windows/Fonts/segoeuib.ttf"},
+    "serif": {"family": "Georgia", "bold": true, "italic": true, "file": "C:/Windows/Fonts/georgiaz.ttf"}
+  },
+  "captions": {
+    "style": "pill",
+    "position": "lower",
+    "max_words": 3,
+    "uppercase": false,
+    "size": 72,
+    "emphasis_look": "accent",
+    "always_emphasize": ["Claude"]
+  },
+  "logo": null,
+  "cta": "Comment \"EDIT\" and I'll send you the walkthrough"
+}

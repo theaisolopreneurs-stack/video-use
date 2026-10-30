@@ -63,6 +63,14 @@
   .toast { color: var(--ok); font-size: 14px; }
   .toast.err { color: var(--warn); }
   .legend { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .capgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .capopt { border: 2px solid var(--line); border-radius: 10px; padding: 4px; cursor: pointer; text-align: center; font-size: 12px; background: var(--bg); }
+  .capimg { position: relative; aspect-ratio: 9 / 16; border-radius: 6px; background: var(--line); overflow: hidden; }
+  .capimg span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 6px; color: var(--muted); font-size: 11px; }
+  .capopt img { position: relative; width: 100%; height: 100%; object-fit: cover; object-position: center 72%; display: block; }
+  .capopt .off { aspect-ratio: 9 / 16; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+  .capopt.sel { border-color: var(--accent); font-weight: 700; }
+  select { font: inherit; font-size: 13px; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: inherit; }
 </style>
 </head>
 <body>
@@ -105,6 +113,20 @@
       <ul class="tnotes" id="tnotes"></ul>
     </section>
     <section class="box">
+      <h2>Captions</h2>
+      <div class="capgrid" id="capgrid"></div>
+      <div class="row" style="margin-top:10px">
+        <label class="meta">Position
+          <select id="capPos"><option value="lower">Lower (clear of app buttons)</option><option value="middle">Middle</option><option value="upper">Upper</option></select>
+        </label>
+        <label class="meta"><input type="checkbox" id="capUpper"> ALL CAPS</label>
+      </div>
+      <label class="meta" style="display:block;margin-top:8px">Words to pop (comma-separated)
+        <input id="capEmph" style="width:100%;font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:inherit" placeholder="e.g. 0 and 4, Super Bowl">
+      </label>
+      <div class="meta" id="capNote" style="margin-top:6px"></div>
+    </section>
+    <section class="box">
       <h2>Overall notes for Claude</h2>
       <textarea id="overall" rows="5" placeholder="e.g. Hook is too slow. Keep it under 45 seconds. Lead with the 'one hour of footage' line."></textarea>
     </section>
@@ -133,6 +155,7 @@ let S = null;          // server state
 let ranges = [];       // working copy of plan.ranges, each with _on flag
 let cardNotes = {};    // index -> note
 let tnotes = [];       // timestamped notes
+let caps = {};         // working copy of plan.captions
 let dirty = false;
 
 const fmt = (t) => { const m = Math.floor(t / 60); return `${m}:${(t - m * 60).toFixed(2).padStart(5, "0")}`; };
@@ -146,9 +169,32 @@ async function load() {
   cardNotes = {}; tnotes = n?.timestamped || [];
   (n?.cards || []).forEach((c) => (cardNotes[c.index] = c.note));
   $("overall").value = n?.overall || "";
+  caps = JSON.parse(JSON.stringify(S.plan.captions || {}));
   setDirty(false);
   render();
+  renderCaptions();
 }
+
+const capEff = (k) => (caps[k] !== undefined ? caps[k] : S.brand_captions[k]);
+function setCap(k, v) {
+  if (JSON.stringify(v) === JSON.stringify(S.brand_captions[k]) && caps[k] === undefined) return;
+  caps[k] = v; setDirty(true); renderCaptions();
+}
+function renderCaptions() {
+  const style = capEff("style"), v = S.plan.version;
+  const opts = [["clean", "Clean"], ["karaoke", "Karaoke"], ["pill", "Pill"], ["none", "Off"]];
+  $("capgrid").innerHTML = opts.map(([k, label]) => `<div class="capopt ${style === k ? "sel" : ""}" onclick="setCap('style','${k}')">
+    ${k === "none" ? `<div class="off">No captions</div>` : `<div class="capimg"><span>Rendering preview…</span><img src="/caption-sample?style=${k}&v=${v}" alt="${label} captions" onerror="this.previousElementSibling.textContent='Preview failed'"></div>`}${label}</div>`).join("");
+  $("capPos").value = capEff("position");
+  $("capUpper").checked = !!capEff("uppercase");
+  if (document.activeElement !== $("capEmph")) $("capEmph").value = (caps.emphasis || []).join(", ");
+  const always = S.brand_captions.always_emphasize || [];
+  $("capNote").textContent = (always.length ? `Brand always pops: ${always.join(", ")}. ` : "") +
+    "Previews refresh after you save. Spelling fixes: ask Claude (e.g. \"drive should be derive\").";
+}
+$("capPos").onchange = (e) => setCap("position", e.target.value);
+$("capUpper").onchange = (e) => setCap("uppercase", e.target.checked);
+$("capEmph").onchange = (e) => setCap("emphasis", e.target.value.split(",").map((x) => x.trim()).filter(Boolean));
 
 function setDirty(v) { dirty = v; $("dirtyMsg").textContent = v ? "Unsaved changes" : "No unsaved changes"; updateApprove(); }
 function toast(msg, err) { const t = $("toast"); t.textContent = msg; t.className = "toast" + (err ? " err" : ""); setTimeout(() => (t.textContent = ""), 6000); }
@@ -316,7 +362,7 @@ $("saveBtn").onclick = async () => {
   const cards = Object.entries(cardNotes).filter(([, n]) => n && n.trim()).map(([i, n]) => {
     const r = ranges[i]; return { index: +i, source: r.source, start: r.start, end: r.end, quote: r.quote, note: n.trim() };
   });
-  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
+  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
   await load();
   toast(res.direct_edits.length ? `Saved as v${res.version}. ${res.notes_saved ? 'Now tell Claude "check my notes".' : ""}` :
     res.notes_saved ? 'Notes saved. Tell Claude "check my notes".' : "Nothing to save.");

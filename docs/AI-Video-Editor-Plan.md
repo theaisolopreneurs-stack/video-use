@@ -108,9 +108,13 @@ Direct edits auto-snapshot to a new version; switched-off sections become restor
 Tested end to end in the browser on the synthetic takes: edit → save (v2) → approve plan → make rough cut → timestamped note → approve rough. Works at phone width.
 Later phases add their previews here: caption samples (4), music audition (5), grade stills / crop box (6), graphic mockups (7).
 
-**Phase 4 — Brand kit + captions**
-*New:* `brand.json` — colors, fonts, caption style, logo, CTA wording. Every later phase reads it, so videos look consistent without re-asking.
-Caption styles: word-by-word, pill, single-word emphasis, mixed-type emphasis. Studio shows each style on a real frame.
+**Phase 4 — Brand kit + captions** ✅ done 2026-10-29
+`brand/brand.json` (repo default, override per project with `<videos_dir>/brand.json`): colours, sans + serif fonts (Windows fonts by default), caption defaults, `always_emphasize`, CTA text. **Placeholder colours — swap in your real brand.**
+`helpers/captions.py` writes `captions.ass` (libass, burned by FFmpeg): styles **clean**, **karaoke** (spoken word in accent colour), **pill** (rounded brand-colour box); emphasis phrases pop inline as **accent** (bigger, gold) or **serif** (italic serif — the mixed-type look); per-word `corrections` fix misheard words; popped phrases never split; position at 70% height (clear of app UI).
+`render.py` burns captions into every `plan.json` render automatically, including the rough cut. Captions are part of the rough-cut "stale" check.
+Studio: Captions panel with live previews of each style on your footage, position, ALL CAPS, words-to-pop; changes save as a new plan version.
+Tested on the Texans clip: pill captions, "0 and 4" / "Super Bowl" / "Claude" popped, "drive" → "derive" fixed.
+Not yet: custom brand font files (any installed Windows font works; dropping .ttf files into a fonts folder is a small follow-up), logo.
 
 **Phase 5 — Audio polish**
 Noise removal, loudness, music ducking, SFX. Studio lets you audition the music bed before render.

@@ -673,7 +673,12 @@ def build_final_composite(
         current = next_label
 
     # Subtitles LAST — Rule 1
-    if has_subs:
+    if has_subs and subtitles_path.suffix.lower() == ".ass":
+        # Styled captions (captions.py) carry their own look; don't force one.
+        from captions import subtitles_filter
+        filter_parts.append(f"{current}{subtitles_filter(subtitles_path)}[outv]")
+        out_label = "[outv]"
+    elif has_subs:
         subs_abs = str(subtitles_path.resolve()).replace(":", r"\:").replace("'", r"\'")
         filter_parts.append(
             f"{current}subtitles='{subs_abs}':force_style='{SUB_FORCE_STYLE}'[outv]"
@@ -787,7 +792,14 @@ def main() -> None:
     # 3. Subtitles: build if requested, resolve final path
     subs_path: Path | None = None
     if not args.no_subtitles:
-        if args.build_subtitles:
+        if status is not None and not args.build_subtitles and not edl.get("subtitles"):
+            # plan.json: styled captions from the brand kit + plan "captions" (style "none" = off).
+            from captions import build_ass, load_brand, settings
+            if settings(edl, load_brand(edit_dir))["style"] != "none":
+                subs_path = edit_dir / "captions.ass"
+                n = build_ass(edl, edit_dir, subs_path)
+                print(f"captions → {subs_path.name} ({n} events)")
+        elif args.build_subtitles:
             subs_path = edit_dir / "master.srt"
             build_master_srt(edl, edit_dir, subs_path)
         elif edl.get("subtitles"):
