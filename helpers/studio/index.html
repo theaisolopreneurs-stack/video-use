@@ -25,7 +25,7 @@
       color-scheme: dark;
     }
   }
-  :root[data-theme="dark"] {
+  :root[data-theme="warm-dark"] {
     --bg: #17110c; --panel: #211811; --panel-2: #2a1f16; --ink: #f3e7d7; --muted: #bba489; --line: #3b2c1f;
     --accent: #f0955a; --accent-ink: #1f130a; --accent-soft: #3e2616; --warn: #f07a6e; --warn-soft: #3d1c18;
     --cut: #8c7660; --ok: #a7c77a; --stage: #0c0806;
@@ -33,6 +33,29 @@
     --pill-done-bg: #2f3a1c; --pill-done-ink: #d3e7b0;
     color-scheme: dark;
   }
+  /* Studio themes (official palettes). Pills are derived from each theme's accent/ok/warn. */
+  :root[data-theme="warm-dark"] { --bg: #17110c; --panel: #211811; --panel-2: #2a1f16; --ink: #f3e7d7; --muted: #bba489; --line: #3b2c1f; --accent: #f0955a; --accent-ink: #1f130a; --warn: #f07a6e; --ok: #a7c77a; --stage: #0c0806; --cut: #8c7660; --beat-0: #c0532b; --beat-1: #a35c7a; --beat-2: #b7791f; --beat-3: #5f7a3a; --beat-4: #8c4a2f; --beat-5: #6b5a8e; color-scheme: dark; }
+  :root[data-theme="classic-light"] { --bg: #f3f2ee; --panel: #ffffff; --panel-2: #f8f7f4; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e1db; --accent: #1f5c4a; --accent-ink: #ffffff; --warn: #a3471c; --ok: #2e7d4f; --stage: #111110; --cut: #9b9890; --beat-0: #2f6f9f; --beat-1: #8a5a9e; --beat-2: #b0702a; --beat-3: #2e8a6e; --beat-4: #a8434f; --beat-5: #5a6b2f; color-scheme: light; }
+  :root[data-theme="classic-dark"] { --bg: #121211; --panel: #1c1c1a; --panel-2: #232321; --ink: #ecebe6; --muted: #a09e97; --line: #34332f; --accent: #5fb394; --accent-ink: #0f1a16; --warn: #e08a5e; --ok: #6cc38f; --stage: #000000; --cut: #77756f; --beat-0: #2f6f9f; --beat-1: #8a5a9e; --beat-2: #b0702a; --beat-3: #2e8a6e; --beat-4: #a8434f; --beat-5: #5a6b2f; color-scheme: dark; }
+  :root[data-theme="github-light"] { --bg: #f6f8fa; --panel: #ffffff; --panel-2: #f6f8fa; --ink: #1f2328; --muted: #59636e; --line: #d1d9e0; --accent: #0969da; --accent-ink: #ffffff; --warn: #d1242f; --ok: #1a7f37; --stage: #0d1117; --cut: #8c959f; --beat-0: #0969da; --beat-1: #8250df; --beat-2: #bf8700; --beat-3: #1a7f37; --beat-4: #cf222e; --beat-5: #1b7c83; color-scheme: light; }
+  :root[data-theme="github-dark"] { --bg: #010409; --panel: #0d1117; --panel-2: #151b23; --ink: #f0f6fc; --muted: #9198a1; --line: #3d444d; --accent: #4493f8; --accent-ink: #0d1117; --warn: #f85149; --ok: #3fb950; --stage: #000000; --cut: #656c76; --beat-0: #1f6feb; --beat-1: #8957e5; --beat-2: #9e6a03; --beat-3: #238636; --beat-4: #da3633; --beat-5: #1b7c83; color-scheme: dark; }
+  :root[data-theme="solarized-light"] { --bg: #eee8d5; --panel: #fdf6e3; --panel-2: #f5efdc; --ink: #073642; --muted: #657b83; --line: #e0dac4; --accent: #268bd2; --accent-ink: #fdf6e3; --warn: #dc322f; --ok: #859900; --stage: #002b36; --cut: #93a1a1; --beat-0: #268bd2; --beat-1: #6c71c4; --beat-2: #b58900; --beat-3: #859900; --beat-4: #cb4b16; --beat-5: #2aa198; color-scheme: light; }
+  :root[data-theme="solarized-dark"] { --bg: #002b36; --panel: #073642; --panel-2: #0a404f; --ink: #eee8d5; --muted: #93a1a1; --line: #164a57; --accent: #2aa198; --accent-ink: #002b36; --warn: #dc322f; --ok: #859900; --stage: #001e26; --cut: #586e75; --beat-0: #268bd2; --beat-1: #6c71c4; --beat-2: #b58900; --beat-3: #859900; --beat-4: #cb4b16; --beat-5: #2aa198; color-scheme: dark; }
+  :root[data-theme="catppuccin-latte"] { --bg: #e6e9ef; --panel: #eff1f5; --panel-2: #dce0e8; --ink: #4c4f69; --muted: #6c6f85; --line: #ccd0da; --accent: #8839ef; --accent-ink: #eff1f5; --warn: #d20f39; --ok: #40a02b; --stage: #1e1e2e; --cut: #9ca0b0; --beat-0: #1e66f5; --beat-1: #8839ef; --beat-2: #df8e1d; --beat-3: #40a02b; --beat-4: #d20f39; --beat-5: #179299; color-scheme: light; }
+  :root[data-theme="catppuccin-mocha"] { --bg: #181825; --panel: #1e1e2e; --panel-2: #313244; --ink: #cdd6f4; --muted: #a6adc8; --line: #45475a; --accent: #cba6f7; --accent-ink: #1e1e2e; --warn: #f38ba8; --ok: #a6e3a1; --stage: #11111b; --cut: #6c7086; --beat-0: #89b4fa; --beat-1: #cba6f7; --beat-2: #f9e2af; --beat-3: #a6e3a1; --beat-4: #f38ba8; --beat-5: #94e2d5; color-scheme: dark; }
+  :root[data-theme="rose-pine-dawn"] { --bg: #f2e9e1; --panel: #fffaf3; --panel-2: #faf4ed; --ink: #575279; --muted: #797593; --line: #dfdad9; --accent: #d7827e; --accent-ink: #fffaf3; --warn: #b4637a; --ok: #286983; --stage: #191724; --cut: #9893a5; --beat-0: #286983; --beat-1: #907aa9; --beat-2: #ea9d34; --beat-3: #56949f; --beat-4: #b4637a; --beat-5: #d7827e; color-scheme: light; }
+  :root[data-theme="rose-pine"] { --bg: #191724; --panel: #1f1d2e; --panel-2: #26233a; --ink: #e0def4; --muted: #908caa; --line: #403d52; --accent: #ebbcba; --accent-ink: #191724; --warn: #eb6f92; --ok: #9ccfd8; --stage: #12101b; --cut: #6e6a86; --beat-0: #31748f; --beat-1: #c4a7e7; --beat-2: #f6c177; --beat-3: #9ccfd8; --beat-4: #eb6f92; --beat-5: #ebbcba; color-scheme: dark; }
+  :root[data-theme="gruvbox-light"] { --bg: #f2e5bc; --panel: #fbf1c7; --panel-2: #f4e8be; --ink: #3c3836; --muted: #7c6f64; --line: #e2d3a6; --accent: #af3a03; --accent-ink: #fbf1c7; --warn: #9d0006; --ok: #79740e; --stage: #282828; --cut: #a89984; --beat-0: #076678; --beat-1: #8f3f71; --beat-2: #b57614; --beat-3: #79740e; --beat-4: #9d0006; --beat-5: #427b58; color-scheme: light; }
+  :root[data-theme="gruvbox-dark"] { --bg: #1d2021; --panel: #282828; --panel-2: #32302f; --ink: #ebdbb2; --muted: #a89984; --line: #3c3836; --accent: #fe8019; --accent-ink: #1d2021; --warn: #fb4934; --ok: #b8bb26; --stage: #141617; --cut: #7c6f64; --beat-0: #458588; --beat-1: #b16286; --beat-2: #d79921; --beat-3: #98971a; --beat-4: #cc241d; --beat-5: #689d6a; color-scheme: dark; }
+  :root[data-theme="nord"] { --bg: #2e3440; --panel: #3b4252; --panel-2: #434c5e; --ink: #eceff4; --muted: #a7b1c2; --line: #4c566a; --accent: #88c0d0; --accent-ink: #2e3440; --warn: #bf616a; --ok: #a3be8c; --stage: #242933; --cut: #6c7a96; --beat-0: #5e81ac; --beat-1: #b48ead; --beat-2: #ebcb8b; --beat-3: #a3be8c; --beat-4: #bf616a; --beat-5: #8fbcbb; color-scheme: dark; }
+  :root[data-theme="dracula"] { --bg: #21222c; --panel: #282a36; --panel-2: #343746; --ink: #f8f8f2; --muted: #b6b9cc; --line: #44475a; --accent: #bd93f9; --accent-ink: #21222c; --warn: #ff5555; --ok: #50fa7b; --stage: #191a21; --cut: #6272a4; --beat-0: #6272a4; --beat-1: #bd93f9; --beat-2: #ffb86c; --beat-3: #50fa7b; --beat-4: #ff5555; --beat-5: #8be9fd; color-scheme: dark; }
+  :root[data-theme="one-dark"] { --bg: #21252b; --panel: #282c34; --panel-2: #2f343e; --ink: #dcdfe4; --muted: #9da5b4; --line: #3a3f4b; --accent: #61afef; --accent-ink: #21252b; --warn: #e06c75; --ok: #98c379; --stage: #181a1f; --cut: #5c6370; --beat-0: #61afef; --beat-1: #c678dd; --beat-2: #d19a66; --beat-3: #98c379; --beat-4: #e06c75; --beat-5: #56b6c2; color-scheme: dark; }
+  :root[data-theme="tokyo-night"] { --bg: #16161e; --panel: #1a1b26; --panel-2: #24283b; --ink: #c0caf5; --muted: #9aa5ce; --line: #292e42; --accent: #7aa2f7; --accent-ink: #16161e; --warn: #f7768e; --ok: #9ece6a; --stage: #0f0f14; --cut: #565f89; --beat-0: #7aa2f7; --beat-1: #bb9af7; --beat-2: #e0af68; --beat-3: #9ece6a; --beat-4: #f7768e; --beat-5: #7dcfff; color-scheme: dark; }
+  :root[data-theme="monokai"] { --bg: #1e1f1c; --panel: #272822; --panel-2: #33342d; --ink: #f8f8f2; --muted: #b0ad9b; --line: #3e3d32; --accent: #a6e22e; --accent-ink: #1e1f1c; --warn: #f92672; --ok: #66d9ef; --stage: #161613; --cut: #75715e; --beat-0: #66d9ef; --beat-1: #ae81ff; --beat-2: #e6db74; --beat-3: #a6e22e; --beat-4: #f92672; --beat-5: #fd971f; color-scheme: dark; }
+  :root[data-theme="everforest"] { --bg: #272e33; --panel: #2d353b; --panel-2: #343f44; --ink: #d3c6aa; --muted: #9da9a0; --line: #414b50; --accent: #a7c080; --accent-ink: #272e33; --warn: #e67e80; --ok: #83c092; --stage: #1e2326; --cut: #7a8478; --beat-0: #7fbbb3; --beat-1: #d699b6; --beat-2: #dbbc7f; --beat-3: #a7c080; --beat-4: #e67e80; --beat-5: #83c092; color-scheme: dark; }
+  :root[data-theme="high-contrast"] { --bg: #000000; --panel: #000000; --panel-2: #141414; --ink: #ffffff; --muted: #e6e6e6; --line: #ffffff; --accent: #ffd400; --accent-ink: #000000; --warn: #ff6b6b; --ok: #4ade80; --stage: #000000; --cut: #bdbdbd; --beat-0: #0080ff; --beat-1: #c060ff; --beat-2: #ffb000; --beat-3: #00b050; --beat-4: #ff4040; --beat-5: #00c0c0; color-scheme: dark; }
+  :root[data-theme]:not([data-theme^="warm"]) { --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--panel)); --warn-soft: color-mix(in srgb, var(--warn) 16%, var(--panel)); --pill-draft-bg: color-mix(in srgb, var(--warn) 18%, var(--panel)); --pill-draft-ink: var(--warn); --pill-plan-bg: color-mix(in srgb, var(--accent) 20%, var(--panel)); --pill-plan-ink: var(--accent); --pill-done-bg: color-mix(in srgb, var(--ok) 22%, var(--panel)); --pill-done-ink: var(--ok); }
+  :root[data-theme="warm-light"] { color-scheme: light; }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
   body { background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -58,6 +81,8 @@
   ol.steps li.now .dot { border-color: var(--accent); color: var(--accent); }
   .actions { display: flex; align-items: center; gap: 8px; }
   .actions .hint { max-width: 220px; text-align: right; }
+  .themepick { display: inline-flex; align-items: center; gap: 4px; }
+  .themepick select { max-width: 160px; }
   .iconbtn { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 
   /* ---- buttons & inputs ------------------------------------------------ */
@@ -203,6 +228,21 @@
   .fxlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
   .fxlist li { display: flex; gap: 6px; align-items: center; background: var(--panel-2); border-radius: 7px; padding: 4px 6px; font-size: 13px; }
   .fxlist li span { flex: 1; }
+  dialog#howto { width: min(760px, calc(100% - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  dialog#howto[open] { display: flex; flex-direction: column; }
+  dialog#howto::backdrop { background: rgba(20, 12, 6, .55); }
+  .howto-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px 8px; }
+  .howto-head h2 { font-size: 18px; margin: 0; flex: 1; }
+  .howto-nav { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 16px 10px; border-bottom: 1px solid var(--line); }
+  .howto-nav a { font-size: 12px; padding: 3px 9px; border-radius: 99px; background: var(--panel-2); color: var(--ink); text-decoration: none; border: 1px solid var(--line); }
+  .howto-nav a:hover { border-color: var(--accent); }
+  .howto-body { overflow-y: auto; padding: 4px 16px 18px; line-height: 1.55; }
+  .howto-body h3 { font-size: 15px; margin: 16px 0 4px; color: var(--accent); }
+  .howto-body p, .howto-body li, .howto-body dd { font-size: 14px; }
+  .howto-body ul, .howto-body ol { padding-left: 20px; margin: 4px 0; }
+  .howto-body dt { font-weight: 700; margin-top: 8px; }
+  .howto-body dd { margin: 2px 0 0 0; color: var(--ink); }
+  .howto-body code { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 12px; }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 10; background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 9px; font-size: 13px; max-width: calc(100% - 32px); box-shadow: 0 4px 16px rgba(0,0,0,.2); }
   #toast.err { background: var(--warn); color: #fff; }
   @media (max-width: 759px) { #toast { bottom: 76px; } }
@@ -219,7 +259,8 @@
     <span id="dirtyMsg" class="meta hint">No unsaved changes</span>
     <button id="saveBtn">Save</button>
     <button id="approveBtn" class="primary">Approve</button>
-    <button id="themeBtn" class="iconbtn" title="Theme: auto" aria-label="Switch theme">◐</button>
+    <button id="howtoBtn" title="How to use the Studio">? How to</button>
+    <label class="themepick" title="Colour theme"><span aria-hidden="true">🎨</span><select id="themeSel" class="field" aria-label="Colour theme"><option value="auto">Auto (Warm, follows system)</option><optgroup label="Light"><option value="warm-light">Warm (light)</option><option value="classic-light">Classic (light)</option><option value="github-light">GitHub Light</option><option value="solarized-light">Solarized Light</option><option value="catppuccin-latte">Catppuccin Latte</option><option value="rose-pine-dawn">Rosé Pine Dawn</option><option value="gruvbox-light">Gruvbox Light</option></optgroup><optgroup label="Dark"><option value="warm-dark">Warm (dark)</option><option value="classic-dark">Classic (dark)</option><option value="github-dark">GitHub Dark</option><option value="solarized-dark">Solarized Dark</option><option value="catppuccin-mocha">Catppuccin Mocha</option><option value="rose-pine">Rosé Pine</option><option value="gruvbox-dark">Gruvbox Dark</option><option value="nord">Nord</option><option value="dracula">Dracula</option><option value="one-dark">One Dark</option><option value="tokyo-night">Tokyo Night</option><option value="monokai">Monokai</option><option value="everforest">Everforest</option><option value="high-contrast">High contrast</option></optgroup></select></label>
   </div>
 </header>
 
@@ -348,7 +389,7 @@
             <textarea id="overall" class="field" rows="6" placeholder="e.g. Hook is too slow. Keep it under 45 seconds. Lead with the 'one hour of footage' line."></textarea>
           </label>
           <div class="help">
-            <b>How this works</b>
+            <b>How this works</b> · <a href="#" onclick="event.preventDefault();$('howto').showModal()">full guide</a>
             <ol>
               <li>Read the storyboard: kept sections in order, <s>cut words</s> in between with reasons.</li>
               <li>Change things directly (switch sections off, nudge edges, restore cuts, relabel, reorder) and/or leave notes.</li>
@@ -362,6 +403,84 @@
   </div>
 </main>
 <div id="toast" role="status" hidden></div>
+
+<dialog id="howto" aria-labelledby="howtoTitle">
+  <div class="howto-head">
+    <h2 id="howtoTitle">How to use the Review Studio</h2>
+    <button id="howtoClose" aria-label="Close">✕</button>
+  </div>
+  <nav class="howto-nav" aria-label="Sections">
+    <a href="#ht-start">Start</a><a href="#ht-steps">The 4 steps</a><a href="#ht-board">Storyboard</a><a href="#ht-player">Player</a>
+    <a href="#ht-tabs">Style tabs</a><a href="#ht-notes">Talking to Claude</a><a href="#ht-export">Export</a><a href="#ht-tips">Tips</a>
+  </nav>
+  <div class="howto-body">
+    <section id="ht-start">
+      <h3>What this is</h3>
+      <p>Claude has drafted an edit of your clips. This page is where you <b>see that plan, change it, and approve it</b> before anything
+        slow or final is rendered. Nothing here leaves your computer.</p>
+      <p><b>The loop:</b> look → change things or leave notes → <b>Save</b> → tell Claude <i>“check my notes”</i> → repeat until it's right → approve.</p>
+    </section>
+    <section id="ht-steps">
+      <h3>The 4 steps (top bar)</h3>
+      <ol>
+        <li><b>Edit &amp; save</b> — change anything, then click <b>Save</b>. Each save keeps the previous version, so nothing is lost.</li>
+        <li><b>Approve plan</b> — when the storyboard reads right. (Click twice; the first click arms it.)</li>
+        <li><b>Rough cut</b> — a fast low-res draft with real cuts, captions, graphics and sound. Watch it.</li>
+        <li><b>Approve rough cut</b> — unlocks the full-quality render and exports.</li>
+      </ol>
+      <p>The orange button in the top bar is always the next step. Changing anything sends you back to step 1 — that's on purpose, so the video always matches what you approved.</p>
+    </section>
+    <section id="ht-board">
+      <h3>Storyboard (the list of sections)</h3>
+      <ul>
+        <li><b>Each card is a kept section</b>: three frames, the line you say, and why Claude kept it. The coloured label (HOOK, STAKES…) is the section's job; click it to rename.</li>
+        <li><b>Crossed-out lines between cards are cuts</b> (pauses, “um”s, flubbed takes) with the reason. <b>Restore</b> puts one back.</li>
+        <li><b>Untick a card</b> to drop that section. <b>↑ ↓</b> reorder. <b>▶</b> plays it in the rough cut.</li>
+        <li><b>Edit</b> on a card: nudge where it starts/ends (±0.1s), pick a <b>transition</b> into it, change its <b>speed</b> (slow-mo or fast), add a <b>freeze</b> at the end, <b>stabilize</b> shaky footage, or leave a note on just that section.</li>
+      </ul>
+    </section>
+    <section id="ht-player">
+      <h3>Player and timeline</h3>
+      <ul>
+        <li>The coloured bar under the video is the whole edit — one block per section, sized by length. Click a block to jump there.</li>
+        <li><b>+ Note at current time</b> pauses the video and pins a note to that exact moment (red pins on the timeline).</li>
+        <li>If you see <i>“This rough cut is from an older plan”</i>, click <b>Make a new one</b> after saving.</li>
+      </ul>
+    </section>
+    <section id="ht-tabs">
+      <h3>Style tabs (right side)</h3>
+      <dl>
+        <dt>Captions</dt><dd>13 caption styles previewed on your footage. <b>Top / Middle / Bottom</b>, or <b>Custom</b> and click on the video where they should go. ALL CAPS, and “words to pop” (the words that get the highlight).</dd>
+        <dt>Look</dt><dd>Colour grades grouped as Natural, Warm, Cinematic, Film, Trend and Black &amp; white. Add your own <code>.cube</code> LUTs to the <code>luts/</code> folder.</dd>
+        <dt>Title</dt><dd>Big hook text over the first seconds. “Behind me” puts the words behind you.</dd>
+        <dt>Effects</dt><dd>Shake, glitch, VHS, flash, film grain, blur, cinema bars and more. Play the video to the moment, pick an effect and a length, click <b>Add</b>. Captions and graphics stay clean on top.</dd>
+        <dt>Audio</dt><dd>Voice clean-up, background music (▶ Listen first), volume, “duck under voice”, and a sound on popped words. Put tracks in the <code>music/</code> folder.</dd>
+        <dt>Notes</dt><dd>Anything you'd rather say than click: “hook is too slow”, “cut the second story”, “make it 45 seconds”.</dd>
+      </dl>
+    </section>
+    <section id="ht-notes">
+      <h3>Talking to Claude</h3>
+      <p>After <b>Save</b>, go back to your Claude chat and say <b>“check my notes”</b>. Claude reads every note (overall, per section and timestamped),
+        makes the changes, and the <b>Latest changes</b> box here says what it did. You can also just ask in the chat — e.g.
+        <i>“add a checklist graphic when I list the steps”</i>, <i>“use the screen recording as B-roll at 0:12”</i>, <i>“spell ‘derive’ correctly in the captions”</i>.</p>
+    </section>
+    <section id="ht-export">
+      <h3>Export</h3>
+      <p>Once the rough cut is approved, tell Claude where it's going — <i>“export for Reels, Instagram feed and YouTube”</i>. You get each shape
+        (9:16, 4:5, 1:1, 16:9) re-laid out and quality-checked, a caption file (.srt), chapters, and three thumbnail options, in the
+        project's <code>exports/</code> folder. Ask Claude for titles, a description and hashtags too.</p>
+    </section>
+    <section id="ht-tips">
+      <h3>Tips</h3>
+      <ul>
+        <li>Lead with your strongest line — a number, a result or a bold claim — even if you said it later.</li>
+        <li>Less is more: one transition between topics, a zoom or graphic every 5–10 seconds, not every line.</li>
+        <li>Watch the rough cut with the sound on, once, start to finish, before approving.</li>
+        <li>The 🎨 menu in the top bar changes this page's colour theme (it doesn't affect your video).</li>
+      </ul>
+    </section>
+  </div>
+</dialog>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -381,16 +500,26 @@ const beatColor = (() => { const map = {}; let n = 0; return (b) => { const k = 
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
 // ---- theme --------------------------------------------------------------
-const themes = ["auto", "light", "dark"];
+// "auto" = Warm light/dark following the system; anything else pins one of the themes above.
+const legacy = { light: "warm-light", dark: "warm-dark" };
 function applyTheme(t) {
+  t = legacy[t] || t;
+  if (!$("themeSel").querySelector(`option[value="${t}"]`)) t = "auto";
   if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
-  $("themeBtn").title = `Theme: ${t}`; $("themeBtn").textContent = { auto: "◐", light: "☀", dark: "☾" }[t];
+  $("themeSel").value = t;
 }
 applyTheme(store.get("studio-theme") || "auto");
-$("themeBtn").onclick = () => {
-  const t = themes[(themes.indexOf(store.get("studio-theme") || "auto") + 1) % 3];
-  store.set("studio-theme", t); applyTheme(t);
-};
+$("themeSel").onchange = (e) => { store.set("studio-theme", e.target.value); applyTheme(e.target.value); };
+
+// ---- How-to guide: opens from the top bar, and by itself on someone's first visit ----------
+const howto = $("howto");
+$("howtoBtn").onclick = () => howto.showModal();
+$("howtoClose").onclick = () => howto.close();
+howto.addEventListener("click", (e) => { if (e.target === howto) howto.close(); });  // click outside closes
+howto.querySelectorAll(".howto-nav a").forEach((a) => (a.onclick = (e) => {
+  e.preventDefault(); howto.querySelector(a.getAttribute("href"))?.scrollIntoView({ behavior: "smooth", block: "start" });
+}));
+if (!store.get("studio-howto-seen")) { store.set("studio-howto-seen", "1"); setTimeout(() => howto.showModal(), 400); }
 
 // ---- settings tabs ------------------------------------------------------
 function showTab(name) {

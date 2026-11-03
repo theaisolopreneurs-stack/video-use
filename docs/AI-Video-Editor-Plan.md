@@ -160,6 +160,8 @@ Tested on a fresh copy of the Texans clip: `--preset justyn --title "How to fix 
 - **Studio**: warm cream/terracotta (light) and espresso/amber (dark) theme; version numbers removed ("Latest changes" in plain English); grouped looks; caption position control; per-section Edit drawer (transition, speed, freeze, stabilize); Effects tab.
 - **Plugin**: `.claude-plugin/plugin.json` + `marketplace.json` (validated); skills `edit-video` and `video-editor-setup`; user guide `docs/GUIDE.md`.
 
+**Studio themes + How-to (2026-11-02):** 🎨 theme picker with 21 themes built from official palettes (Warm light/dark default, Classic, GitHub, Solarized, Catppuccin Latte/Mocha, Rosé Pine/Dawn, Gruvbox, Nord, Dracula, One Dark, Tokyo Night, Monokai, Everforest, High contrast); in-app **? How to** guide (start, 4 steps, storyboard, player, style tabs, talking to Claude, export, tips), shown automatically on first visit.
+
 ## Review Studio (preview → iterate → approve → final edit)
 
 Why: rendering animations and full-res video takes the longest. If the plan is wrong, that time is wasted. The Studio catches it while changes are still cheap.

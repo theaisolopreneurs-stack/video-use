@@ -50,6 +50,8 @@ only paid piece is your Claude plan.
 | **Audio** | Voice clean-up, music (with ▶ Listen), volume, ducking, a sound on popped words. |
 | **Notes** | Anything you'd rather tell Claude than click. |
 
+New to the Studio? Click **? How to** in the top bar for a full walkthrough (it also opens by itself the first time). The **🎨** menu switches the Studio's colour theme — Warm (default, follows your system), Classic, GitHub, Solarized, Catppuccin, Rosé Pine, Gruvbox, Nord, Dracula, One Dark, Tokyo Night, Monokai, Everforest, High contrast — it only changes the page, never your video.
+
 Click **Save**, then tell Claude **"check my notes"**. Claude answers each note, and the
 **Latest changes** box says what changed. When the plan's right: **Approve plan → Make rough
 cut → watch → Approve rough cut**. Only then can the full-quality render happen.
