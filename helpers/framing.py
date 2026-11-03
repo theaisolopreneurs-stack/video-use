@@ -121,9 +121,10 @@ def face(video: str, start: float = 0.0, end: float | None = None, samples: int 
 
 def zoom_center(plan: dict, edit_dir: Path, t_out: float) -> tuple[float, float]:
     """Face centre (0-1 of the output frame) at output time t, from the range playing then."""
+    from plan import range_len
     offset = 0.0
     for r in plan["ranges"]:
-        d = float(r["end"]) - float(r["start"])
+        d = range_len(r)
         if offset <= t_out < offset + d:
             src = Path(plan["sources"][r["source"]])
             src = src if src.is_absolute() else edit_dir / src

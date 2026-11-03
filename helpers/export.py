@@ -98,7 +98,7 @@ def write_chapters(plan: dict, out: Path) -> str:
         beat = (r.get("beat") or "").strip().title()
         if beat and (not chapters or chapters[-1][1] != beat):
             chapters.append((t, beat))
-        t += float(r["end"]) - float(r["start"])
+        t += planlib.range_len(r)
     if chapters:
         chapters[0] = (0.0, chapters[0][1])
     ok = len(chapters) >= 3 and all(b[0] - a[0] >= 10 for a, b in zip(chapters, chapters[1:])) and t - chapters[-1][0] >= 10

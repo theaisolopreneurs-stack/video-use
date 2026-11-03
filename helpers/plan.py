@@ -96,8 +96,13 @@ def validate(plan: dict, edit_dir: Path) -> list[str]:
     return problems
 
 
+def range_len(r: dict) -> float:
+    """How long a section plays in the output: source length at its speed, plus any freeze."""
+    return (float(r["end"]) - float(r["start"])) / float(r.get("speed") or 1.0) + float(r.get("hold") or 0.0)
+
+
 def total_duration(plan: dict) -> float:
-    return round(sum(float(r["end"]) - float(r["start"]) for r in plan.get("ranges", [])), 2)
+    return round(sum(range_len(r) for r in plan.get("ranges", [])), 2)
 
 
 def summary(plan: dict) -> str:
@@ -119,9 +124,16 @@ def summary(plan: dict) -> str:
 def cut_signature(plan: dict) -> list:
     """The part of a plan that decides what a render looks like: which source, which
     seconds, and every setting that changes how it looks or sounds."""
-    return [[r["source"], round(float(r["start"]), 3), round(float(r["end"]), 3)]
+    return [[r["source"], round(float(r["start"]), 3), round(float(r["end"]), 3),
+             {k: r[k] for k in RANGE_FX if r.get(k)}]
             for r in plan.get("ranges", [])] + [plan.get(k) or {} for k in
-                                                ("captions", "audio", "title", "zooms", "grade", "target")]
+                                                ("captions", "audio", "title", "zooms", "grade", "target",
+                                                 "graphics", "effects", "broll")]
+
+
+# Per-section edit options (render.py): speed, freeze at the end, stabilise, reverse,
+# and the transition *into* this section from the previous one.
+RANGE_FX = ("speed", "hold", "stabilize", "reverse", "transition")
 
 
 def range_key(r: dict) -> tuple:

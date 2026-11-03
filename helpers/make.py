@@ -90,7 +90,7 @@ def auto_zooms(plan: dict, edit_dir: Path, z: dict, skip_until: float) -> list[d
         t = 0.0
         for r in plan["ranges"]:
             cands.append(t + 0.1)
-            t += float(r["end"]) - float(r["start"])
+            t += planlib.range_len(r)
     total = planlib.total_duration(plan)
     dur = 1.5 if z.get("style", "punch") == "punch" else 2.6
     out, last_t = [], -99.0

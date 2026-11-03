@@ -152,6 +152,14 @@ Tested on a fresh copy of the Texans clip: `--preset justyn --title "How to fix 
 
 ---
 
+**Phase 10 — Creative toolkit, multi-video, polish, packaging** ✅ done 2026-11-02
+- **35 recipe looks** (`helpers/looks.py`): natural, warm, cinematic, film emulation, trend (Y2K, clean girl, pastel…), mono. Built as LUTs on first use; 6 s to build and preview all.
+- **Caption position**: top / middle / bottom or any spot (`{"x","y"}`), kept inside the frame; Studio "Custom" = click on the video.
+- **CapCut-style editing**: 21 transitions (xfade with handles so timing never shifts) + glitch/shake/flash cuts; per-section speed (0.25–4×, pitch kept), freeze, stabilize, reverse; 15 effects in time windows (shake, glitch, VHS, grain, flash, light leak, cinema bars…).
+- **Multi-video**: any mix of clips/sizes/frame rates/silent clips stitches to one canvas; B-roll cutaways full-frame or picture-in-picture. Tested: 3 sources + silent B-roll + 4 transitions + speed + freeze + effects → 22 s draft render.
+- **Studio**: warm cream/terracotta (light) and espresso/amber (dark) theme; version numbers removed ("Latest changes" in plain English); grouped looks; caption position control; per-section Edit drawer (transition, speed, freeze, stabilize); Effects tab.
+- **Plugin**: `.claude-plugin/plugin.json` + `marketplace.json` (validated); skills `edit-video` and `video-editor-setup`; user guide `docs/GUIDE.md`.
+
 ## Review Studio (preview → iterate → approve → final edit)
 
 Why: rendering animations and full-res video takes the longest. If the plan is wrong, that time is wasted. The Studio catches it while changes are still cheap.

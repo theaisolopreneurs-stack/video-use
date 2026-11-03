@@ -77,7 +77,7 @@ def frames_every(video: Path, every_n: int, vf: str | None = None, width: int = 
 def cut_times(plan: dict) -> list[float]:
     t, out = 0.0, []
     for r in plan["ranges"][:-1]:
-        t += float(r["end"]) - float(r["start"])
+        t += planlib.range_len(r)
         out.append(round(t, 3))
     return out
 

@@ -5,31 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Review Studio</title>
 <style>
+  /* Warm studio palette: cream paper + terracotta in light, espresso + amber in dark. */
   :root {
-    --bg: #f3f2ee; --panel: #ffffff; --panel-2: #f8f7f4; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e1db;
-    --accent: #1f5c4a; --accent-ink: #ffffff; --accent-soft: #dcebe4; --warn: #a3471c; --warn-soft: #f8e6dc;
-    --cut: #9b9890; --ok: #2e7d4f; --stage: #111110;
-    --pill-draft-bg: #f1e3c8; --pill-draft-ink: #6b4a12; --pill-plan-bg: #d9e8f5; --pill-plan-ink: #1d4a72;
-    --pill-done-bg: #d6eedd; --pill-done-ink: #1d5a33;
-    --beat-0: #2f6f9f; --beat-1: #8a5a9e; --beat-2: #b0702a; --beat-3: #2e8a6e; --beat-4: #a8434f; --beat-5: #5a6b2f;
+    --bg: #f6efe4; --panel: #fffaf2; --panel-2: #f3e9da; --ink: #2d2118; --muted: #7d6b58; --line: #e6d8c4;
+    --accent: #c0532b; --accent-ink: #fffaf2; --accent-soft: #f7dfcf; --warn: #b4232a; --warn-soft: #f9dcd6;
+    --cut: #a8927a; --ok: #4d7a2f; --stage: #1e150f;
+    --pill-draft-bg: #fbe3c2; --pill-draft-ink: #7a4a0e; --pill-plan-bg: #f6d9c9; --pill-plan-ink: #8a3517;
+    --pill-done-bg: #e1ebcc; --pill-done-ink: #3f5a1c;
+    --beat-0: #c0532b; --beat-1: #a35c7a; --beat-2: #b7791f; --beat-3: #5f7a3a; --beat-4: #8c4a2f; --beat-5: #6b5a8e;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #121211; --panel: #1c1c1a; --panel-2: #232321; --ink: #ecebe6; --muted: #a09e97; --line: #34332f;
-      --accent: #5fb394; --accent-ink: #0f1a16; --accent-soft: #1f3a30; --warn: #e08a5e; --warn-soft: #3a2419;
-      --cut: #77756f; --ok: #6cc38f; --stage: #000;
-      --pill-draft-bg: #4a3a1c; --pill-draft-ink: #f1d9a8; --pill-plan-bg: #1d3550; --pill-plan-ink: #b9d6f2;
-      --pill-done-bg: #1d3f2a; --pill-done-ink: #b5e4c4;
+      --bg: #17110c; --panel: #211811; --panel-2: #2a1f16; --ink: #f3e7d7; --muted: #bba489; --line: #3b2c1f;
+      --accent: #f0955a; --accent-ink: #1f130a; --accent-soft: #3e2616; --warn: #f07a6e; --warn-soft: #3d1c18;
+      --cut: #8c7660; --ok: #a7c77a; --stage: #0c0806;
+      --pill-draft-bg: #4a3216; --pill-draft-ink: #f6d7a6; --pill-plan-bg: #4a2a19; --pill-plan-ink: #f6c6a6;
+      --pill-done-bg: #2f3a1c; --pill-done-ink: #d3e7b0;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #121211; --panel: #1c1c1a; --panel-2: #232321; --ink: #ecebe6; --muted: #a09e97; --line: #34332f;
-    --accent: #5fb394; --accent-ink: #0f1a16; --accent-soft: #1f3a30; --warn: #e08a5e; --warn-soft: #3a2419;
-    --cut: #77756f; --ok: #6cc38f; --stage: #000;
-    --pill-draft-bg: #4a3a1c; --pill-draft-ink: #f1d9a8; --pill-plan-bg: #1d3550; --pill-plan-ink: #b9d6f2;
-    --pill-done-bg: #1d3f2a; --pill-done-ink: #b5e4c4;
+    --bg: #17110c; --panel: #211811; --panel-2: #2a1f16; --ink: #f3e7d7; --muted: #bba489; --line: #3b2c1f;
+    --accent: #f0955a; --accent-ink: #1f130a; --accent-soft: #3e2616; --warn: #f07a6e; --warn-soft: #3d1c18;
+    --cut: #8c7660; --ok: #a7c77a; --stage: #0c0806;
+    --pill-draft-bg: #4a3216; --pill-draft-ink: #f6d7a6; --pill-plan-bg: #4a2a19; --pill-plan-ink: #f6c6a6;
+    --pill-done-bg: #2f3a1c; --pill-done-ink: #d3e7b0;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
@@ -191,6 +192,17 @@
   .help ol { margin: 4px 0 0; padding-left: 18px; }
   .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 
+  .lookgroup { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 6px 0 2px; grid-column: 1 / -1; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { flex: 1; border: 0; border-radius: 0; background: var(--panel-2); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .pickzone { position: absolute; inset: 0; cursor: crosshair; z-index: 3; }
+  .pickzone .hint { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); background: rgba(0,0,0,.7); color: #fff; padding: 4px 10px; border-radius: 99px; font-size: 12px; pointer-events: none; }
+  .capdot { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid #fff; background: var(--accent); box-shadow: 0 0 0 2px rgba(0,0,0,.4); pointer-events: none; z-index: 4; }
+  .fxlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .fxlist li { display: flex; gap: 6px; align-items: center; background: var(--panel-2); border-radius: 7px; padding: 4px 6px; font-size: 13px; }
+  .fxlist li span { flex: 1; }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 10; background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 9px; font-size: 13px; max-width: calc(100% - 32px); box-shadow: 0 4px 16px rgba(0,0,0,.2); }
   #toast.err { background: var(--warn); color: #fff; }
   @media (max-width: 759px) { #toast { bottom: 76px; } }
@@ -258,6 +270,7 @@
         <button role="tab" data-tab="captions">Captions</button>
         <button role="tab" data-tab="look">Look</button>
         <button role="tab" data-tab="title">Title</button>
+        <button role="tab" data-tab="effects">Effects</button>
         <button role="tab" data-tab="audio">Audio</button>
         <button role="tab" data-tab="notes">Notes</button>
       </div>
@@ -265,12 +278,19 @@
         <div class="tabpanel" role="tabpanel" data-panel="captions">
           <div class="capgrid" id="capgrid"></div>
           <div class="meta" id="capDesc"></div>
-          <div class="grid2">
-            <label class="lbl">Position
-              <select id="capPos" class="field"><option value="lower">Lower (clear of app buttons)</option><option value="middle">Middle</option><option value="upper">Upper</option></select>
-            </label>
-            <label class="chk" style="align-self:end;padding-bottom:5px"><input type="checkbox" id="capUpper"> ALL CAPS</label>
+          <div class="lbl">Where on screen
+            <div class="seg" id="capPosSeg" role="group" aria-label="Caption position">
+              <button type="button" data-pos="top">Top</button>
+              <button type="button" data-pos="middle">Middle</button>
+              <button type="button" data-pos="bottom">Bottom</button>
+              <button type="button" data-pos="custom" title="Click a spot on the video">Custom</button>
+            </div>
           </div>
+          <div class="grid2" id="capXY" hidden>
+            <label class="lbl">Across (0–100%) <input id="capX" class="field" type="number" min="0" max="100" step="1"></label>
+            <label class="lbl">Down (0–100%) <input id="capY" class="field" type="number" min="0" max="100" step="1"></label>
+          </div>
+          <label class="chk"><input type="checkbox" id="capUpper"> ALL CAPS</label>
           <label class="lbl">Words to pop (comma-separated)
             <input id="capEmph" class="field" placeholder="e.g. 0 and 4, Super Bowl">
           </label>
@@ -292,6 +312,17 @@
           </div>
           <div class="capimg" id="ttlPreview" style="max-width:200px" hidden><span>Rendering preview…</span><img alt="Title preview"></div>
           <div class="meta" id="ttlNote"></div>
+        </div>
+        <div class="tabpanel" role="tabpanel" data-panel="effects" hidden>
+          <div class="help">Effects play over part of the video (text and graphics stay clean). Transitions, speed and freeze-frames are set on each section's <b>Edit</b> drawer in the storyboard.</div>
+          <ul class="fxlist" id="fxlist"></ul>
+          <div class="grid2">
+            <label class="lbl">Effect <select id="fxType" class="field"></select></label>
+            <label class="lbl">For <select id="fxDur" class="field">
+              <option value="0.3">0.3s</option><option value="0.6">0.6s</option><option value="1">1s</option><option value="2" selected>2s</option><option value="4">4s</option><option value="0">Whole video</option>
+            </select></label>
+          </div>
+          <button id="fxAdd">+ Add at the player's current time</button>
         </div>
         <div class="tabpanel" role="tabpanel" data-panel="audio" hidden>
           <label class="chk"><input type="checkbox" id="audVoice"> Clean up voice (rumble, hiss, harsh “s”, even levels)</label>
@@ -343,6 +374,7 @@ let dirty = false;
 let sel = -1;          // selected card
 const openCards = new Set();  // cards whose edit drawer is open
 
+const rlen = (r) => (r.end - r.start) / (r.speed || 1) + (r.hold || 0);  // seconds on screen
 const fmt = (t) => { const m = Math.floor(t / 60); return `${m}:${(t - m * 60).toFixed(2).padStart(5, "0")}`; };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const beatColor = (() => { const map = {}; let n = 0; return (b) => { const k = (b || "").toUpperCase(); if (!(k in map)) map[k] = `var(--beat-${n++ % 6})`; return map[k]; }; })();
@@ -372,7 +404,7 @@ function markTabs() {
   if (!S) return;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const changed = { captions: !same(caps, S.plan.captions || {}), look: look !== (S.plan.grade || "none"),
-    title: !same(ttl, S.plan.title || {}), audio: !same(aud, S.plan.audio || {}) };
+    title: !same(ttl, S.plan.title || {}), audio: !same(aud, S.plan.audio || {}), effects: !same(fxs, S.plan.effects || []) };
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("changed", !!changed[b.dataset.tab]));
 }
 
@@ -387,20 +419,25 @@ async function load() {
   aud = JSON.parse(JSON.stringify(S.plan.audio || {}));
   look = S.plan.grade || "none";
   ttl = JSON.parse(JSON.stringify(S.plan.title || {}));
+  fxs = JSON.parse(JSON.stringify(S.plan.effects || []));
   setDirty(false);
   render();
   renderCaptions();
   renderAudio();
   renderLook();
   renderTitle();
+  renderEffects();
 }
 
-let look = "none", ttl = {};
-const lookName = (k) => ({ none: "None", subtle: "Subtle", neutral_punch: "Punchy", warm_cinematic: "Cinematic", auto: "Auto-fix" }[k] ||
-  k.replace(/^lut:/, "").replace(/\.cube$/, "").replace(/_/g, " "));
+let look = "none", ttl = {}, fxs = [];
 function renderLook() {
-  $("lookgrid").innerHTML = S.looks.map((k, i) => `<button type="button" class="capopt ${look === k ? "sel" : ""}" aria-pressed="${look === k}" onclick="look=S.looks[${i}];setDirty(true);renderLook()">
-    <div class="capimg"><span>Rendering…</span><img src="/look-sample?look=${encodeURIComponent(k)}" alt="${esc(lookName(k))}"></div>${esc(lookName(k))}</button>`).join("");
+  let group = "", html = "";
+  S.looks.forEach((L, i) => {
+    if (L.group !== group) { group = L.group; html += `<div class="lookgroup">${esc(group)}</div>`; }
+    html += `<button type="button" class="capopt ${look === L.id ? "sel" : ""}" aria-pressed="${look === L.id}" onclick="look=S.looks[${i}].id;setDirty(true);renderLook()">
+      <div class="capimg"><span>Rendering…</span><img loading="lazy" src="/look-sample?look=${encodeURIComponent(L.id)}" alt="${esc(L.label)}"></div>${esc(L.label)}</button>`;
+  });
+  $("lookgrid").innerHTML = html;
 }
 function renderTitle() {
   const saved = JSON.stringify(ttl) === JSON.stringify(S.plan.title || {});
@@ -438,6 +475,20 @@ function renderAudio() {
   $("sfxPlay").disabled = !aud.sfx_on_emphasis;
   if (!S.music.length) $("audNote").textContent = "No music yet: put tracks in the music/ folder (see music/README.md for free sources).";
 }
+function renderEffects() {
+  $("fxType").innerHTML = S.effects_kit.map((e) => `<option value="${e.id}">${esc(e.label)}</option>`).join("");
+  const name = (id) => (S.effects_kit.find((e) => e.id === id) || { label: id }).label;
+  $("fxlist").innerHTML = fxs.length ? fxs.map((e, k) => `<li><span>${esc(name(e.type))} · ${e.duration ? `${fmt(e.start_in_output || 0)} for ${e.duration}s` : "whole video"}</span>
+    ${e.duration ? `<button class="sm" onclick="seekRaw(${e.start_in_output || 0})">▶</button>` : ""}<button class="sm" onclick="fxs.splice(${k},1);setDirty(true);renderEffects()" aria-label="Remove">✕</button></li>`).join("")
+    : `<li><span class="meta">No effects yet.</span></li>`;
+}
+$("fxAdd").onclick = () => {
+  const v = $("player"), d = +$("fxDur").value;
+  const e = { type: $("fxType").value };
+  if (d) { e.start_in_output = Math.round((v ? v.currentTime : 0) * 100) / 100; e.duration = d; }
+  fxs.push(e); setDirty(true); renderEffects();
+  if (!v && d) toast("Added at 0:00 — make a rough cut to place effects at a moment.");
+};
 $("audVoice").onchange = (e) => setAud((a) => { if (e.target.checked) delete a.voice; else a.voice = "off"; });
 $("audMusic").onchange = (e) => setAud((a) => { if (e.target.value) a.music = { volume_db: -20, duck: true, ...(a.music || {}), file: e.target.value }; else delete a.music; });
 $("audVol").onchange = (e) => setAud((a) => (a.music.volume_db = +e.target.value));
@@ -465,14 +516,56 @@ function renderCaptions() {
     ${k === "none" ? `<div class="noimg">No captions</div>` : `<div class="capimg"><span>Rendering preview…</span><img loading="lazy" src="/caption-sample?style=${k}&v=${v}" alt="${esc(label)} captions" onerror="this.previousElementSibling.textContent='Preview failed'"></div>`}${esc(label)}</button>`).join("");
   const cur = S.caption_styles.find((c) => c.id === style);
   $("capDesc").textContent = cur ? cur.blurb : style === "none" ? "Captions off." : "";
-  $("capPos").value = capEff("position");
+  const pos = capEff("position");
+  const named = typeof pos === "string" && !pos.includes(",") ? ({ upper: "top", lower: "bottom", center: "middle" }[pos] || pos) : "custom";
+  document.querySelectorAll("#capPosSeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.pos === named || (b.dataset.pos === "custom" && picking)));
+  $("capXY").hidden = named !== "custom";
+  if (named === "custom" && typeof pos === "object") { $("capX").value = Math.round(pos.x * 100); $("capY").value = Math.round(pos.y * 100); }
+  drawCapDot();
   $("capUpper").checked = !!capEff("uppercase");
   if (document.activeElement !== $("capEmph")) $("capEmph").value = (caps.emphasis || []).join(", ");
   const always = S.brand_captions.always_emphasize || [];
   $("capNote").textContent = (always.length ? `Brand always pops: ${always.join(", ")}. ` : "") +
     "Previews refresh after you save. Spelling fixes: ask Claude (e.g. \"drive should be derive\").";
 }
-$("capPos").onchange = (e) => setCap("position", e.target.value);
+let picking = false;
+document.querySelectorAll("#capPosSeg button").forEach((b) => (b.onclick = () => {
+  if (b.dataset.pos === "custom") { startPick(); return; }
+  picking = false; removePick(); setCap("position", b.dataset.pos);
+}));
+const setXY = () => setCap("position", { x: Math.min(1, Math.max(0, (+$("capX").value || 0) / 100)), y: Math.min(1, Math.max(0, (+$("capY").value || 0) / 100)) });
+$("capX").onchange = setXY; $("capY").onchange = setXY;
+// The part of the screen element the video actually covers (it's letterboxed to fit).
+function videoBox() {
+  const v = $("player"), scr = $("roughArea"); if (!v || !v.videoWidth) return null;
+  const r = v.getBoundingClientRect(), sr = scr.getBoundingClientRect();
+  const k = Math.min(r.width / v.videoWidth, r.height / v.videoHeight), w = v.videoWidth * k, h = v.videoHeight * k;
+  return { left: r.left - sr.left + (r.width - w) / 2, top: r.top - sr.top + (r.height - h) / 2, w, h };
+}
+function startPick() {
+  if (!$("player")) { setCap("position", { x: 0.5, y: 0.3 }); return toast("Make a rough cut to pick the spot on the video; set Across/Down for now."); }
+  picking = true; renderCaptions(); removePick();
+  const z = document.createElement("div"); z.className = "pickzone"; z.id = "pickzone";
+  z.innerHTML = `<span class="hint">Click where the captions should sit</span>`;
+  z.onclick = (e) => {
+    const b = videoBox(), sr = $("roughArea").getBoundingClientRect(); if (!b) return;
+    const x = (e.clientX - sr.left - b.left) / b.w, y = (e.clientY - sr.top - b.top) / b.h;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return;
+    picking = false; removePick();
+    setCap("position", { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 });
+  };
+  $("roughArea").appendChild(z);
+}
+function removePick() { $("pickzone")?.remove(); }
+function drawCapDot() {
+  document.querySelectorAll(".capdot").forEach((d) => d.remove());
+  const pos = S && capEff("position"), b = videoBox();
+  if (!b || !pos || typeof pos !== "object") return;
+  const d = document.createElement("div"); d.className = "capdot";
+  d.style.left = `${b.left + pos.x * b.w}px`; d.style.top = `${b.top + pos.y * b.h}px`;
+  d.title = "Caption position"; $("roughArea").appendChild(d);
+}
+window.addEventListener("resize", drawCapDot);
 $("capUpper").onchange = (e) => setCap("uppercase", e.target.checked);
 $("capEmph").onchange = (e) => setCap("emphasis", e.target.value.split(",").map((x) => x.trim()).filter(Boolean));
 
@@ -489,7 +582,7 @@ function toast(msg, err) {
 
 function totals() {
   const on = ranges.filter((r) => r._on);
-  return on.reduce((a, r) => a + (r.end - r.start), 0);
+  return on.reduce((a, r) => a + rlen(r), 0);
 }
 
 function render() {
@@ -500,23 +593,24 @@ function render() {
   $("status").className = `pill ${p.status}`;
   const total = totals(), target = p.target?.max_duration_s;
   const nOn = ranges.filter((r) => r._on).length;
-  $("meta").innerHTML = `v${p.version} · ` +
+  $("meta").innerHTML =
     `<span class="${target && total > target ? "over" : ""}">${total.toFixed(1)}s${target ? ` of ${target}s` : ""}</span>` +
     (p.target?.aspect ? ` · ${esc(p.target.aspect)}` : "");
   $("boardMeta").textContent = `${nOn} sections · ${p.cuts?.length || 0} cuts`;
 
   const changes = [...(p.changes || [])];
-  $("changesBox").hidden = !changes.length && !S.diff_prev.length;
-  $("changesBox").querySelector("summary").textContent = `What changed in v${p.version}`;
-  $("changes").innerHTML = changes.map((c) => `<li>${esc(c)}</li>`).join("") +
-    (S.diff_prev.length ? `<li class="meta">vs v${S.versions.at(-1)}: ${S.diff_prev.map(esc).join("; ")}</li>` : "");
+  // Plain-English change list: no version numbers or tool names, just what changed.
+  const tidy = (c) => c.replace(/^v\d+(\s*\([^)]*\))?:\s*/i, "").replace(/^You:\s*/, "You changed ");
+  $("changesBox").hidden = !changes.length;
+  $("changesBox").querySelector("summary").textContent = "Latest changes";
+  $("changes").innerHTML = changes.map((c) => `<li>${esc(tidy(c))}</li>`).join("");
   $("problemsBox").hidden = !S.problems.length;
   $("problems").innerHTML = S.problems.map((x) => `<li>${esc(x)}</li>`).join("");
 
   // timeline
-  const all = ranges.reduce((a, r) => a + (r.end - r.start), 0) || 1;
+  const all = ranges.reduce((a, r) => a + rlen(r), 0) || 1;
   $("timeline").innerHTML = ranges.map((r, i) =>
-    `<div class="${r._on ? "" : "off"} ${i === sel ? "sel" : ""}" style="flex:${(r.end - r.start) / all};background:${beatColor(r.beat)}" title="${esc(r.quote)}" onclick="pick(${i}, true)">${esc(r.beat || r.source)}</div>`).join("");
+    `<div class="${r._on ? "" : "off"} ${i === sel ? "sel" : ""}" style="flex:${rlen(r) / all};background:${beatColor(r.beat)}" title="${esc(r.quote)}" onclick="pick(${i}, true)">${esc(r.beat || r.source)}</div>`).join("");
 
   // storyboard: cuts sit before the section they lead into (same source), trailing cuts after the last
   const cuts = visibleCuts();
@@ -525,7 +619,7 @@ function render() {
   ranges.forEach((r, i) => {
     cuts.forEach((c, ci) => { if (!placed.has(ci) && c.source === r.source && c.end <= r.start + 0.06) { html += cutHtml(c, ci, i); placed.add(ci); } });
     html += cardHtml(r, i, outT);
-    if (r._on) outT += r.end - r.start;
+    if (r._on) outT += rlen(r);
     const lastOfSource = !ranges.slice(i + 1).some((x) => x.source === r.source);
     if (lastOfSource) cuts.forEach((c, ci) => { if (!placed.has(ci) && c.source === r.source && c.start >= r.end - 0.06) { html += cutHtml(c, ci, i + 1); placed.add(ci); } });
   });
@@ -535,7 +629,7 @@ function render() {
 }
 
 function plannedFor(r, outStart) {
-  const outEnd = outStart + (r.end - r.start);
+  const outEnd = outStart + rlen(r);
   const inWin = (t) => t !== undefined && t >= outStart - 0.01 && t < outEnd;
   const items = [];
   (S.plan.graphics || []).forEach((g) => { if (inWin(g.start_in_output)) items.push(`🎨 ${esc(g.type || "graphic")}${g.text ? `: “${esc(g.text)}”` : ""}`); });
@@ -544,9 +638,10 @@ function plannedFor(r, outStart) {
 }
 
 function cardHtml(r, i, outT) {
-  const mid = (r.start + r.end) / 2, d = r.end - r.start;
+  const mid = (r.start + r.end) / 2, d = rlen(r);
   const orig = S.plan.ranges[i];
-  const changed = !orig || orig.start !== r.start || orig.end !== r.end || orig.beat !== r.beat || orig.source !== r.source || !r._on;
+  const changed = !orig || orig.start !== r.start || orig.end !== r.end || orig.beat !== r.beat || orig.source !== r.source || !r._on ||
+    JSON.stringify([orig.speed, orig.hold, orig.transition, orig.stabilize]) !== JSON.stringify([r.speed, r.hold, r.transition, r.stabilize]);
   const th = (t) => `<img loading="lazy" src="/thumb?source=${encodeURIComponent(r.source)}&t=${t.toFixed(2)}" alt="">`;
   const note = cardNotes[i] || "";
   return `<div class="card ${r._on ? "" : "off"} ${changed ? "dirty" : ""} ${i === sel ? "sel" : ""}" id="card${i}" style="border-left-color:${beatColor(r.beat)}">
@@ -567,7 +662,7 @@ function cardHtml(r, i, outT) {
       </div>
     </div>
     <details class="more" ${openCards.has(i) ? "open" : ""} ontoggle="this.open ? openCards.add(${i}) : openCards.delete(${i})">
-      <summary>Trim &amp; note${note ? ` <span class="badge">📝 note</span>` : ""}</summary>
+      <summary>Edit${note ? ` <span class="badge">📝 note</span>` : ""}${fxBadges(r, i)}</summary>
       <div class="edit">
         <div class="row">
           <span class="times">${esc(r.source)} ${fmt(r.start)}–${fmt(r.end)}</span>
@@ -575,6 +670,15 @@ function cardHtml(r, i, outT) {
         <div class="row">
           <span class="meta">Start</span><button class="sm" onclick="nudge(${i},'start',-0.1)">−0.1s</button><button class="sm" onclick="nudge(${i},'start',0.1)">+0.1s</button>
           <span class="meta" style="margin-left:6px">End</span><button class="sm" onclick="nudge(${i},'end',-0.1)">−0.1s</button><button class="sm" onclick="nudge(${i},'end',0.1)">+0.1s</button>
+        </div>
+        <div class="grid2">
+          ${i > 0 ? `<label class="lbl">Transition in <select class="field" onchange="setFx(${i},'transition',this.value||null)">
+            <option value="">Cut (none)</option>${S.transitions.map((t) => `<option value="${t}" ${trName(r) === t ? "selected" : ""}>${t.replace(/_/g, " ")}</option>`).join("")}</select></label>` : `<span></span>`}
+          <label class="lbl">Speed <select class="field" onchange="setFx(${i},'speed',+this.value===1?null:+this.value)">
+            ${[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3].map((v) => `<option value="${v}" ${(r.speed || 1) === v ? "selected" : ""}>${v}×${v === 1 ? " (normal)" : v < 1 ? " slow-mo" : ""}</option>`).join("")}</select></label>
+          <label class="lbl">Freeze at end <select class="field" onchange="setFx(${i},'hold',+this.value||null)">
+            ${[0, 0.5, 1, 1.5, 2].map((v) => `<option value="${v}" ${(r.hold || 0) === v ? "selected" : ""}>${v ? v + "s" : "No freeze"}</option>`).join("")}</select></label>
+          <label class="chk" style="align-self:end;padding-bottom:5px"><input type="checkbox" ${r.stabilize ? "checked" : ""} onchange="setFx(${i},'stabilize',this.checked||null)"> Stabilize</label>
         </div>
         <textarea class="field" placeholder="Note on this section (optional)" oninput="cardNotes[${i}]=this.value; setDirty(true)">${esc(note)}</textarea>
       </div>
@@ -601,7 +705,20 @@ function pick(i, scroll) {
 }
 function outStartOf(i) {
   if (!ranges[i]?._on) return null;
-  return ranges.slice(0, i).reduce((a, r) => a + (r._on ? r.end - r.start : 0), 0);
+  return ranges.slice(0, i).reduce((a, r) => a + (r._on ? rlen(r) : 0), 0);
+}
+const trName = (r) => (r.transition && typeof r.transition === "object" ? r.transition.type : r.transition) || "";
+function fxBadges(r, i) {
+  const b = [];
+  if (i > 0 && trName(r)) b.push(`↪ ${trName(r).replace(/_/g, " ")}`);
+  if (r.speed && r.speed !== 1) b.push(`${r.speed}×`);
+  if (r.hold) b.push(`❚❚ ${r.hold}s`);
+  if (r.stabilize) b.push("steady");
+  return b.map((x) => ` <span class="badge">${esc(x)}</span>`).join("");
+}
+function setFx(i, k, v) {
+  if (v === null || v === undefined) delete ranges[i][k]; else ranges[i][k] = k === "transition" ? { type: v } : v;
+  openCards.add(i); setDirty(true); render();
 }
 function toggle(i, on) { ranges[i]._on = on; setDirty(true); render(); }
 function setBeat(i, v) { ranges[i].beat = v.toUpperCase(); setDirty(true); render(); }
@@ -635,14 +752,14 @@ function restore(ci, at) {
 // ---- rough cut player ---------------------------------------------------
 // The playhead maps rough-cut time onto the timeline, which is only right while the
 // rough cut matches the plan on screen (not stale, no unsaved section edits).
-const cutKey = (rs) => JSON.stringify(rs.map((r) => [r.source, r.start, r.end]));
+const cutKey = (rs) => JSON.stringify(rs.map((r) => [r.source, r.start, r.end, r.speed || 1, r.hold || 0, r.transition || null]));
 const playheadValid = () => S && S.rough.exists && !S.rough.stale &&
   cutKey(ranges.filter((r) => r._on)) === cutKey(S.plan.ranges);
 function outToX(t) {   // rough-cut time -> fraction across the timeline, plus range index
-  const all = ranges.reduce((a, r) => a + (r.end - r.start), 0) || 1;
+  const all = ranges.reduce((a, r) => a + rlen(r), 0) || 1;
   let acc = 0, out = 0;
   for (let i = 0; i < ranges.length; i++) {
-    const d = ranges[i].end - ranges[i].start;
+    const d = rlen(ranges[i]);
     if (ranges[i]._on && t < out + d) return { x: (acc + (t - out)) / all, i };
     if (ranges[i]._on) out += d;
     acc += d;
@@ -671,6 +788,7 @@ function renderRough() {
       area.innerHTML = `<video id="player" controls playsinline preload="metadata" src="${src}" data-src="${src}"></video><div class="stale" id="staleBar" hidden></div>`;
       const p = $("player");
       ["timeupdate", "seeked", "loadedmetadata"].forEach((e) => p.addEventListener(e, updatePlayhead));
+      p.addEventListener("loadedmetadata", drawCapDot);
     }
     $("tnoteBtn").disabled = false;
   } else {
@@ -753,10 +871,10 @@ $("saveBtn").onclick = async () => {
   const cards = Object.entries(cardNotes).filter(([, n]) => n && n.trim()).map(([i, n]) => {
     const r = ranges[i]; return { index: +i, source: r.source, start: r.start, end: r.end, quote: r.quote, note: n.trim() };
   });
-  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, title: ttl, grade: look === "none" ? null : look, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
+  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, title: ttl, effects: fxs, grade: look === "none" ? null : look, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
   openCards.clear(); sel = -1;
   await load();
-  toast(res.direct_edits.length ? `Saved as v${res.version}. ${res.notes_saved ? 'Now tell Claude "check my notes".' : ""}` :
+  toast(res.direct_edits.length ? `Saved. ${res.notes_saved ? 'Now tell Claude "check my notes".' : ""}` :
     res.notes_saved ? 'Notes saved. Tell Claude "check my notes".' : "Nothing to save.");
 };
 

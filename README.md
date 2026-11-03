@@ -1,3 +1,25 @@
+# AI Video Editor for Claude Code
+
+A free, local AI video editor: drop raw clips in a folder, tell Claude what you want, review
+and approve in the **Review Studio**, export for every platform. Local transcription, smart
+cuts, 13 caption styles, 40+ looks, transitions, effects, speed ramps, B-roll, motion graphics,
+music ducking, QC and multi-format export.
+
+**Install as a Claude Code plugin:**
+
+```bash
+claude plugin marketplace add theaisolopreneurs-stack/video-use
+claude plugin install ai-video-editor@aisolopreneurs-video
+```
+
+Then run `/ai-video-editor:video-editor-setup` once, and say *"edit the clips in
+footage/my-video as a reel"*. **Read the [user guide](docs/GUIDE.md).**
+
+This is a fork of [browser-use/video-use](https://github.com/browser-use/video-use) (MIT) — the
+original README follows.
+
+---
+
 <p align="center">
   <img src="static/video-use-banner.png" alt="video-use" width="100%">
 </p>

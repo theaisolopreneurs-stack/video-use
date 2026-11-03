@@ -6,7 +6,7 @@ plan.json "captions":
     "captions": {
       "style": "pill",              # see PRESETS: clean, karaoke, pill, hormozi, beast, bold,
                                     # highlight, classic, minimal, neon, typewriter, one_word, stacked, none
-      "position": "lower",          # lower (clear of Reels/TikTok UI) | middle | upper
+      "position": "bottom",         # top | middle | bottom, or an exact spot {"x": 0.5, "y": 0.3}
       "max_words": 3,               # optional: overrides the style's own words-per-caption
       "uppercase": false,
       "size": 72,                   # px at 1080-wide portrait / 1080-tall landscape
@@ -38,7 +38,28 @@ from PIL import ImageFont
 
 REPO = Path(__file__).resolve().parent.parent
 FONTS_DIR = "C:/Windows/Fonts"
-POSITIONS = {"lower": 0.70, "middle": 0.50, "upper": 0.25}
+POSITIONS = {"lower": 0.70, "bottom": 0.70, "middle": 0.50, "center": 0.50, "upper": 0.25, "top": 0.25}
+
+
+def caption_xy(position, W: int, H: int) -> tuple[float, float]:
+    """Caption centre as fractions of the frame.
+
+    position: "top" | "middle" | "bottom" (aliases upper/center/lower), or an exact spot as
+    {"x": 0.5, "y": 0.3} / [0.5, 0.3] / "0.5,0.3" (0-1 across and down). Named spots respect
+    the platform UI: in 9:16 "bottom" sits at 70% (clear of the app's caption area); square
+    and wide frames have no app UI, so it drops to 86%.
+    """
+    if isinstance(position, dict):
+        return float(position.get("x", 0.5)), float(position.get("y", 0.7))
+    if isinstance(position, (list, tuple)) and len(position) == 2:
+        return float(position[0]), float(position[1])
+    if isinstance(position, str) and "," in position:
+        x, y = position.split(",", 1)
+        return float(x), float(y)
+    fy = POSITIONS.get(str(position), 0.70)
+    if W / H > 0.9 and str(position) in ("lower", "bottom"):
+        fy = 0.86
+    return 0.5, fy
 PUNCT_BREAK = set(".,!?;:")
 
 
@@ -85,12 +106,18 @@ def norm(t: str) -> str:
 
 
 def output_words(plan: dict, edit_dir: Path, corrections: list[dict]) -> list[dict]:
-    """Every kept word, re-timed onto the output timeline, with corrections applied."""
+    """Every kept word, re-timed onto the output timeline, with corrections applied.
+    Speed-changed sections scale word times; reversed sections get no captions."""
+    from plan import range_len
     words: list[dict] = []
     offset = 0.0
     cache: dict[str, list[dict]] = {}
     for r in plan["ranges"]:
         src, s, e = r["source"], float(r["start"]), float(r["end"])
+        speed = float(r.get("speed") or 1.0)
+        if r.get("reverse"):
+            offset += range_len(r)
+            continue
         if src not in cache:
             tp = edit_dir / "transcripts" / f"{src}.json"
             cache[src] = [w for w in json.loads(tp.read_text(encoding="utf-8")).get("words", [])
@@ -109,9 +136,9 @@ def output_words(plan: dict, edit_dir: Path, corrections: list[dict]) -> list[di
                 trail = re.search(r"[^\w']+$", text)
                 text = c["to"] + (trail.group(0) if trail else "")
             words.append({"text": text,
-                          "start": max(w["start"], s) - s + offset,
-                          "end": min(w["end"], e) - s + offset})
-        offset += e - s
+                          "start": (max(w["start"], s) - s) / speed + offset,
+                          "end": (min(w["end"], e) - s) / speed + offset})
+        offset += range_len(r)
     return words
 
 
@@ -261,10 +288,8 @@ class Writer:
         unit = W / 1080 if H > W else H / 1080
         self.size = int(s["size"] * self.p.get("size", 1.0) * unit)
         self.upper = self.p["upper"] if "upper" in self.p else bool(s["uppercase"])
-        frac = POSITIONS.get(s["position"], 0.70)
-        if W / H > 0.9 and s["position"] == "lower":
-            frac = 0.86  # square/wide frames have no app UI at the bottom, and the face sits lower
-        self.y = int(H * frac)
+        fx, fy = caption_xy(s["position"], W, H)
+        self.x, self.y = int(W * fx), int(H * fy)
         self.events: list[str] = []
         self.n_cue = 0
 
@@ -379,7 +404,13 @@ class Writer:
 
     def emit(self, cue: list[dict], a: float, b: float, active: int | None, first: bool) -> None:
         p = self.p
-        pos = f"\\an5\\pos({self.W // 2},{self.y})"
+        # Keep the whole line inside the frame, wherever the user put the captions.
+        ws_all, sp_all = self.widths(cue)
+        half = (sum(ws_all) + sp_all * (len(ws_all) - 1)) / (2 if p.get("lines", 1) == 1 or len(cue) <= 3 else 4)
+        half += self.size * 0.6
+        cx_line = int(min(max(self.x, half), self.W - half)) if half * 2 < self.W else self.W // 2
+        cy_line = int(min(max(self.y, self.size * 1.2), self.H - self.size * 1.2))
+        pos = f"\\an5\\pos({cx_line},{cy_line})"
         anim = ""
         if first and p["anim"] == "pop":
             anim = "\\fscx90\\fscy90\\t(0,90,\\fscx100\\fscy100)"
@@ -402,15 +433,15 @@ class Writer:
             # (libass word spacing differs slightly from PIL's, which would misalign the box).
             ws, sp = self.widths(cue)
             sp += self.size * 0.12  # room for the box padding between words
-            x = self.W / 2 - (sum(ws) + sp * (len(ws) - 1)) / 2
+            x = cx_line - (sum(ws) + sp * (len(ws) - 1)) / 2
             colour = self.col.get(p["active"]["box"], p["active"]["box"])
             for j, w in enumerate(cue):
                 cx = x + ws[j] / 2
                 if j == active:
                     bw, bh = ws[j] + self.size * 0.36, self.size * 1.22
-                    self.add(0, a, b, "Box", f"{{\\an5\\pos({cx:.0f},{self.y}){anim}\\1c{ass_color(colour)}"
+                    self.add(0, a, b, "Box", f"{{\\an5\\pos({cx:.0f},{cy_line}){anim}\\1c{ass_color(colour)}"
                                              f"\\shad0\\p1}}{rounded_rect(bw, bh, self.size * 0.22)}{{\\p0}}")
-                self.add(1, a, b, "Cap", f"{{\\an5\\pos({cx:.0f},{self.y}){anim}}}" + self.word_text(w, j == active))
+                self.add(1, a, b, "Cap", f"{{\\an5\\pos({cx:.0f},{cy_line}){anim}}}" + self.word_text(w, j == active))
                 x += ws[j] + sp
             return
 
@@ -498,10 +529,11 @@ def sample_frame(plan: dict, edit_dir: Path, style: str, out_jpg: Path, height: 
     cue = [dict(w, start=w["start"] - t0 + 0.05, end=w["end"] - t0 + 0.05) for w in first]
     # Map the cue's output time back to its source frame.
     offset, src, src_t = 0.0, plan["ranges"][0]["source"], float(plan["ranges"][0]["start"])
+    from plan import range_len
     for r in plan["ranges"]:
-        d = float(r["end"]) - float(r["start"])
+        d = range_len(r)
         if offset <= t0 < offset + d:
-            src, src_t = r["source"], float(r["start"]) + (t0 - offset)
+            src, src_t = r["source"], float(r["start"]) + (t0 - offset) * float(r.get("speed") or 1.0)
             break
         offset += d
     ass = out_jpg.with_suffix(".ass")

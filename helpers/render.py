@@ -75,6 +75,9 @@ def resolve_grade_filter(grade_field: str | None) -> str:
         return ""
     if grade_field == "auto":
         return "__AUTO__"
+    if grade_field.startswith("look:"):
+        from looks import look_filter
+        return look_filter(grade_field)
     if grade_field.startswith("lut:") or grade_field.endswith(".cube"):
         from grade import lut_filter
         return lut_filter(grade_field)
@@ -248,6 +251,32 @@ def probe_source_fps(video: Path) -> str | None:
 # -------- Per-segment extraction (Rule 2 + Rule 3) --------------------------
 
 
+def atempo_chain(speed: float) -> list[str]:
+    """atempo only takes 0.5-2.0 per instance; chain instances for bigger changes."""
+    parts, s = [], speed
+    while s > 2.0:
+        parts.append("atempo=2.0")
+        s /= 2.0
+    while s < 0.5:
+        parts.append("atempo=0.5")
+        s /= 0.5
+    parts.append(f"atempo={s:.4f}")
+    return parts
+
+
+# Transition into a section (plan range "transition": {"type", "duration"}). Most are FFmpeg
+# xfade wipes; the cut point stays put because both sides borrow a little extra footage.
+TRANSITIONS = {
+    "crossfade": ("fade", 0.4), "dissolve": ("dissolve", 0.5), "fade_black": ("fadeblack", 0.6),
+    "fade_white": ("fadewhite", 0.5), "flash": ("fadewhite", 0.2), "whip_left": ("smoothleft", 0.25),
+    "whip_right": ("smoothright", 0.25), "whip_up": ("smoothup", 0.25), "slide_left": ("slideleft", 0.35),
+    "slide_right": ("slideright", 0.35), "slide_up": ("slideup", 0.35), "wipe_left": ("wipeleft", 0.4),
+    "wipe_right": ("wiperight", 0.4), "circle_open": ("circleopen", 0.5), "circle_close": ("circleclose", 0.5),
+    "radial": ("radial", 0.5), "zoom_in": ("zoomin", 0.4), "pixelate": ("pixelize", 0.4),
+    "blur": ("hblur", 0.4), "squeeze": ("squeezeh", 0.35), "diagonal": ("diagtl", 0.4),
+}
+
+
 def extract_segment(
     source: Path,
     seg_start: float,
@@ -259,6 +288,7 @@ def extract_segment(
     rate: str | None = None,
     crop: str | None = None,
     out_size: tuple[int, int] | None = None,
+    fx: dict | None = None,
 ) -> None:
     """Extract a cut range as its own MP4 with grade + 30ms audio fades baked in.
 
@@ -283,7 +313,13 @@ def extract_segment(
     else:
         scale = "scale=-2:1920" if portrait else "scale=1920:-2"
 
+    fx = fx or {}
+    speed = float(fx.get("speed") or 1.0)
+    hold = float(fx.get("hold") or 0.0)
+
     vf_parts: list[str] = []
+    if fx.get("stabilize"):
+        vf_parts.append("deshake=rx=32:ry=32")
     if is_hdr_source(source):
         vf_parts.append(TONEMAP_CHAIN)
     if crop:
@@ -291,11 +327,27 @@ def extract_segment(
     vf_parts.append(scale)
     if grade_filter:
         vf_parts.append(grade_filter)
+    if fx.get("reverse"):
+        vf_parts.append("reverse")
+    if speed != 1.0:
+        vf_parts.append(f"setpts=(PTS-STARTPTS)/{speed:.4f}")
+    if hold > 0:
+        vf_parts.append(f"tpad=stop_mode=clone:stop_duration={hold:.3f}")  # freeze the last frame
     vf = ",".join(vf_parts)
 
-    # 30ms audio fades at both edges (Rule 3) — prevent pops
-    fade_out_start = max(0.0, duration - 0.03)
-    af = f"afade=t=in:st=0:d=0.03,afade=t=out:st={fade_out_start:.3f}:d=0.03"
+    # 30ms audio fades at both edges (Rule 3) — prevent pops. Speed/reverse/freeze happen first,
+    # so the fades land on the edges of what actually plays.
+    play = duration / speed
+    af_parts = ["areverse"] if fx.get("reverse") else []
+    if speed != 1.0:
+        af_parts += atempo_chain(speed)
+    af_parts.append(f"afade=t=in:st=0:d=0.03,afade=t=out:st={max(0.0, play - 0.03):.3f}:d=0.03")
+    if hold > 0:
+        af_parts.append(f"apad=pad_dur={hold:.3f}")
+    af = ",".join(af_parts)
+    has_audio = bool(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
+                                     "stream=index", "-of", "csv=p=0", str(source)],
+                                    capture_output=True, text=True).stdout.strip())
 
     if draft:
         preset, crf = "ultrafast", "28"
@@ -310,16 +362,21 @@ def extract_segment(
     # own rate; fall back to 24 only if it can't be probed.
     out_rate = rate if rate is not None else (probe_source_fps(source) or "24")
 
+    # -t is an *input* option so speed changes and freezes can make the output longer.
+    # Clips without sound (B-roll, screen recordings) get silence so every segment concats.
+    silence = [] if has_audio else ["-f", "lavfi", "-t", f"{duration:.3f}",
+                                    "-i", "anullsrc=r=48000:cl=stereo"]
     cmd = [
         "ffmpeg", "-y",
-        "-ss", f"{seg_start:.3f}",
+        "-ss", f"{seg_start:.3f}", "-t", f"{duration:.3f}",
         "-i", str(source),
-        "-t", f"{duration:.3f}",
+        *silence,
+        "-map", "0:v:0", "-map", "0:a:0" if has_audio else "1:a:0",
         "-vf", vf,
         "-af", af,
         "-c:v", "libx264", "-preset", preset, "-crf", crf,
         "-pix_fmt", "yuv420p", "-r", out_rate,
-        "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
         "-movflags", "+faststart",
         str(out_path),
     ]
@@ -368,11 +425,38 @@ def extract_all_segments(
           f"{' (forced)' if fps is not None else ' (from source)'}")
     if is_auto:
         print("  (auto-grade per segment: analyzing each range)")
+
+    # Transitions: each join borrows footage from both neighbours ("handles") so the cut point,
+    # and so every caption/graphic time, stays where it was. Output seconds on each side.
+    pre = [0.0] * len(ranges)
+    post = [0.0] * len(ranges)
+    joins: list[tuple[str, float]] = [("cut", 0.0)]
+    for i in range(1, len(ranges)):
+        tr = ranges[i].get("transition") or {}
+        kind = tr.get("type") if isinstance(tr, dict) else tr
+        if kind not in TRANSITIONS or "status" not in edl:
+            joins.append(("cut", 0.0))
+            continue
+        want = float(tr.get("duration") or TRANSITIONS[kind][1]) if isinstance(tr, dict) else TRANSITIONS[kind][1]
+        a, b = ranges[i - 1], ranges[i]
+        sa, sb = float(a.get("speed") or 1), float(b.get("speed") or 1)
+        a_src = resolve_path(sources[a["source"]], edit_dir)
+        avail_post = 0.0 if (a.get("hold") or a.get("reverse")) else \
+            max(0.0, (_duration(a_src) - float(a["end"])) / sa)
+        avail_pre = 0.0 if b.get("reverse") else max(0.0, float(b["start"]) / sb)
+        p_ = min(avail_pre, want / 2)
+        q_ = min(avail_post, want / 2)
+        p_ = min(avail_pre, want - q_)
+        q_ = min(avail_post, want - p_)
+        pre[i], post[i - 1] = round(p_, 3), round(q_, 3)
+        joins.append((TRANSITIONS[kind][0], round(p_ + q_, 3)) if p_ + q_ >= 0.08 else ("cut", 0.0))
+
     for i, r in enumerate(ranges):
         src_name = r["source"]
         src_path = resolve_path(sources[src_name], edit_dir)
-        start = float(r["start"])
-        end = float(r["end"])
+        speed = float(r.get("speed") or 1.0)
+        start = float(r["start"]) - pre[i] * speed
+        end = float(r["end"]) + post[i] * speed
         duration = end - start
         out_path = clips_dir / f"seg_{i:02d}_{src_name}.mp4"
 
@@ -383,6 +467,10 @@ def extract_all_segments(
 
         crop, out_size = None, None
         aspect = (edl.get("target") or {}).get("aspect")
+        if "status" in edl and not aspect:
+            # Mixed sources need one canvas; take the shape of the first one.
+            first = resolve_path(sources[ranges[0]["source"]], edit_dir)
+            aspect = "9:16" if is_portrait_source(first) else "16:9"
         if "status" in edl and aspect:
             from framing import output_size, reframe_crop, reframe_pad
             out_size = output_size(aspect, draft)
@@ -395,10 +483,53 @@ def extract_all_segments(
         if is_auto:
             print(f"        grade: {seg_filter or '(none)'}")
         extract_segment(src_path, start, duration, seg_filter, out_path, preview=preview, draft=draft,
-                        rate=out_rate, crop=crop, out_size=out_size)
+                        rate=out_rate, crop=crop, out_size=out_size,
+                        fx={k: r.get(k) for k in ("speed", "hold", "stabilize", "reverse")})
         seg_paths.append(out_path)
 
+    extract_all_segments.joins = joins  # read by main() to pick lossless concat vs transitions
+    extract_all_segments.rate = out_rate
     return seg_paths
+
+
+def _duration(p: Path) -> float:
+    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                          "-of", "default=nw=1:nk=1", str(p)], capture_output=True, text=True)
+    return float(out.stdout.strip() or 0)
+
+
+def join_with_transitions(segment_paths: list[Path], joins: list[tuple[str, float]], out_path: Path,
+                          rate: str, draft: bool) -> None:
+    """Join segments with xfade/acrossfade where a transition is set, plain joins elsewhere.
+
+    Segments already carry their handles, so each xfade starts `d` before the end of what's been
+    joined so far and the total length equals the plan's.
+    """
+    inputs, parts = [], []
+    for i, p in enumerate(segment_paths):
+        inputs += ["-i", str(p)]
+        # Same clock (fps then settb, so plain joins and xfades agree), pixel format and colour
+        # tags on every clip: phone footage is tagged BT.709, screen/test clips often aren't.
+        parts.append(f"[{i}:v]fps={rate},settb=AVTB,format=yuv420p,"
+                     f"setparams=range=tv:colorspace=bt709:color_primaries=bt709:color_trc=bt709[v{i}];"
+                     f"[{i}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[a{i}]")
+    vcur, acur, length = "[v0]", "[a0]", _duration(segment_paths[0])
+    for i in range(1, len(segment_paths)):
+        kind, d = joins[i]
+        nxt = _duration(segment_paths[i])
+        if kind == "cut" or d <= 0:
+            parts.append(f"{vcur}[v{i}]concat=n=2:v=1:a=0[vj{i}];{acur}[a{i}]concat=n=2:v=0:a=1[aj{i}]")
+            length += nxt
+        else:
+            parts.append(f"{vcur}[v{i}]xfade=transition={kind}:duration={d:.3f}:offset={length - d:.3f}[vj{i}];"
+                         f"{acur}[a{i}]acrossfade=d={d:.3f}[aj{i}]")
+            length += nxt - d
+        vcur, acur = f"[vj{i}]", f"[aj{i}]"
+    preset, crf = ("ultrafast", "28") if draft else ("fast", "18")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", ";".join(parts),
+                    "-map", vcur, "-map", acur, "-c:v", "libx264", "-preset", preset, "-crf", crf,
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+                    str(out_path)], check=True)
 
 
 # -------- Lossless concat ----------------------------------------------------
@@ -695,8 +826,9 @@ def build_final_composite(
         dur = float(ov["duration"])
         end = t + dur
         next_label = f"[v{idx}]"
+        xy = f":x='{ov['x']}':y='{ov['y']}'" if "x" in ov else ""  # e.g. a picture-in-picture B-roll
         filter_parts.append(
-            f"{current}[a{idx}]overlay=enable='between(t,{t:.3f},{end:.3f})'{next_label}"
+            f"{current}[a{idx}]overlay=enable='between(t,{t:.3f},{end:.3f})'{xy}{next_label}"
         )
         current = next_label
 
@@ -815,7 +947,12 @@ def main() -> None:
     else:
         base_name = "base.mp4"
     base_path = edit_dir / base_name
-    concat_segments(segment_paths, base_path, edit_dir)
+    joins = getattr(extract_all_segments, "joins", [])
+    if any(kind != "cut" for kind, _ in joins):
+        print(f"joining with {sum(k != 'cut' for k, _ in joins)} transition(s) → {base_name}")
+        join_with_transitions(segment_paths, joins, base_path, extract_all_segments.rate, args.draft)
+    else:
+        concat_segments(segment_paths, base_path, edit_dir)
 
     # 2b. plan.json: audio polish on the continuous voice track (cleanup, music, SFX).
     if status is not None:
@@ -847,6 +984,15 @@ def main() -> None:
         from framing import probe_size, zoom_filter
         bw, bh = probe_size(base_path)
         zoom = zoom_filter(edl, edit_dir, bw, bh, probe_source_fps(base_path) or "30")
+        # Effects (and glitch/shake/flash cuts) act on the picture after zooms, before any text.
+        from effects import build_broll_overlays, effects_chain
+        fx = effects_chain(edl, bw, bh)
+        if fx:
+            zoom = f"{zoom or 'null'}{fx}"
+        # B-roll cutaways sit under titles and graphics, so they go first in the overlay stack.
+        if edl.get("broll"):
+            overlays = build_broll_overlays(edl, edit_dir, bw, bh, probe_source_fps(base_path) or "30",
+                                            args.draft) + overlays
         # Hook titles (title.py) render as alpha overlays; built here so the rough cut shows them.
         if edl.get("title"):
             from title import build_title_overlay

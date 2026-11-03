@@ -80,7 +80,9 @@ class Studio:
             "brand_captions": self.brand_captions(),
             "music": [self.music_name(p) for p in self.music_files()],
             "sfx_kit": sorted(__import__("audio").SFX_KIT),
-            "looks": self.looks(),
+            "looks": self.look_list(),
+            "effects_kit": __import__("effects").effect_list(),
+            "transitions": sorted(__import__("render").TRANSITIONS) + sorted(__import__("effects").CUT_EFFECTS),
             "caption_styles": __import__("captions").style_list(),
         }
 
@@ -115,6 +117,13 @@ class Studio:
             if new_grade != plan.get("grade"):
                 settings_changed["grade"] = new_grade
                 changed.append(f"look: {plan.get('grade') or 'none'} -> {new_grade or 'none'}")
+            new_fx = body.get("effects")
+            if new_fx is not None and new_fx != (plan.get("effects") or []):
+                settings_changed["effects"] = new_fx
+                old_n = {e.get("type") for e in plan.get("effects") or []}
+                new_n = {e.get("type") for e in new_fx}
+                changed.append("effects: " + (", ".join(sorted(new_n)) or "none") +
+                               (f" (removed {', '.join(sorted(old_n - new_n))})" if old_n - new_n else ""))
             for field in ("captions", "audio", "title"):
                 new = body.get(field)
                 old = plan.get(field) or {}
@@ -133,11 +142,19 @@ class Studio:
             if new_ranges is not None:
                 candidate = dict(plan, ranges=new_ranges)
                 changed += planlib.diff(plan, candidate)
-                old_beats = {planlib.range_key(r): r.get("beat", "") for r in plan["ranges"]}
+                old_by_key = {planlib.range_key(r): r for r in plan["ranges"]}
                 for r in new_ranges:
-                    old = old_beats.get(planlib.range_key(r))
-                    if old is not None and old != r.get("beat", ""):
-                        changed.append(f"labeled \"{(r.get('quote') or '')[:40]}\" as {r.get('beat') or '(none)'}")
+                    old = old_by_key.get(planlib.range_key(r))
+                    if old is None:
+                        continue
+                    name = '"' + (r.get("quote") or r.get("beat") or "")[:40] + '"'
+                    if old.get("beat", "") != r.get("beat", ""):
+                        changed.append(f"labeled {name} as {r.get('beat') or '(none)'}")
+                    for k in planlib.RANGE_FX:
+                        if old.get(k) != r.get(k):
+                            v = r.get(k)
+                            v = v.get("type") if isinstance(v, dict) else v
+                            changed.append(f"{k} on {name}: {v if v not in (None, False) else 'off'}")
             if changed:
                 v = int(plan.get("version", 1))
                 shutil.copyfile(self.plan_path, self.edit_dir / f"plan_v{v}.json")
@@ -154,7 +171,7 @@ class Studio:
                 plan.update(settings_changed)
                 plan["version"] = v + 1
                 plan["status"] = "draft"
-                plan["changes"] = [f"v{v + 1} (you, in Review Studio): {c}" for c in changed]
+                plan["changes"] = [f"You: {c}" for c in changed]
                 plan["total_duration_s"] = planlib.total_duration(plan)
                 planlib.save(self.plan_path, plan)
             notes = body.get("notes") or {}
@@ -212,9 +229,17 @@ class Studio:
         return out
 
     def looks(self) -> list[str]:
+        return [x["id"] for x in self.look_list()]
+
+    def look_list(self) -> list[dict]:
+        """Every look the Studio offers: basics, the recipe looks (looks.py), then any .cube files."""
         import grade
-        return ["none", "subtle", "neutral_punch", "warm_cinematic", "auto"] + \
-               [f"lut:{p.name}" for p in grade.list_luts(self.edit_dir)]
+        import looks
+        basics = [("none", "None"), ("auto", "Auto-fix"), ("subtle", "Subtle"), ("neutral_punch", "Punchy"),
+                  ("warm_cinematic", "Warm cinematic")]
+        return ([{"id": k, "label": v, "group": "Basics"} for k, v in basics] + looks.look_list() +
+                [{"id": f"lut:{p.name}", "label": p.stem.replace("_", " ").title(), "group": "Your LUTs"}
+                 for p in grade.list_luts(self.edit_dir)])
 
     def _first_frame(self, width: int = 360):
         """A frame half a second into the first kept section, plus its source/time."""
@@ -238,6 +263,9 @@ class Studio:
         if look == "auto":
             r = plan["ranges"][0]
             vf, _ = grade.auto_grade_for_clip(src, float(r["start"]), float(r["end"]) - float(r["start"]))
+        elif look.startswith("look:"):
+            import looks
+            vf = looks.look_filter(look)
         elif look.startswith("lut:"):
             vf = grade.lut_filter(look, self.edit_dir)
         else:

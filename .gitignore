@@ -78,3 +78,9 @@ sfx/
 
 # Downloaded MediaPipe models (helpers/framing.py)
 models/
+
+# Looks built from recipes (helpers/looks.py)
+luts/generated/
+
+# Session worktrees and local preview config
+.claude/worktrees/
