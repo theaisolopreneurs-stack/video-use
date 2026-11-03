@@ -846,6 +846,17 @@ def main() -> None:
             ov = build_title_overlay(edl, edit_dir, base_path)
             if ov:
                 overlays.append(ov)
+        # Motion graphics (graphics.py → HyperFrames), one alpha clip per graphic; the
+        # progress bar is drawn by FFmpeg as part of the base chain.
+        if edl.get("graphics"):
+            from graphics import build_graphics_overlays, progress_chain
+            overlays += build_graphics_overlays(edl, edit_dir, base_path, draft=args.draft)
+            total = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                                          "-of", "default=nw=1:nk=1", str(base_path)],
+                                         capture_output=True, text=True).stdout.strip() or 0)
+            bar = progress_chain(edl, edit_dir, bw, bh, probe_source_fps(base_path) or "30", total)
+            if bar:
+                zoom = f"{zoom or 'null'}{bar}"
     if args.no_loudnorm:
         # Composite directly to final output
         build_final_composite(base_path, overlays, subs_path, out_path, edit_dir, zoom)

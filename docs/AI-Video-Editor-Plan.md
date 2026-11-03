@@ -132,8 +132,12 @@ Studio: **Look** panel (every look previewed on your footage), **Hook title** pa
 Tested on the Texans clip (v4: title behind you for 2.5 s, punch-ins on "0 and 4" and "give it to Claude") and on a synthetic landscape clip (reframe found the face at 27% across and cropped around it). Draft render with everything: ~27 s.
 Not yet: moving-camera face *tracking* within a segment (crop is per segment), auto-suggested zooms from emphasis words, 16:9 export from vertical.
 
-**Phase 7 — Motion-graphics template library (HyperFrames)**
-Charts, checklists, pop-outs, progress bar, plus *new* templates: prompt box, chat bubbles, app window, timer/stat card, PiP proof insert, collage grid, CTA end card. Triggered by keywords in the transcript or by request. Studio shows a still mockup of each graphic in brand style before it's animated.
+**Phase 7 — Motion-graphics template library (HyperFrames)** ✅ done 2026-11-02
+`graphics/` = a pinned Node project (HyperFrames 0.9.6 + GSAP 3.15) with `templates.js` / `templates.css`: 14 templates — text card, stat counter, timer, bar chart, checklist, AI prompt box (typing), chat bubbles, app/code window, picture-in-picture proof insert, screenshot collage, CTA end card with mock comment, lower third, emoji pop, progress bar. Brand colours/fonts flow in as CSS variables; sizes scale with the canvas.
+`helpers/graphics.py` packs all of a plan's graphics onto one timeline, renders once to transparent ProRes 4444, cuts one clip per graphic, and `render.py` overlays each at its time. The progress bar is drawn by FFmpeg (a full-length browser capture cost more than everything else). Cached by content, so re-renders reuse them.
+Tested on the Texans clip (v7: 🏈 pop, "0 – 4" card, typing prompt box, checklist, CTA end card, progress bar). Rough cut with graphics: ~48 s first time, ~21 s cached.
+Change from plan: the rough cut shows the real graphics instead of placeholder boxes — one extra render (~30 s) was worth seeing the real thing.
+Not yet: still mockups of graphics in the Studio (waiting for the UI redesign), graphics editing in the Studio (ask Claude for now), screen-recording inserts beyond the PiP template.
 
 **Phase 8 — Self-review loop and exports**
 Frame checks at cuts/overlays, safe-zone and text-over-face checks, loudness check, an "anti-slop" cap on effects per 10 seconds. Multi-ratio exports, thumbnails, chapters.
