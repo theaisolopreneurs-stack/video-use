@@ -6,193 +6,331 @@
 <title>Review Studio</title>
 <style>
   :root {
-    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e1db;
-    --accent: #1f5c4a; --accent-ink: #ffffff; --warn: #a3471c; --cut: #9b9890; --ok: #2e7d4f;
+    --bg: #f3f2ee; --panel: #ffffff; --panel-2: #f8f7f4; --ink: #1d1d1b; --muted: #6b6a66; --line: #e3e1db;
+    --accent: #1f5c4a; --accent-ink: #ffffff; --accent-soft: #dcebe4; --warn: #a3471c; --warn-soft: #f8e6dc;
+    --cut: #9b9890; --ok: #2e7d4f; --stage: #111110;
+    --pill-draft-bg: #f1e3c8; --pill-draft-ink: #6b4a12; --pill-plan-bg: #d9e8f5; --pill-plan-ink: #1d4a72;
+    --pill-done-bg: #d6eedd; --pill-done-ink: #1d5a33;
     --beat-0: #2f6f9f; --beat-1: #8a5a9e; --beat-2: #b0702a; --beat-3: #2e8a6e; --beat-4: #a8434f; --beat-5: #5a6b2f;
+    color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #151514; --panel: #1f1f1d; --ink: #ecebe6; --muted: #a09e97; --line: #33322f;
-      --accent: #5fb394; --accent-ink: #0f1a16; --warn: #e08a5e; --cut: #77756f; --ok: #6cc38f;
+      --bg: #121211; --panel: #1c1c1a; --panel-2: #232321; --ink: #ecebe6; --muted: #a09e97; --line: #34332f;
+      --accent: #5fb394; --accent-ink: #0f1a16; --accent-soft: #1f3a30; --warn: #e08a5e; --warn-soft: #3a2419;
+      --cut: #77756f; --ok: #6cc38f; --stage: #000;
+      --pill-draft-bg: #4a3a1c; --pill-draft-ink: #f1d9a8; --pill-plan-bg: #1d3550; --pill-plan-ink: #b9d6f2;
+      --pill-done-bg: #1d3f2a; --pill-done-ink: #b5e4c4;
+      color-scheme: dark;
     }
   }
+  :root[data-theme="dark"] {
+    --bg: #121211; --panel: #1c1c1a; --panel-2: #232321; --ink: #ecebe6; --muted: #a09e97; --line: #34332f;
+    --accent: #5fb394; --accent-ink: #0f1a16; --accent-soft: #1f3a30; --warn: #e08a5e; --warn-soft: #3a2419;
+    --cut: #77756f; --ok: #6cc38f; --stage: #000;
+    --pill-draft-bg: #4a3a1c; --pill-draft-ink: #f1d9a8; --pill-plan-bg: #1d3550; --pill-plan-ink: #b9d6f2;
+    --pill-done-bg: #1d3f2a; --pill-done-ink: #b5e4c4;
+    color-scheme: dark;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { padding: 18px 20px 10px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: baseline; }
-  h1 { font-size: 20px; margin: 0; }
-  .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 13px; background: var(--line); }
-  .pill.draft { background: #f1e3c8; color: #6b4a12; }
-  .pill.plan_approved { background: #d9e8f5; color: #1d4a72; }
-  .pill.rough_approved, .pill.final { background: #d6eedd; color: #1d5a33; }
-  .meta { color: var(--muted); font-size: 14px; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  [hidden] { display: none !important; }
+
+  /* ---- top bar: project, gates, actions -------------------------------- */
+  header.top { background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  .brand { display: flex; flex-direction: column; min-width: 0; }
+  h1 { font-size: 16px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta { color: var(--muted); font-size: 13px; }
   .over { color: var(--warn); font-weight: 600; }
-  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; padding: 0 20px 110px; }
-  @media (max-width: 980px) { main { grid-template-columns: 1fr; } aside { order: -1; } }
-  @media (max-width: 600px) { main { padding: 0 16px 200px; } header { padding: 16px 16px 8px; } }
-  section.box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
-  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
-  ul.changes { margin: 0; padding-left: 18px; }
-  .problems { color: var(--warn); }
-  .timeline { display: flex; height: 34px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
-  .timeline div { color: #fff; font-size: 11px; padding: 2px 4px; overflow: hidden; white-space: nowrap; cursor: pointer; border-right: 1px solid rgba(255,255,255,.4); }
-  .timeline div.off { background: repeating-linear-gradient(45deg, var(--cut), var(--cut) 4px, transparent 4px, transparent 8px) !important; color: var(--ink); }
-  .card { background: var(--panel); border: 1px solid var(--line); border-left: 6px solid var(--beat-0); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
-  .card.off { opacity: .5; }
-  .card.dirty { box-shadow: 0 0 0 2px var(--accent); }
-  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .thumbs { display: flex; gap: 6px; margin: 8px 0; }
-  .thumbs img { height: 120px; border-radius: 6px; background: var(--line); }
-  .quote { font-size: 16px; margin: 4px 0; }
-  .reason { color: var(--muted); font-size: 13px; }
-  .times { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); }
-  input.beat { width: 120px; font: inherit; font-weight: 700; text-transform: uppercase; border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; background: transparent; color: inherit; }
-  textarea { width: 100%; min-height: 44px; font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--bg); color: inherit; resize: vertical; }
-  button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
-  button:hover { border-color: var(--muted); }
-  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; padding: 8px 16px; font-size: 14px; }
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--line); vertical-align: 1px; }
+  .pill.draft { background: var(--pill-draft-bg); color: var(--pill-draft-ink); }
+  .pill.plan_approved { background: var(--pill-plan-bg); color: var(--pill-plan-ink); }
+  .pill.rough_approved, .pill.final { background: var(--pill-done-bg); color: var(--pill-done-ink); }
+  ol.steps { list-style: none; margin: 0 auto; padding: 0; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  ol.steps li { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); padding: 3px 8px 3px 3px; border-radius: 99px; }
+  ol.steps li + li::before { content: ""; width: 14px; height: 1px; background: var(--line); margin-right: 4px; }
+  ol.steps .dot { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+  ol.steps li.done { color: var(--ink); }
+  ol.steps li.done .dot { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  ol.steps li.now { color: var(--ink); font-weight: 600; background: var(--accent-soft); }
+  ol.steps li.now .dot { border-color: var(--accent); color: var(--accent); }
+  .actions { display: flex; align-items: center; gap: 8px; }
+  .actions .hint { max-width: 220px; text-align: right; }
+  .iconbtn { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+
+  /* ---- buttons & inputs ------------------------------------------------ */
+  button { font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; padding: 7px 14px; }
+  button.armed { background: var(--warn); border-color: var(--warn); }
   button:disabled { opacity: .45; cursor: not-allowed; }
-  .cut { margin: 0 0 10px 24px; padding: 6px 10px; border-left: 2px dashed var(--cut); color: var(--cut); font-size: 14px; }
-  .cut s { color: var(--cut); }
-  .cut .kind { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-right: 6px; }
-  .planned { font-size: 13px; margin-top: 6px; }
-  .planned span { display: inline-block; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; margin: 2px 4px 0 0; }
-  video { width: 100%; max-height: 60vh; background: #000; border-radius: 8px; }
-  .tnotes li { margin-bottom: 4px; }
-  footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 12px 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-  footer .spacer { flex: 1; }
-  .toast { color: var(--ok); font-size: 14px; }
-  .toast.err { color: var(--warn); }
-  .legend { font-size: 13px; color: var(--muted); margin-top: 6px; }
-  .capgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .capopt { border: 2px solid var(--line); border-radius: 10px; padding: 4px; cursor: pointer; text-align: center; font-size: 12px; background: var(--bg); }
-  .capimg { position: relative; aspect-ratio: 9 / 16; border-radius: 6px; background: var(--line); overflow: hidden; }
-  .capimg span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 6px; color: var(--muted); font-size: 11px; }
+  button.sm { padding: 2px 7px; font-size: 12px; }
+  .field { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: inherit; min-width: 0; }
+  input.field, textarea.field { width: 100%; }
+  textarea.field { min-height: 40px; resize: vertical; }
+  select.field { padding: 4px 6px; }
+  label.lbl { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+  label.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .grow { flex: 1; }
+
+  /* ---- workspace layout ------------------------------------------------ */
+  main { display: grid; gap: 12px; padding: 12px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "stage" "board" "inspector"; }
+  .col { min-width: 0; }
+  #stageCol { grid-area: stage; }
+  #boardCol { grid-area: board; }
+  #inspCol { grid-area: inspector; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .panel-h { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .panel-h h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; }
+  .panel-b { padding: 12px; }
+  @media (min-width: 760px) {
+    main { grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "stage inspector" "board inspector"; align-items: start; }
+    #inspCol { position: sticky; top: 12px; }
+  }
+  @media (min-width: 1180px) {
+    body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    main { flex: 1; min-height: 0; grid-template-columns: 360px minmax(0, 1fr) 360px; grid-template-areas: "board stage inspector"; align-items: stretch; }
+    .col { min-height: 0; display: flex; flex-direction: column; }
+    #inspCol { position: static; }
+    .col > .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .scroll { flex: 1; min-height: 0; overflow-y: auto; }
+    #stageCol { overflow-y: auto; }
+    #stageCol > .panel { flex: none; }
+  }
+  @media (max-width: 759px) {
+    header.top { padding: 10px 16px; }
+    main { padding: 12px 16px 84px; }
+    ol.steps { order: 3; width: 100%; margin: 0; }
+    ol.steps li { padding-right: 6px; font-size: 12px; }
+    ol.steps li + li::before { width: 6px; margin-right: 0; }
+    ol.steps li:not(.now) .lab { display: none; }
+    .actions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--panel); border-top: 1px solid var(--line); padding: 10px 16px; }
+    .actions .hint { flex: 1; text-align: left; max-width: none; }
+    .brand { flex: 1; }
+  }
+
+  /* ---- stage: player + timeline --------------------------------------- */
+  .banner { border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; }
+  .banner.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
+  .banner.info { background: var(--panel); border: 1px solid var(--line); }
+  .banner summary { cursor: pointer; font-weight: 600; }
+  .banner ul { margin: 6px 0 0; padding-left: 18px; max-height: 7.5em; overflow-y: auto; }
+  .screen { background: var(--stage); border-radius: 10px 10px 0 0; display: flex; align-items: center; justify-content: center; min-height: 220px; position: relative; overflow: hidden; }
+  .screen video { display: block; width: 100%; max-height: 58vh; background: #000; }
+  @media (min-width: 1180px) { .screen video { max-height: calc(100dvh - 330px); min-height: 240px; } }
+  .empty { color: #c9c7c0; text-align: center; padding: 28px 20px; max-width: 360px; }
+  .empty b { color: #fff; display: block; font-size: 15px; margin-bottom: 4px; }
+  .stale { position: absolute; top: 10px; left: 10px; right: 10px; background: rgba(0,0,0,.72); color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 13px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .stale button { background: #fff; color: #111; border-color: #fff; }
+  .transport { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .tlwrap { position: relative; padding-top: 10px; }
+  .timeline { display: flex; height: 38px; border-radius: 7px; overflow: hidden; border: 1px solid var(--line); }
+  .timeline div { color: #fff; font-size: 11px; font-weight: 600; padding: 3px 5px; overflow: hidden; white-space: nowrap; cursor: pointer; border-right: 1px solid rgba(255,255,255,.45); min-width: 3px; }
+  .timeline div:hover { filter: brightness(1.12); }
+  .timeline div.off { background: repeating-linear-gradient(45deg, var(--cut), var(--cut) 4px, transparent 4px, transparent 8px) !important; color: var(--ink); }
+  .timeline div.sel { box-shadow: inset 0 0 0 2px var(--ink); }
+  .playhead { position: absolute; top: 6px; bottom: -4px; width: 2px; background: var(--warn); pointer-events: none; border-radius: 2px; }
+  .marks { position: absolute; left: 0; right: 0; top: 0; height: 10px; }
+  .marks button { position: absolute; top: 0; width: 10px; height: 10px; padding: 0; margin-left: -5px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--warn); border: 0; }
+  .legend { font-size: 12px; color: var(--muted); }
+  .tnotes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .tnotes li { display: flex; gap: 8px; align-items: center; font-size: 13px; background: var(--panel-2); border-radius: 7px; padding: 3px 4px 3px 4px; }
+  .tnotes li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .tnotes .t { font-variant-numeric: tabular-nums; }
+
+  /* ---- storyboard ------------------------------------------------------ */
+  #board { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--beat-0); border-radius: 10px; padding: 8px 10px; }
+  .card.off { opacity: .55; }
+  .card.dirty { box-shadow: 0 0 0 1.5px var(--accent); }
+  .card.sel { border-color: var(--ink); }
+  .card.playing { background: var(--accent-soft); }
+  .card-top { display: flex; align-items: center; gap: 6px; }
+  .card-top .times { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-body { display: flex; gap: 10px; margin-top: 6px; }
+  .thumbs { display: flex; gap: 3px; flex: none; }
+  .thumbs img { height: 72px; min-width: 40px; border-radius: 5px; background: var(--line); display: block; }
+  .quote { font-size: 14px; line-height: 1.35; }
+  .reason { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .times { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); }
+  input.beat { width: 92px; font: inherit; font-size: 12px; font-weight: 700; text-transform: uppercase; border: 1px solid transparent; border-radius: 5px; padding: 1px 4px; background: transparent; color: inherit; }
+  input.beat:hover, input.beat:focus { border-color: var(--line); background: var(--panel-2); }
+  .keep { display: inline-flex; }
+  .keep input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+  details.more { margin-top: 6px; }
+  details.more summary { font-size: 12px; color: var(--muted); cursor: pointer; list-style: none; display: inline-flex; gap: 6px; align-items: center; }
+  details.more summary::-webkit-details-marker { display: none; }
+  details.more summary::before { content: "▸"; font-size: 10px; }
+  details.more[open] summary::before { content: "▾"; }
+  details.more .edit { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+  .badge { font-size: 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; color: var(--ink); }
+  .planned { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+  .cut { margin-left: 18px; padding: 2px 4px 2px 8px; border-left: 2px dashed var(--cut); color: var(--cut); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .cut .txt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cut .kind { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-right: 4px; }
+  @media (max-width: 420px) { .thumbs img:not(:nth-child(2)) { display: none; } }
+
+  /* ---- inspector tabs -------------------------------------------------- */
+  .tabs { display: flex; gap: 2px; padding: 6px 6px 0; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+  .tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: transparent; padding: 8px 10px; color: var(--muted); font-weight: 600; white-space: nowrap; position: relative; flex: 1; }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .tabs button.changed::after { content: ""; position: absolute; top: 6px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .tabpanel { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .capgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .capopt { border: 2px solid var(--line); border-radius: 9px; padding: 3px; cursor: pointer; text-align: center; font-size: 11px; background: var(--panel-2); color: inherit; font: inherit; font-size: 11px; line-height: 1.3; }
+  .capopt.sel { border-color: var(--accent); font-weight: 700; }
+  .capimg { position: relative; aspect-ratio: 9 / 16; border-radius: 6px; background: var(--line); overflow: hidden; margin-bottom: 2px; }
+  .capimg span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 6px; color: var(--muted); font-size: 10px; }
   .capimg img { position: relative; width: 100%; height: 100%; object-fit: cover; display: block; }
   .capopt img { object-position: center 72%; }
-  .capopt .off { aspect-ratio: 9 / 16; display: flex; align-items: center; justify-content: center; color: var(--muted); }
-  .capopt.sel { border-color: var(--accent); font-weight: 700; }
-  select { font: inherit; font-size: 13px; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: inherit; }
+  .capopt .noimg { aspect-ratio: 9 / 16; display: flex; align-items: center; justify-content: center; color: var(--muted); margin-bottom: 2px; }
+  .help { font-size: 13px; color: var(--muted); }
+  .help ol { margin: 4px 0 0; padding-left: 18px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 10; background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 9px; font-size: 13px; max-width: calc(100% - 32px); box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+  #toast.err { background: var(--warn); color: #fff; }
+  @media (max-width: 759px) { #toast { bottom: 76px; } }
 </style>
 </head>
 <body>
-<header>
-  <h1 id="title">Review Studio</h1>
-  <span id="status" class="pill">…</span>
-  <span id="meta" class="meta"></span>
-</header>
-<main>
-  <div>
-    <section class="box" id="changesBox" hidden>
-      <h2>What changed</h2>
-      <ul class="changes" id="changes"></ul>
-    </section>
-    <section class="box" id="problemsBox" hidden>
-      <h2>Problems</h2>
-      <ul class="problems" id="problems"></ul>
-    </section>
-    <section class="box">
-      <h2>Timeline</h2>
-      <div class="timeline" id="timeline"></div>
-      <div class="legend">Each block is a kept section, sized by length. Click to jump to its card. Striped = you've switched it off.</div>
-    </section>
-    <div id="board"></div>
+<header class="top">
+  <div class="brand">
+    <h1><span id="title">Review Studio</span> <span id="status" class="pill">…</span></h1>
+    <span id="meta" class="meta"></span>
   </div>
-  <aside>
-    <section class="box">
-      <h2>Rough cut</h2>
-      <div id="roughArea"></div>
-      <div class="row" style="margin-top:8px">
-        <button id="roughBtn">Make rough cut</button>
-        <button id="tnoteBtn" disabled>Note at current time</button>
-        <span id="roughMsg" class="meta"></span>
-      </div>
-      <form id="tnoteForm" hidden style="margin-top:8px">
-        <div id="tnoteLabel" class="meta"></div>
-        <div class="row"><input id="tnoteText" style="flex:1;font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:inherit" placeholder="e.g. cut feels abrupt here">
-        <button type="submit">Add</button></div>
-      </form>
-      <ul class="tnotes" id="tnotes"></ul>
-    </section>
-    <section class="box">
-      <h2>Captions</h2>
-      <div class="capgrid" id="capgrid"></div>
-      <div class="meta" id="capDesc" style="margin-top:6px"></div>
-      <div class="row" style="margin-top:10px">
-        <label class="meta">Position
-          <select id="capPos"><option value="lower">Lower (clear of app buttons)</option><option value="middle">Middle</option><option value="upper">Upper</option></select>
-        </label>
-        <label class="meta"><input type="checkbox" id="capUpper"> ALL CAPS</label>
-      </div>
-      <label class="meta" style="display:block;margin-top:8px">Words to pop (comma-separated)
-        <input id="capEmph" style="width:100%;font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:inherit" placeholder="e.g. 0 and 4, Super Bowl">
-      </label>
-      <div class="meta" id="capNote" style="margin-top:6px"></div>
-    </section>
-    <section class="box">
-      <h2>Look</h2>
-      <div class="capgrid" id="lookgrid"></div>
-      <div class="meta" style="margin-top:6px">Add your own looks by dropping .cube LUT files into the luts/ folder.</div>
-    </section>
-    <section class="box">
-      <h2>Hook title</h2>
-      <input id="ttlText" style="width:100%;font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:inherit" placeholder="e.g. How to fix the Texans (leave empty for none)">
-      <div class="row" style="margin-top:8px">
-        <label class="meta"><input type="checkbox" id="ttlBehind"> Behind me</label>
-        <label class="meta">Font <select id="ttlFont"><option value="serif">Serif</option><option value="sans">Sans</option></select></label>
-        <label class="meta">For <select id="ttlDur"><option value="1.5">1.5s</option><option value="2">2s</option><option value="2.5">2.5s</option><option value="3">3s</option></select></label>
-        <label class="meta">At <select id="ttlPos"><option value="upper">Top</option><option value="middle">Middle</option></select></label>
-      </div>
-      <div class="capimg" id="ttlPreview" style="margin-top:8px;max-width:220px" hidden><span>Rendering preview…</span><img alt="Title preview"></div>
-      <div class="meta" id="ttlNote" style="margin-top:6px"></div>
-    </section>
-    <section class="box">
-      <h2>Audio</h2>
-      <label class="meta" style="display:block"><input type="checkbox" id="audVoice"> Clean up voice (rumble, hiss, harsh "s", even levels)</label>
-      <div class="row" style="margin-top:8px">
-        <label class="meta">Music
-          <select id="audMusic"></select>
-        </label>
-        <button id="audPlay" title="Listen to this track">▶ Listen</button>
-      </div>
-      <div class="row" style="margin-top:6px">
-        <label class="meta">Music volume
-          <select id="audVol">
-            <option value="-28">Very quiet</option><option value="-24">Quiet</option><option value="-20">Medium</option><option value="-16">Loud</option>
-          </select>
-        </label>
-        <label class="meta"><input type="checkbox" id="audDuck"> Duck under voice</label>
-      </div>
-      <div class="row" style="margin-top:6px">
-        <label class="meta">Sound on popped words
-          <select id="audSfx"></select>
-        </label>
-        <button id="sfxPlay" title="Listen to this sound">▶</button>
-      </div>
-      <audio id="audPlayer" hidden></audio>
-      <div class="meta" id="audNote" style="margin-top:6px">Make a new rough cut after saving to hear the full mix.</div>
-    </section>
-    <section class="box">
-      <h2>Overall notes for Claude</h2>
-      <textarea id="overall" rows="5" placeholder="e.g. Hook is too slow. Keep it under 45 seconds. Lead with the 'one hour of footage' line."></textarea>
-    </section>
-    <section class="box">
-      <h2>How this works</h2>
-      <div class="meta">
-        1. Read the storyboard: kept sections in order, <s>cut words</s> in between with reasons.<br>
-        2. Change things directly (switch sections off, nudge edges, restore cuts, relabel, reorder) and/or leave notes.<br>
-        3. <b>Save</b> — then tell Claude "check my notes".<br>
-        4. When it looks right: <b>Approve plan</b>, make the rough cut, watch it, <b>Approve rough cut</b>.
+  <ol class="steps" id="steps" aria-label="Approval steps"></ol>
+  <div class="actions">
+    <span id="dirtyMsg" class="meta hint">No unsaved changes</span>
+    <button id="saveBtn">Save</button>
+    <button id="approveBtn" class="primary">Approve</button>
+    <button id="themeBtn" class="iconbtn" title="Theme: auto" aria-label="Switch theme">◐</button>
+  </div>
+</header>
+
+<main>
+  <!-- centre: player + timeline -->
+  <div class="col" id="stageCol">
+    <div class="banner warn" id="problemsBox" hidden><b>Problems to fix before approving</b><ul id="problems"></ul></div>
+    <details class="banner info" id="changesBox" hidden open><summary>What changed</summary><ul id="changes"></ul></details>
+    <section class="panel">
+      <div class="screen" id="roughArea"></div>
+      <div class="transport">
+        <div class="tlwrap">
+          <div class="marks" id="marks"></div>
+          <div class="timeline" id="timeline"></div>
+          <div class="playhead" id="playhead" hidden></div>
+        </div>
+        <div class="legend">Each block is a section, sized by length — click to jump to it. Striped = switched off. Red pins are your timestamped notes.</div>
+        <div class="row">
+          <button id="roughBtn">Make rough cut</button>
+          <button id="tnoteBtn" disabled>+ Note at current time</button>
+          <span id="roughMsg" class="meta"></span>
+        </div>
+        <form id="tnoteForm" hidden>
+          <div class="row">
+            <span id="tnoteLabel" class="meta"></span>
+            <input id="tnoteText" class="field grow" placeholder="e.g. cut feels abrupt here">
+            <button type="submit">Add</button>
+            <button type="button" id="tnoteCancel">Cancel</button>
+          </div>
+        </form>
+        <ul class="tnotes" id="tnotes"></ul>
       </div>
     </section>
-  </aside>
+  </div>
+
+  <!-- left: storyboard -->
+  <div class="col" id="boardCol">
+    <section class="panel">
+      <div class="panel-h"><h2>Storyboard</h2><span class="grow"></span><span class="meta" id="boardMeta"></span></div>
+      <div class="scroll"><div id="board"></div></div>
+    </section>
+  </div>
+
+  <!-- right: settings -->
+  <div class="col" id="inspCol">
+    <section class="panel">
+      <div class="tabs" role="tablist" id="tabs">
+        <button role="tab" data-tab="captions">Captions</button>
+        <button role="tab" data-tab="look">Look</button>
+        <button role="tab" data-tab="title">Title</button>
+        <button role="tab" data-tab="audio">Audio</button>
+        <button role="tab" data-tab="notes">Notes</button>
+      </div>
+      <div class="scroll">
+        <div class="tabpanel" role="tabpanel" data-panel="captions">
+          <div class="capgrid" id="capgrid"></div>
+          <div class="meta" id="capDesc"></div>
+          <div class="grid2">
+            <label class="lbl">Position
+              <select id="capPos" class="field"><option value="lower">Lower (clear of app buttons)</option><option value="middle">Middle</option><option value="upper">Upper</option></select>
+            </label>
+            <label class="chk" style="align-self:end;padding-bottom:5px"><input type="checkbox" id="capUpper"> ALL CAPS</label>
+          </div>
+          <label class="lbl">Words to pop (comma-separated)
+            <input id="capEmph" class="field" placeholder="e.g. 0 and 4, Super Bowl">
+          </label>
+          <div class="meta" id="capNote"></div>
+        </div>
+        <div class="tabpanel" role="tabpanel" data-panel="look" hidden>
+          <div class="capgrid" id="lookgrid"></div>
+          <div class="meta">Add your own looks by dropping .cube LUT files into the luts/ folder.</div>
+        </div>
+        <div class="tabpanel" role="tabpanel" data-panel="title" hidden>
+          <label class="lbl">Hook title
+            <input id="ttlText" class="field" placeholder="e.g. How to fix the Texans (leave empty for none)">
+          </label>
+          <div class="grid2">
+            <label class="lbl">Font <select id="ttlFont" class="field"><option value="serif">Serif</option><option value="sans">Sans</option></select></label>
+            <label class="lbl">Show for <select id="ttlDur" class="field"><option value="1.5">1.5s</option><option value="2">2s</option><option value="2.5">2.5s</option><option value="3">3s</option></select></label>
+            <label class="lbl">Position <select id="ttlPos" class="field"><option value="upper">Top</option><option value="middle">Middle</option></select></label>
+            <label class="chk" style="align-self:end;padding-bottom:5px"><input type="checkbox" id="ttlBehind"> Behind me</label>
+          </div>
+          <div class="capimg" id="ttlPreview" style="max-width:200px" hidden><span>Rendering preview…</span><img alt="Title preview"></div>
+          <div class="meta" id="ttlNote"></div>
+        </div>
+        <div class="tabpanel" role="tabpanel" data-panel="audio" hidden>
+          <label class="chk"><input type="checkbox" id="audVoice"> Clean up voice (rumble, hiss, harsh “s”, even levels)</label>
+          <label class="lbl">Music
+            <span class="row"><select id="audMusic" class="field grow"></select><button id="audPlay" title="Listen to this track">▶ Listen</button></span>
+          </label>
+          <div class="grid2">
+            <label class="lbl">Music volume
+              <select id="audVol" class="field">
+                <option value="-28">Very quiet</option><option value="-24">Quiet</option><option value="-20">Medium</option><option value="-16">Loud</option>
+              </select>
+            </label>
+            <label class="chk" style="align-self:end;padding-bottom:5px"><input type="checkbox" id="audDuck"> Duck under voice</label>
+          </div>
+          <label class="lbl">Sound on popped words
+            <span class="row"><select id="audSfx" class="field grow"></select><button id="sfxPlay" title="Listen to this sound">▶</button></span>
+          </label>
+          <audio id="audPlayer" hidden></audio>
+          <div class="meta" id="audNote">Make a new rough cut after saving to hear the full mix.</div>
+        </div>
+        <div class="tabpanel" role="tabpanel" data-panel="notes" hidden>
+          <label class="lbl">Overall notes for Claude
+            <textarea id="overall" class="field" rows="6" placeholder="e.g. Hook is too slow. Keep it under 45 seconds. Lead with the 'one hour of footage' line."></textarea>
+          </label>
+          <div class="help">
+            <b>How this works</b>
+            <ol>
+              <li>Read the storyboard: kept sections in order, <s>cut words</s> in between with reasons.</li>
+              <li>Change things directly (switch sections off, nudge edges, restore cuts, relabel, reorder) and/or leave notes.</li>
+              <li><b>Save</b> — then tell Claude “check my notes”.</li>
+              <li>When it looks right: <b>Approve plan</b>, make the rough cut, watch it, <b>Approve rough cut</b>.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
 </main>
-<footer>
-  <span id="dirtyMsg" class="meta">No unsaved changes</span>
-  <span id="toast" class="toast"></span>
-  <span class="spacer"></span>
-  <button id="saveBtn" class="primary">Save changes &amp; notes</button>
-  <button id="approveBtn" class="primary">Approve</button>
-</footer>
+<div id="toast" role="status" hidden></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -202,10 +340,41 @@ let cardNotes = {};    // index -> note
 let tnotes = [];       // timestamped notes
 let caps = {};         // working copy of plan.captions
 let dirty = false;
+let sel = -1;          // selected card
+const openCards = new Set();  // cards whose edit drawer is open
 
 const fmt = (t) => { const m = Math.floor(t / 60); return `${m}:${(t - m * 60).toFixed(2).padStart(5, "0")}`; };
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const beatColor = (() => { const map = {}; let n = 0; return (b) => { const k = (b || "").toUpperCase(); if (!(k in map)) map[k] = `var(--beat-${n++ % 6})`; return map[k]; }; })();
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+
+// ---- theme --------------------------------------------------------------
+const themes = ["auto", "light", "dark"];
+function applyTheme(t) {
+  if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  $("themeBtn").title = `Theme: ${t}`; $("themeBtn").textContent = { auto: "◐", light: "☀", dark: "☾" }[t];
+}
+applyTheme(store.get("studio-theme") || "auto");
+$("themeBtn").onclick = () => {
+  const t = themes[(themes.indexOf(store.get("studio-theme") || "auto") + 1) % 3];
+  store.set("studio-theme", t); applyTheme(t);
+};
+
+// ---- settings tabs ------------------------------------------------------
+function showTab(name) {
+  document.querySelectorAll("#tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === name));
+  document.querySelectorAll(".tabpanel").forEach((p) => (p.hidden = p.dataset.panel !== name));
+  store.set("studio-tab", name);
+}
+document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+showTab(store.get("studio-tab") || "captions");
+function markTabs() {
+  if (!S) return;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const changed = { captions: !same(caps, S.plan.captions || {}), look: look !== (S.plan.grade || "none"),
+    title: !same(ttl, S.plan.title || {}), audio: !same(aud, S.plan.audio || {}) };
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("changed", !!changed[b.dataset.tab]));
+}
 
 async function load() {
   S = await (await fetch("/api/state")).json();
@@ -230,8 +399,8 @@ let look = "none", ttl = {};
 const lookName = (k) => ({ none: "None", subtle: "Subtle", neutral_punch: "Punchy", warm_cinematic: "Cinematic", auto: "Auto-fix" }[k] ||
   k.replace(/^lut:/, "").replace(/\.cube$/, "").replace(/_/g, " "));
 function renderLook() {
-  $("lookgrid").innerHTML = S.looks.map((k) => `<div class="capopt ${look === k ? "sel" : ""}" onclick="look='${k}';setDirty(true);renderLook()">
-    <div class="capimg"><span>Rendering…</span><img src="/look-sample?look=${encodeURIComponent(k)}" alt="${esc(lookName(k))}"></div>${esc(lookName(k))}</div>`).join("");
+  $("lookgrid").innerHTML = S.looks.map((k, i) => `<button type="button" class="capopt ${look === k ? "sel" : ""}" aria-pressed="${look === k}" onclick="look=S.looks[${i}];setDirty(true);renderLook()">
+    <div class="capimg"><span>Rendering…</span><img src="/look-sample?look=${encodeURIComponent(k)}" alt="${esc(lookName(k))}"></div>${esc(lookName(k))}</button>`).join("");
 }
 function renderTitle() {
   const saved = JSON.stringify(ttl) === JSON.stringify(S.plan.title || {});
@@ -292,8 +461,8 @@ function setCap(k, v) {
 function renderCaptions() {
   const style = capEff("style"), v = S.plan.version;
   const opts = [...S.caption_styles.map((c) => [c.id, c.label, c.blurb]), ["none", "Off", "No captions"]];
-  $("capgrid").innerHTML = opts.map(([k, label, blurb]) => `<div class="capopt ${style === k ? "sel" : ""}" title="${esc(blurb)}" onclick="setCap('style','${k}')">
-    ${k === "none" ? `<div class="off">No captions</div>` : `<div class="capimg"><span>Rendering preview…</span><img loading="lazy" src="/caption-sample?style=${k}&v=${v}" alt="${esc(label)} captions" onerror="this.previousElementSibling.textContent='Preview failed'"></div>`}${esc(label)}</div>`).join("");
+  $("capgrid").innerHTML = opts.map(([k, label, blurb]) => `<button type="button" class="capopt ${style === k ? "sel" : ""}" aria-pressed="${style === k}" title="${esc(blurb)}" onclick="setCap('style','${k}')">
+    ${k === "none" ? `<div class="noimg">No captions</div>` : `<div class="capimg"><span>Rendering preview…</span><img loading="lazy" src="/caption-sample?style=${k}&v=${v}" alt="${esc(label)} captions" onerror="this.previousElementSibling.textContent='Preview failed'"></div>`}${esc(label)}</button>`).join("");
   const cur = S.caption_styles.find((c) => c.id === style);
   $("capDesc").textContent = cur ? cur.blurb : style === "none" ? "Captions off." : "";
   $("capPos").value = capEff("position");
@@ -307,8 +476,16 @@ $("capPos").onchange = (e) => setCap("position", e.target.value);
 $("capUpper").onchange = (e) => setCap("uppercase", e.target.checked);
 $("capEmph").onchange = (e) => setCap("emphasis", e.target.value.split(",").map((x) => x.trim()).filter(Boolean));
 
-function setDirty(v) { dirty = v; $("dirtyMsg").textContent = v ? "Unsaved changes" : "No unsaved changes"; updateApprove(); }
-function toast(msg, err) { const t = $("toast"); t.textContent = msg; t.className = "toast" + (err ? " err" : ""); setTimeout(() => (t.textContent = ""), 6000); }
+function setDirty(v) {
+  dirty = v; $("dirtyMsg").textContent = v ? "Unsaved changes" : "All changes saved";
+  $("saveBtn").classList.toggle("primary", v);
+  markTabs(); updateApprove();
+}
+let toastTimer = null;
+function toast(msg, err) {
+  const t = $("toast"); t.textContent = msg; t.className = err ? "err" : ""; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 6000);
+}
 
 function totals() {
   const on = ranges.filter((r) => r._on);
@@ -317,16 +494,20 @@ function totals() {
 
 function render() {
   const p = S.plan;
-  $("title").textContent = `Review Studio — ${S.project}`;
+  $("title").textContent = S.project;
+  document.title = `Review Studio — ${S.project}`;
   $("status").textContent = p.status.replace("_", " ");
   $("status").className = `pill ${p.status}`;
   const total = totals(), target = p.target?.max_duration_s;
-  $("meta").innerHTML = `v${p.version} · ${ranges.filter((r) => r._on).length} sections · ` +
-    `<span class="${target && total > target ? "over" : ""}">${total.toFixed(1)}s${target ? ` of ${target}s target` : ""}</span>` +
-    (p.target?.aspect ? ` · ${esc(p.target.aspect)}` : "") + ` · ${p.cuts?.length || 0} cuts`;
+  const nOn = ranges.filter((r) => r._on).length;
+  $("meta").innerHTML = `v${p.version} · ` +
+    `<span class="${target && total > target ? "over" : ""}">${total.toFixed(1)}s${target ? ` of ${target}s` : ""}</span>` +
+    (p.target?.aspect ? ` · ${esc(p.target.aspect)}` : "");
+  $("boardMeta").textContent = `${nOn} sections · ${p.cuts?.length || 0} cuts`;
 
   const changes = [...(p.changes || [])];
   $("changesBox").hidden = !changes.length && !S.diff_prev.length;
+  $("changesBox").querySelector("summary").textContent = `What changed in v${p.version}`;
   $("changes").innerHTML = changes.map((c) => `<li>${esc(c)}</li>`).join("") +
     (S.diff_prev.length ? `<li class="meta">vs v${S.versions.at(-1)}: ${S.diff_prev.map(esc).join("; ")}</li>` : "");
   $("problemsBox").hidden = !S.problems.length;
@@ -335,7 +516,7 @@ function render() {
   // timeline
   const all = ranges.reduce((a, r) => a + (r.end - r.start), 0) || 1;
   $("timeline").innerHTML = ranges.map((r, i) =>
-    `<div class="${r._on ? "" : "off"}" style="flex:${(r.end - r.start) / all};background:${beatColor(r.beat)}" title="${esc(r.quote)}" onclick="document.getElementById('card${i}').scrollIntoView({behavior:'smooth',block:'center'})">${esc(r.beat || r.source)}</div>`).join("");
+    `<div class="${r._on ? "" : "off"} ${i === sel ? "sel" : ""}" style="flex:${(r.end - r.start) / all};background:${beatColor(r.beat)}" title="${esc(r.quote)}" onclick="pick(${i}, true)">${esc(r.beat || r.source)}</div>`).join("");
 
   // storyboard: cuts sit before the section they lead into (same source), trailing cuts after the last
   const cuts = visibleCuts();
@@ -359,7 +540,7 @@ function plannedFor(r, outStart) {
   const items = [];
   (S.plan.graphics || []).forEach((g) => { if (inWin(g.start_in_output)) items.push(`🎨 ${esc(g.type || "graphic")}${g.text ? `: “${esc(g.text)}”` : ""}`); });
   (S.plan.zooms || []).forEach((z) => { if (inWin(z.start_in_output)) items.push(`🔍 zoom ${esc(z.style || "")}`); });
-  return items.length ? `<div class="planned">${items.map((x) => `<span>${x}</span>`).join("")}</div>` : "";
+  return items.length ? `<div class="planned">${items.map((x) => `<span class="badge">${x}</span>`).join("")}</div>` : "";
 }
 
 function cardHtml(r, i, outT) {
@@ -367,34 +548,61 @@ function cardHtml(r, i, outT) {
   const orig = S.plan.ranges[i];
   const changed = !orig || orig.start !== r.start || orig.end !== r.end || orig.beat !== r.beat || orig.source !== r.source || !r._on;
   const th = (t) => `<img loading="lazy" src="/thumb?source=${encodeURIComponent(r.source)}&t=${t.toFixed(2)}" alt="">`;
-  return `<div class="card ${r._on ? "" : "off"} ${changed ? "dirty" : ""}" id="card${i}" style="border-left-color:${beatColor(r.beat)}">
-    <div class="row">
-      <label><input type="checkbox" ${r._on ? "checked" : ""} onchange="toggle(${i}, this.checked)"> keep</label>
-      <input class="beat" value="${esc(r.beat)}" placeholder="BEAT" onchange="setBeat(${i}, this.value)">
-      <span class="times">${esc(r.source)} ${fmt(r.start)}–${fmt(r.end)} · ${d.toFixed(2)}s · plays at ${fmt(outT)}</span>
-      <span style="flex:1"></span>
-      <button onclick="seek(${outT})" title="Play this section in the rough cut">▶</button>
-      <button onclick="move(${i},-1)" title="Move earlier">↑</button>
-      <button onclick="move(${i},1)" title="Move later">↓</button>
+  const note = cardNotes[i] || "";
+  return `<div class="card ${r._on ? "" : "off"} ${changed ? "dirty" : ""} ${i === sel ? "sel" : ""}" id="card${i}" style="border-left-color:${beatColor(r.beat)}">
+    <div class="card-top">
+      <label class="keep" title="Keep this section"><input type="checkbox" ${r._on ? "checked" : ""} onchange="toggle(${i}, this.checked)" aria-label="Keep section ${i + 1}"></label>
+      <input class="beat" value="${esc(r.beat)}" placeholder="BEAT" onchange="setBeat(${i}, this.value)" aria-label="Beat label">
+      <span class="times" title="${esc(r.source)} ${fmt(r.start)}–${fmt(r.end)}">${d.toFixed(1)}s · at ${fmt(outT)}</span>
+      <button class="sm" onclick="seek(${outT})" title="Play this section in the rough cut" aria-label="Play">▶</button>
+      <button class="sm" onclick="move(${i},-1)" title="Move earlier" aria-label="Move earlier" ${i === 0 ? "disabled" : ""}>↑</button>
+      <button class="sm" onclick="move(${i},1)" title="Move later" aria-label="Move later" ${i === ranges.length - 1 ? "disabled" : ""}>↓</button>
     </div>
-    <div class="thumbs">${th(r.start + 0.15)}${th(mid)}${th(Math.max(r.start, r.end - 0.15))}</div>
-    <div class="quote">“${esc(r.quote)}”</div>
-    <div class="reason">${esc(r.reason)}</div>
-    ${plannedFor(r, outT)}
-    <div class="row" style="margin:8px 0">
-      <span class="meta">Start</span><button onclick="nudge(${i},'start',-0.1)">−0.1s</button><button onclick="nudge(${i},'start',0.1)">+0.1s</button>
-      <span class="meta" style="margin-left:10px">End</span><button onclick="nudge(${i},'end',-0.1)">−0.1s</button><button onclick="nudge(${i},'end',0.1)">+0.1s</button>
+    <div class="card-body" onclick="pick(${i}, false)">
+      <div class="thumbs">${th(r.start + 0.15)}${th(mid)}${th(Math.max(r.start, r.end - 0.15))}</div>
+      <div style="min-width:0">
+        <div class="quote">“${esc(r.quote)}”</div>
+        <div class="reason">${esc(r.reason)}</div>
+        ${plannedFor(r, outT)}
+      </div>
     </div>
-    <textarea placeholder="Note on this section (optional)" oninput="cardNotes[${i}]=this.value; setDirty(true)">${esc(cardNotes[i] || "")}</textarea>
+    <details class="more" ${openCards.has(i) ? "open" : ""} ontoggle="this.open ? openCards.add(${i}) : openCards.delete(${i})">
+      <summary>Trim &amp; note${note ? ` <span class="badge">📝 note</span>` : ""}</summary>
+      <div class="edit">
+        <div class="row">
+          <span class="times">${esc(r.source)} ${fmt(r.start)}–${fmt(r.end)}</span>
+        </div>
+        <div class="row">
+          <span class="meta">Start</span><button class="sm" onclick="nudge(${i},'start',-0.1)">−0.1s</button><button class="sm" onclick="nudge(${i},'start',0.1)">+0.1s</button>
+          <span class="meta" style="margin-left:6px">End</span><button class="sm" onclick="nudge(${i},'end',-0.1)">−0.1s</button><button class="sm" onclick="nudge(${i},'end',0.1)">+0.1s</button>
+        </div>
+        <textarea class="field" placeholder="Note on this section (optional)" oninput="cardNotes[${i}]=this.value; setDirty(true)">${esc(note)}</textarea>
+      </div>
+    </details>
   </div>`;
 }
 
 function cutHtml(c, ci, insertAt) {
-  return `<div class="cut"><span class="kind">cut · ${esc(c.kind)}</span>${c.text ? `<s>${esc(c.text)}</s> ` : ""}
-    <span class="meta">${esc(c.reason)} · ${fmt(c.start)}–${fmt(c.end)}</span>
-    <button style="margin-left:8px" onclick="restore(${ci}, ${insertAt})">Restore</button></div>`;
+  const why = `${c.reason || ""} · ${fmt(c.start)}–${fmt(c.end)}`;
+  return `<div class="cut" title="${esc(why)}"><span class="txt"><span class="kind">cut · ${esc(c.kind)}</span>${c.text ? `<s>${esc(c.text)}</s> · ` : ""}${esc(c.reason)}</span>
+    <button class="sm" onclick="restore(${ci}, ${insertAt})">Restore</button></div>`;
 }
 
+function pick(i, scroll) {
+  sel = i;
+  document.querySelectorAll(".card.sel, .timeline .sel").forEach((e) => e.classList.remove("sel"));
+  $("card" + i)?.classList.add("sel");
+  $("timeline").children[i]?.classList.add("sel");
+  if (scroll) {
+    $("card" + i)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const t = outStartOf(i), v = $("player");
+    if (v && t !== null && playheadValid()) { v.currentTime = t; }
+  }
+}
+function outStartOf(i) {
+  if (!ranges[i]?._on) return null;
+  return ranges.slice(0, i).reduce((a, r) => a + (r._on ? r.end - r.start : 0), 0);
+}
 function toggle(i, on) { ranges[i]._on = on; setDirty(true); render(); }
 function setBeat(i, v) { ranges[i].beat = v.toUpperCase(); setDirty(true); render(); }
 function nudge(i, edge, dt) {
@@ -407,6 +615,9 @@ function move(i, dir) {
   const j = i + dir; if (j < 0 || j >= ranges.length) return;
   [ranges[i], ranges[j]] = [ranges[j], ranges[i]];
   [cardNotes[i], cardNotes[j]] = [cardNotes[j], cardNotes[i]];
+  const oi = openCards.has(i), oj = openCards.has(j);
+  openCards.delete(i); openCards.delete(j); if (oi) openCards.add(j); if (oj) openCards.add(i);
+  if (sel === i) sel = j; else if (sel === j) sel = i;
   setDirty(true); render();
 }
 function visibleCuts() {
@@ -421,36 +632,104 @@ function restore(ci, at) {
   setDirty(true); render();
 }
 
+// ---- rough cut player ---------------------------------------------------
+// The playhead maps rough-cut time onto the timeline, which is only right while the
+// rough cut matches the plan on screen (not stale, no unsaved section edits).
+const cutKey = (rs) => JSON.stringify(rs.map((r) => [r.source, r.start, r.end]));
+const playheadValid = () => S && S.rough.exists && !S.rough.stale &&
+  cutKey(ranges.filter((r) => r._on)) === cutKey(S.plan.ranges);
+function outToX(t) {   // rough-cut time -> fraction across the timeline, plus range index
+  const all = ranges.reduce((a, r) => a + (r.end - r.start), 0) || 1;
+  let acc = 0, out = 0;
+  for (let i = 0; i < ranges.length; i++) {
+    const d = ranges[i].end - ranges[i].start;
+    if (ranges[i]._on && t < out + d) return { x: (acc + (t - out)) / all, i };
+    if (ranges[i]._on) out += d;
+    acc += d;
+  }
+  return { x: 1, i: -1 };
+}
+let playingIdx = -1;
+function updatePlayhead() {
+  const v = $("player"), ph = $("playhead");
+  if (!v || !playheadValid()) { ph.hidden = true; return; }
+  const { x, i } = outToX(v.currentTime);
+  ph.hidden = false; ph.style.left = `calc(${(x * 100).toFixed(3)}% - 1px)`;
+  if (i !== playingIdx) {
+    $("card" + playingIdx)?.classList.remove("playing");
+    playingIdx = i; $("card" + i)?.classList.add("playing");
+  }
+}
+
 function renderRough() {
   const r = S.rough;
   const area = $("roughArea");
   if (r.exists) {
     const src = `/media/rough.mp4?v=${r.mtime}`;
     const v = area.querySelector("video");
-    if (!v || v.dataset.src !== src) area.innerHTML = `<video id="player" controls preload="metadata" src="${src}" data-src="${src}"></video>`;
+    if (!v || v.dataset.src !== src) {
+      area.innerHTML = `<video id="player" controls playsinline preload="metadata" src="${src}" data-src="${src}"></video><div class="stale" id="staleBar" hidden></div>`;
+      const p = $("player");
+      ["timeupdate", "seeked", "loadedmetadata"].forEach((e) => p.addEventListener(e, updatePlayhead));
+    }
     $("tnoteBtn").disabled = false;
   } else {
-    area.innerHTML = `<div class="meta">No rough cut yet. It's a fast 720p draft of the current plan — graphics show as placeholders later on.</div>`;
+    area.innerHTML = `<div class="empty"><b>No rough cut yet</b>A fast 720p draft of the current plan. Graphics show as placeholders.<br><br>
+      <button class="primary" onclick="makeRough()" ${r.state === "running" || dirty ? "disabled" : ""}>${r.state === "running" ? "Rendering…" : "Make rough cut"}</button></div>`;
     $("tnoteBtn").disabled = true;
   }
+  const bar = $("staleBar");
+  if (bar) {
+    bar.hidden = !(r.stale || r.state === "running");
+    bar.innerHTML = r.state === "running" ? "Rendering a new rough cut…" :
+      `This rough cut is from an older plan. <button class="sm" onclick="makeRough()" ${dirty ? "disabled title='Save first'" : ""}>Make a new one</button>`;
+  }
   $("roughMsg").textContent = r.state === "running" ? "Rendering…" : r.state === "failed" ? "Render failed" :
-    r.stale ? "Plan changed since this rough cut" : "";
+    r.stale ? "Plan changed since this rough cut" : r.exists && !playheadValid() ? "Save to compare against the rough cut" : "";
   $("roughBtn").disabled = r.state === "running" || dirty;
   $("roughBtn").title = dirty ? "Save first" : "";
-  $("tnotes").innerHTML = tnotes.map((n, k) => `<li><button onclick="seekRaw(${n.t})">${fmt(n.t)}</button> ${esc(n.note)} <button onclick="tnotes.splice(${k},1);setDirty(true);renderRough()">✕</button></li>`).join("");
+  $("roughBtn").textContent = r.exists ? "Make new rough cut" : "Make rough cut";
+  $("tnotes").innerHTML = tnotes.map((n, k) => `<li><button class="sm t" onclick="seekRaw(${n.t})" title="Jump to ${fmt(n.t)}">${fmt(n.t)}</button><span>${esc(n.note)}</span><button class="sm" onclick="tnotes.splice(${k},1);setDirty(true);renderRough()" aria-label="Delete note">✕</button></li>`).join("");
+  $("marks").innerHTML = playheadValid() ? tnotes.map((n) => `<button style="left:${(outToX(n.t).x * 100).toFixed(2)}%" onclick="seekRaw(${n.t})" title="${esc(fmt(n.t) + " " + n.note)}" aria-label="Note at ${fmt(n.t)}"></button>`).join("") : "";
+  updatePlayhead();
   updateApprove();
 }
 
-function seek(t) { const v = $("player"); if (!v) return toast("Make a rough cut first", true); v.currentTime = t; v.play(); v.scrollIntoView({ behavior: "smooth", block: "center" }); }
+function seek(t) { const v = $("player"); if (!v) return toast("Make a rough cut first", true); v.currentTime = t; v.play(); v.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
 function seekRaw(t) { const v = $("player"); if (v) { v.currentTime = t; v.pause(); } }
 
+// ---- approval gates -----------------------------------------------------
+// The header button always shows the next step: Approve plan -> Make rough cut -> Approve rough cut.
 function updateApprove() {
   if (!S) return;
-  const b = $("approveBtn"), st = S.plan.status;
-  if (st === "draft") { b.textContent = "Approve plan"; b.disabled = dirty || S.problems.length > 0; b.dataset.gate = "plan"; }
-  else if (st === "plan_approved") { b.textContent = "Approve rough cut"; b.disabled = dirty || !S.rough.exists || S.rough.stale; b.dataset.gate = "rough";
-    b.title = !S.rough.exists ? "Make and watch the rough cut first" : S.rough.stale ? "Rough cut is out of date — make a new one" : ""; }
-  else { b.textContent = st === "final" ? "Final" : "Rough cut approved ✓"; b.disabled = true; }
+  const b = $("approveBtn"), st = S.plan.status, r = S.rough;
+  const needRough = !r.exists || r.stale;
+  let hint = dirty ? "Unsaved changes — save first" : "";
+  b.title = "";
+  if (b.dataset.armed) return;
+  b.classList.remove("armed");
+  if (st === "draft") {
+    b.textContent = "Approve plan"; b.dataset.gate = "plan"; b.disabled = dirty || S.problems.length > 0;
+    if (!dirty && S.problems.length) hint = "Fix the problems first";
+  } else if (st === "plan_approved" && needRough) {
+    b.textContent = r.state === "running" ? "Rendering…" : "Make rough cut"; b.dataset.gate = "make"; b.disabled = dirty || r.state === "running";
+    if (!dirty) hint = r.state === "running" ? "Rendering the rough cut…" : r.exists ? "Rough cut is out of date" : "Plan approved — next, the rough cut";
+  } else if (st === "plan_approved") {
+    b.textContent = "Approve rough cut"; b.dataset.gate = "rough"; b.disabled = dirty;
+    if (!dirty) hint = "Watch it, leave notes, then approve";
+  } else {
+    b.textContent = st === "final" ? "Final" : "Rough cut approved ✓"; b.dataset.gate = ""; b.disabled = true;
+  }
+  $("dirtyMsg").textContent = hint || "All changes saved";
+  // stepper
+  const step = st === "draft" ? 1 : st === "plan_approved" ? (needRough ? 2 : 3) : 4;
+  const names = ["Edit & save", "Approve plan", "Rough cut", "Approve rough cut"];
+  const nowIdx = st === "draft" ? (dirty ? 0 : 1) : step;
+  $("steps").innerHTML = names.map((n, k) => {
+    const done = k < nowIdx || (k === 0 && st !== "draft") || step === 4;
+    const cls = done ? "done" : k === nowIdx ? "now" : "";
+    return `<li class="${cls}" ${k === nowIdx && step !== 4 ? 'aria-current="step"' : ""}><span class="dot" title="${n}">${done ? "✓" : k + 1}</span><span class="lab">${n}</span></li>`;
+  }).join("");
 }
 
 $("overall").addEventListener("input", () => setDirty(true));
@@ -458,9 +737,10 @@ $("overall").addEventListener("input", () => setDirty(true));
 $("tnoteBtn").onclick = () => {
   const v = $("player"); if (!v) return; v.pause();
   const t = Math.round(v.currentTime * 100) / 100;
-  $("tnoteForm").hidden = false; $("tnoteLabel").textContent = `Note at ${fmt(t)}:`;
+  $("tnoteForm").hidden = false; $("tnoteLabel").textContent = `At ${fmt(t)}:`;
   $("tnoteForm").dataset.t = t; $("tnoteText").value = ""; $("tnoteText").focus();
 };
+$("tnoteCancel").onclick = () => ($("tnoteForm").hidden = true);
 $("tnoteForm").onsubmit = (e) => {
   e.preventDefault();
   const note = $("tnoteText").value.trim();
@@ -474,6 +754,7 @@ $("saveBtn").onclick = async () => {
     const r = ranges[i]; return { index: +i, source: r.source, start: r.start, end: r.end, quote: r.quote, note: n.trim() };
   });
   const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, title: ttl, grade: look === "none" ? null : look, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
+  openCards.clear(); sel = -1;
   await load();
   toast(res.direct_edits.length ? `Saved as v${res.version}. ${res.notes_saved ? 'Now tell Claude "check my notes".' : ""}` :
     res.notes_saved ? 'Notes saved. Tell Claude "check my notes".' : "Nothing to save.");
@@ -482,18 +763,21 @@ $("saveBtn").onclick = async () => {
 let armTimer = null;
 $("approveBtn").onclick = async () => {
   const b = $("approveBtn"), gate = b.dataset.gate;
+  if (gate === "make") return makeRough();
   if (!b.dataset.armed) {   // first click arms, second click (within 5 s) approves
-    b.dataset.armed = "1"; b.textContent = gate === "plan" ? "Click again to approve plan" : "Click again to approve rough cut";
+    b.dataset.armed = "1"; b.classList.add("armed");
+    b.textContent = gate === "plan" ? "Click again to approve plan" : "Click again to approve rough cut";
     armTimer = setTimeout(() => { delete b.dataset.armed; updateApprove(); }, 5000);
     return;
   }
   clearTimeout(armTimer); delete b.dataset.armed;
   const res = await (await fetch("/api/approve", { method: "POST", body: JSON.stringify({ gate }) })).json();
-  if (!res.ok) return toast(res.error, true);
+  if (!res.ok) { updateApprove(); return toast(res.error, true); }
   await load(); toast(`Approved — status is now ${res.status.replace("_", " ")}.`);
 };
 
-$("roughBtn").onclick = async () => {
+async function makeRough() {
+  if (dirty) return toast("Save first", true);
   const res = await (await fetch("/api/rough", { method: "POST", body: "{}" })).json();
   if (!res.ok) return toast(res.error, true);
   S.rough.state = "running"; renderRough();
@@ -502,7 +786,8 @@ $("roughBtn").onclick = async () => {
     if (st.rough.state !== "running") { clearInterval(poll); S = { ...S, rough: st.rough }; renderRough();
       toast(st.rough.state === "done" ? "Rough cut ready." : "Rough cut failed: " + (st.rough.error || ""), st.rough.state !== "done"); }
   }, 1500);
-};
+}
+$("roughBtn").onclick = makeRough;
 
 window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
 load();
