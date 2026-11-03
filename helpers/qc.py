@@ -86,7 +86,8 @@ def cut_times(plan: dict) -> list[float]:
 
 def check_length(plan, video, f):
     want, got = planlib.total_duration(plan), duration(video)
-    if abs(want - got) > 0.25:
+    # Each section rounds to whole frames (~1 frame of drift per cut), so allow a little per section.
+    if abs(want - got) > max(0.25, 0.04 * len(plan.get("ranges", []))):
         f.append(("fail", None, f"length is {got:.2f}s but the plan adds up to {want:.2f}s"))
     return {"planned_s": want, "rendered_s": round(got, 2)}
 

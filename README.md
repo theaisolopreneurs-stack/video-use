@@ -5,15 +5,21 @@ and approve in the **Review Studio**, export for every platform. Local transcrip
 cuts, 13 caption styles, 40+ looks, transitions, effects, speed ramps, B-roll, motion graphics,
 music ducking, QC and multi-format export.
 
-**Install as a Claude Code plugin:**
+**Install (easiest):** open Claude Code and paste:
+
+> Please install the AI Video Editor plugin from theaisolopreneurs-stack/video-use and set it up for me.
+
+Then double-click **AI Video Editor** on your Desktop, drag in your clips, pick a style, and
+click **Make my video**. **Read the [user guide](docs/GUIDE.md).**
+
+Prefer the terminal?
 
 ```bash
 claude plugin marketplace add theaisolopreneurs-stack/video-use
 claude plugin install ai-video-editor@aisolopreneurs-video
 ```
 
-Then run `/ai-video-editor:video-editor-setup` once, and say *"edit the clips in
-footage/my-video as a reel"*. **Read the [user guide](docs/GUIDE.md).**
+then run `/ai-video-editor:video-editor-setup` in Claude Code.
 
 This is a fork of [browser-use/video-use](https://github.com/browser-use/video-use) (MIT) — the
 original README follows.

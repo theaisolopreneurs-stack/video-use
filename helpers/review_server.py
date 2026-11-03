@@ -11,9 +11,18 @@ leaves the machine.
     POST /api/approve          {gate: plan|rough}
     POST /api/rough            start a --draft render of plan.json -> rough.mp4
 
+Home mode (no edit_dir): a Home screen over the video library (library.py) - drag in clips,
+pick a style, open any video in the Studio, export, open folders. This is what the desktop
+shortcut starts.
+
+    GET  /api/home, /project-thumb?name=, /api/job?id=
+    POST /api/new {name}, /api/upload?project=&file= (raw bytes), /api/make {project, preset, title}
+    POST /api/open {project}, /api/export {aspects}, /api/reveal {what}
+
 Usage:
-    python helpers/review_server.py <edit_dir>
-    python helpers/review_server.py <videos_dir>/edit --port 8765 --no-open
+    python helpers/review_server.py                      # Home: the whole library
+    python helpers/review_server.py --library "D:/My Videos"
+    python helpers/review_server.py <videos_dir>/edit    # one video's Studio only
 """
 
 from __future__ import annotations
@@ -36,6 +45,8 @@ import plan as planlib
 
 HELPERS = Path(__file__).resolve().parent
 STUDIO_HTML = HELPERS / "studio" / "index.html"
+HOME_HTML = HELPERS / "studio" / "home.html"
+THEME_CSS = HELPERS / "studio" / "theme.css"
 
 
 class Studio:
@@ -314,7 +325,21 @@ class Studio:
         return out if out.exists() else None
 
 
-def make_handler(studio: Studio):
+class App:
+    """What the server is showing: the library (Home), the Studio for one video, or both."""
+    def __init__(self, studio: Studio | None = None, library=None):
+        self.studio, self.library = studio, library
+
+    def open(self, project: str) -> Studio:
+        edit = self.library.folder(project) / "edit"
+        if not (edit / "plan.json").exists():
+            raise FileNotFoundError("this video hasn't been edited yet")
+        if not self.studio or self.studio.edit_dir != edit:
+            self.studio = Studio(edit)
+        return self.studio
+
+
+def make_handler(app: App):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):  # quiet
             pass
@@ -361,12 +386,36 @@ def make_handler(studio: Studio):
 
         def do_GET(self):
             url = urlparse(self.path)
+            q = parse_qs(url.query)
+            lib, studio = app.library, app.studio
             if url.path in ("/", "/index.html"):
+                return self.send_file(HOME_HTML if lib else STUDIO_HTML)
+            if url.path == "/theme.css":
+                return self.send_file(THEME_CSS)
+            if url.path == "/studio":
+                if not studio:
+                    return self.redirect("/")
                 return self.send_file(STUDIO_HTML)
+            if lib and url.path == "/api/home":
+                return self.send_json({"library": str(lib.root), "projects": lib.projects(),
+                                       "presets": lib.presets(), "current": studio.edit_dir.parent.name if studio else None})
+            if lib and url.path == "/project-thumb":
+                p = lib.thumb(q.get("name", [""])[0])
+                return self.send_file(p) if p else self.send_error(404)
+            if lib and url.path == "/api/job":
+                j = lib.jobs.get(q.get("id", [""])[0])
+                return self.send_json(j or {"state": "missing"})
+            if not studio:
+                return self.send_error(404)
             if url.path == "/api/state":
-                return self.send_json(studio.state())
+                st = studio.state()
+                st["home"] = bool(lib)
+                if lib:
+                    d = studio.edit_dir.parent
+                    st["exports"] = sorted(p.name for p in (d / "exports").glob("*.mp4")) if (d / "exports").is_dir() else []
+                    st["jobs"] = [j for j in lib.jobs.values() if j["project"] == d.name][-1:]
+                return self.send_json(st)
             if url.path == "/thumb":
-                q = parse_qs(url.query)
                 p = studio.thumb(q.get("source", [""])[0], float(q.get("t", ["0"])[0]))
                 return self.send_file(p) if p else self.send_error(404)
             if url.path == "/music-file":
@@ -394,8 +443,48 @@ def make_handler(studio: Studio):
                 return self.send_file(p)
             self.send_error(404)
 
+        def redirect(self, where: str) -> None:
+            self.send_response(302)
+            self.send_header("Location", where)
+            self.end_headers()
+
         def do_POST(self):
+            url = urlparse(self.path)
+            lib, studio = app.library, app.studio
+            if lib and url.path == "/api/upload":  # raw file bytes, streamed straight to disk
+                q = parse_qs(url.query)
+                try:
+                    name = lib.save_upload(q.get("project", [""])[0], q.get("file", [""])[0],
+                                           self.rfile, int(self.headers.get("Content-Length", 0)))
+                except ValueError as e:
+                    return self.send_json({"ok": False, "error": str(e)}, 400)
+                return self.send_json({"ok": True, "file": name})
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            if lib and url.path == "/api/new":
+                return self.send_json({"ok": True, "name": lib.create(body.get("name") or "My video")})
+            if lib and url.path == "/api/make":
+                return self.send_json({"ok": True, "job": lib.start_make(body["project"], body.get("preset", "reel"),
+                                                                         (body.get("title") or "").strip() or None)})
+            if lib and url.path == "/api/open":
+                try:
+                    app.open(body["project"])
+                except (FileNotFoundError, ValueError) as e:
+                    return self.send_json({"ok": False, "error": str(e)})
+                return self.send_json({"ok": True})
+            if lib and url.path == "/api/reveal":
+                from library import open_in_file_manager
+                what = body.get("what", "library")
+                name = body.get("project") or (studio.edit_dir.parent.name if studio else "")
+                target = lib.root if what == "library" or not name else lib.folder(name)
+                open_in_file_manager(target / "exports" if what == "exports" else target)
+                return self.send_json({"ok": True})
+            if not studio:
+                return self.send_error(404)
+            if lib and url.path == "/api/export":
+                aspects = [a for a in body.get("aspects") or ["9:16"] if a in ("9:16", "4:5", "1:1", "16:9")]
+                if studio.state()["plan"].get("status") not in ("rough_approved", "final"):
+                    return self.send_json({"ok": False, "error": "Approve the rough cut first."})
+                return self.send_json({"ok": True, "job": lib.start_export(studio.edit_dir.parent.name, aspects)})
             if self.path == "/api/save":
                 return self.send_json(studio.save(body))
             if self.path == "/api/approve":
@@ -408,19 +497,33 @@ def make_handler(studio: Studio):
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Open the Review Studio for an edit directory")
-    ap.add_argument("edit_dir", type=Path, help="<videos_dir>/edit (must contain plan.json)")
+    ap = argparse.ArgumentParser(description="Open the video editor (Home) or one video's Review Studio")
+    ap.add_argument("edit_dir", type=Path, nargs="?", help="<videos_dir>/edit for a single video; omit for Home")
+    ap.add_argument("--library", type=Path, default=None, help="video library folder (Home mode)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-open", action="store_true", help="don't open a browser tab")
     args = ap.parse_args()
 
-    edit_dir = args.edit_dir.resolve()
-    if not (edit_dir / "plan.json").exists():
-        sys.exit(f"no plan.json in {edit_dir} - run suggest_cuts.py first")
+    if args.edit_dir:
+        edit_dir = args.edit_dir.resolve()
+        if not (edit_dir / "plan.json").exists():
+            sys.exit(f"no plan.json in {edit_dir} - run suggest_cuts.py first")
+        app, label = App(studio=Studio(edit_dir)), f"Review Studio for {edit_dir.parent.name}"
+    else:
+        from library import Library, default_library
+        lib = Library((args.library or default_library()).expanduser().resolve())
+        app, label = App(library=lib), f"AI Video Editor (videos in {lib.root})"
 
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(Studio(edit_dir)))
     url = f"http://127.0.0.1:{args.port}/"
-    print(f"Review Studio for {edit_dir.parent.name}: {url}  (Ctrl+C to stop)", flush=True)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(app))
+    except OSError:
+        # Already running (e.g. the desktop icon was clicked twice): just open it.
+        print(f"already running: {url}")
+        if not args.no_open:
+            webbrowser.open(url)
+        return
+    print(f"{label}: {url}  (Ctrl+C to stop)", flush=True)
     if not args.no_open:
         webbrowser.open(url)
     try:

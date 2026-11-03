@@ -51,7 +51,21 @@ It makes a spoken test clip, transcribes it locally, and cuts the silence. `PASS
 editor is ready. The first run downloads the small Whisper model (~250 MB) and two tiny MediaPipe
 models; nothing else leaves the machine.
 
-## 5. Tell the user
+## 5. Desktop icon and video library
 
-Say it's ready, and that the fastest start is: put clips in a folder and say
-"edit the clips in <folder> as a reel".
+```bash
+uv run --project "ROOT" python "ROOT/helpers/shortcut.py"
+```
+
+This puts an **AI Video Editor** icon on the Desktop (and Start menu / Applications) and creates
+the video library folder `~/Videos/AI Video Editor/`.
+
+## 6. Open it and tell the user
+
+Start the editor in the background (it opens their browser):
+`uv run --project "ROOT" python "ROOT/helpers/review_server.py"`. Then, in plain words:
+
+- "All set! Your video editor is open in your browser."
+- "Drag your clips in, pick a style, click **Make my video**."
+- "Next time, double-click **AI Video Editor** on your Desktop. Come back here any time to ask
+  me to improve a video."

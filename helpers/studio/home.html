@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Video Editor</title>
+<link rel="stylesheet" href="/theme.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  [hidden] { display: none !important; }
+  a { color: var(--accent); }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 20px; margin: 0; flex: 1; display: flex; align-items: center; gap: 8px; }
+  main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 60px; }
+  button { font: inherit; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.big { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; font-size: 18px; padding: 14px 28px; border-radius: 14px; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-bottom: 18px; }
+  h2 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 14px; }
+  .step { display: flex; gap: 12px; margin-top: 18px; }
+  .num { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .step > div { flex: 1; min-width: 0; }
+  .step h3 { margin: 4px 0 8px; font-size: 17px; }
+  .drop { border: 3px dashed var(--line); border-radius: 16px; padding: 30px 16px; text-align: center; background: var(--panel-2); cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop .icon { font-size: 44px; line-height: 1; }
+  .drop b { display: block; font-size: 18px; margin: 6px 0 2px; }
+  .files { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 4px; }
+  .files li { display: flex; gap: 8px; align-items: center; background: var(--panel-2); border-radius: 8px; padding: 6px 10px; font-size: 14px; }
+  .files li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .styles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  .style { text-align: left; padding: 12px; border-radius: 14px; border: 2px solid var(--line); background: var(--panel-2); }
+  .style.sel { border-color: var(--accent); background: var(--accent-soft); }
+  .style .em { font-size: 26px; }
+  .style b { display: block; margin: 4px 0 2px; }
+  .style small { color: var(--muted); display: block; line-height: 1.35; }
+  .field { font: inherit; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); color: inherit; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } }
+  label.lbl { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+  .go { display: flex; align-items: center; gap: 14px; margin-top: 22px; flex-wrap: wrap; }
+  .progress { margin-top: 6px; }
+  .bar { height: 14px; border-radius: 99px; background: var(--panel-2); overflow: hidden; border: 1px solid var(--line); }
+  .bar div { height: 100%; background: var(--accent); width: 0; transition: width .4s; }
+  .doing { font-size: 17px; font-weight: 600; margin: 10px 0 4px; }
+  .stages { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
+  .stages li { display: flex; gap: 10px; align-items: center; color: var(--muted); }
+  .stages li.done { color: var(--ink); }
+  .stages li.now { color: var(--ink); font-weight: 700; }
+  .stages .dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: none; }
+  .stages li.done .dot { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .stages li.now .dot { border-color: var(--accent); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 5px var(--accent-soft); } }
+  .videos { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+  .vid { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+  .vid .thumb { aspect-ratio: 16 / 10; background: var(--stage) center / cover no-repeat; position: relative; }
+  .vid .badge { position: absolute; left: 8px; top: 8px; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; background: var(--panel); color: var(--ink); }
+  .vid .body { padding: 10px 12px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .vid .name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vid .meta { color: var(--muted); font-size: 13px; }
+  .vid .acts { display: flex; gap: 6px; margin-top: auto; }
+  .vid .acts button { flex: 1; padding: 6px 8px; font-size: 14px; }
+  .vid .acts button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+  .empty { color: var(--muted); text-align: center; padding: 20px; }
+  .tip { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 14px; }
+  .tip code { background: var(--panel); padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); }
+  .err { color: var(--warn); font-weight: 600; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; max-width: calc(100% - 32px); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎬 AI Video Editor</h1>
+  <button id="openLib" title="See all your videos in a normal folder window">📁 Open my videos folder</button>
+</header>
+<main>
+  <!-- 1: make a new video -->
+  <section class="card" id="newCard">
+    <h2>Make a new video</h2>
+    <p class="sub">Three steps. Everything stays on your computer.</p>
+
+    <div class="step"><span class="num">1</span><div>
+      <h3>Add your clips</h3>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Add video clips">
+        <div class="icon">📥</div>
+        <b>Drag your video clips here</b>
+        <span class="sub">or click to choose them · phone videos, screen recordings, anything</span>
+      </div>
+      <input type="file" id="picker" accept="video/*,.mov,.mp4,.mkv,.m4v,.webm" multiple hidden>
+      <ul class="files" id="files"></ul>
+    </div></div>
+
+    <div class="step"><span class="num">2</span><div>
+      <h3>Pick a style</h3>
+      <div class="styles" id="styles"></div>
+    </div></div>
+
+    <div class="step"><span class="num">3</span><div>
+      <h3>Name it <span class="sub" style="font-weight:400">(optional)</span></h3>
+      <div class="grid2">
+        <label class="lbl">Video name <input class="field" id="vname" placeholder="e.g. Texans part 2"></label>
+        <label class="lbl" id="titleWrap">Big title at the start <input class="field" id="vtitle" placeholder="e.g. How to fix the Texans"></label>
+      </div>
+    </div></div>
+
+    <div class="go">
+      <button class="big" id="make" disabled>✨ Make my video</button>
+      <span class="sub" id="makeHint" style="margin:0">Add at least one clip to start.</span>
+    </div>
+  </section>
+
+  <!-- 2: working on it -->
+  <section class="card" id="workCard" hidden>
+    <h2 id="workTitle">Making your video…</h2>
+    <p class="sub">You can leave this page open and grab a coffee. Short clips take a couple of minutes.</p>
+    <div class="progress"><div class="bar"><div id="bar"></div></div></div>
+    <div class="doing" id="doing">Getting started…</div>
+    <ul class="stages" id="stages"></ul>
+    <p class="err" id="workErr" hidden></p>
+  </section>
+
+  <!-- 3: my videos -->
+  <section class="card">
+    <h2>My videos</h2>
+    <p class="sub" id="libPath"></p>
+    <div class="videos" id="videos"></div>
+  </section>
+
+  <div class="tip">
+    <b>Want it even better?</b> Open Claude and say <code>improve my <span id="tipName">video</span></code> — Claude picks the best takes,
+    rewrites the hook and adds graphics. Then come back here and press <b>Open</b>.
+  </div>
+</main>
+<div id="toast" hidden></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+try { const t = localStorage.getItem("studio-theme"); const m = { light: "warm-light", dark: "warm-dark" };
+  if (t && t !== "auto") document.documentElement.dataset.theme = m[t] || t; } catch {}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 5000); }
+const post = async (url, body) => (await fetch(url, { method: "POST", body: JSON.stringify(body || {}) })).json();
+
+let H = null, files = [], preset = "reel";
+const EMOJI = { reel: "📱", justyn: "🔥", youtube: "▶️", tutorial: "🎓", podcast: "🎙️" };
+const FRIENDLY = { reel: "Reel / TikTok / Short", justyn: "Viral talking-head", youtube: "YouTube video", tutorial: "How-to / tutorial", podcast: "Podcast clip" };
+const STATUS = { new: "Not edited yet", draft: "Ready to review", plan_approved: "Plan approved", rough_approved: "Ready to export", final: "Finished" };
+
+async function load() {
+  H = await (await fetch("/api/home")).json();
+  $("libPath").textContent = `Saved in ${H.library}`;
+  $("styles").innerHTML = H.presets.map((p) => `<button type="button" class="style ${p.id === preset ? "sel" : ""}" onclick="pickStyle('${p.id}')" aria-pressed="${p.id === preset}">
+    <span class="em">${EMOJI[p.id] || "🎬"}</span><b>${esc(FRIENDLY[p.id] || p.label)}</b><small>${esc(p.about)}</small></button>`).join("");
+  $("titleWrap").hidden = !(H.presets.find((p) => p.id === preset) || {}).title;
+  $("videos").innerHTML = H.projects.length ? H.projects.map((v) => `<div class="vid">
+      <div class="thumb" style="${v.has_thumb ? `background-image:url('/project-thumb?name=${encodeURIComponent(v.name)}')` : ""}">
+        <span class="badge">${v.busy ? "⏳ Working…" : esc(STATUS[v.status] || v.status)}</span></div>
+      <div class="body">
+        <div class="name" title="${esc(v.name)}">${esc(v.name)}</div>
+        <div class="meta">${v.clips} clip${v.clips === 1 ? "" : "s"}${v.length ? ` · ${Math.round(v.length)}s` : ""}${v.exports.length ? ` · ${v.exports.length} exported` : ""}</div>
+        <div class="acts">
+          ${v.status === "new" ? `<button class="primary" onclick="remake('${encodeURIComponent(v.name)}')" ${v.busy ? "disabled" : ""}>Edit it</button>`
+            : `<button class="primary" onclick="openVideo('${encodeURIComponent(v.name)}')" ${v.busy ? "disabled" : ""}>Open</button>`}
+          <button onclick="reveal('${encodeURIComponent(v.name)}', '${v.exports.length ? "exports" : "project"}')" title="Show in a folder window">📁</button>
+        </div>
+      </div></div>`).join("")
+    : `<div class="empty">No videos yet. Make your first one above! 👆</div>`;
+  if (H.projects[0]) $("tipName").textContent = H.projects[0].name + " video";
+}
+function pickStyle(id) { preset = id; load(); }
+
+// ---- adding clips ------------------------------------------------------------
+const drop = $("drop"), picker = $("picker");
+drop.onclick = () => picker.click();
+drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); picker.click(); } };
+picker.onchange = () => { addFiles(picker.files); picker.value = ""; };
+["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => addFiles(e.dataTransfer.files));
+// Dropping anywhere on the page works too.
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => { e.preventDefault(); if (e.target !== drop && !drop.contains(e.target)) addFiles(e.dataTransfer.files); });
+
+function addFiles(list) {
+  const ok = /\.(mp4|mov|mkv|m4v|webm|avi)$/i;
+  let skipped = 0;
+  for (const f of list) { if (ok.test(f.name)) { if (!files.some((x) => x.name === f.name && x.size === f.size)) files.push(f); } else skipped++; }
+  if (skipped) toast(`Skipped ${skipped} file(s) that aren't videos.`);
+  if (!$("vname").value && files[0]) $("vname").placeholder = files[0].name.replace(/\.[^.]+$/, "");
+  renderFiles();
+}
+const mb = (n) => n > 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(n / 1e6))} MB`;
+function renderFiles() {
+  $("files").innerHTML = files.map((f, i) => `<li>🎞️ <span>${esc(f.name)}</span><small>${mb(f.size)}</small>
+    <button onclick="files.splice(${i},1);renderFiles()" aria-label="Remove ${esc(f.name)}" style="padding:2px 8px">✕</button></li>`).join("");
+  $("make").disabled = !files.length;
+  $("makeHint").textContent = files.length ? `${files.length} clip${files.length > 1 ? "s" : ""} ready.` : "Add at least one clip to start.";
+}
+
+// ---- making the video ------------------------------------------------------
+const STAGES = ["Copying your clips", "Listening to every word", "Cutting pauses and mistakes", "Adding captions, style and effects", "Making a preview", "Double-checking everything"];
+function showWork(stage, pct, doing) {
+  $("newCard").hidden = true; $("workCard").hidden = false;
+  $("bar").style.width = `${pct}%`; $("doing").textContent = doing;
+  $("stages").innerHTML = STAGES.map((s, i) => `<li class="${i < stage ? "done" : i === stage ? "now" : ""}"><span class="dot">${i < stage ? "✓" : ""}</span>${s}</li>`).join("");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+$("make").onclick = async () => {
+  const name = $("vname").value.trim() || $("vname").placeholder || "My video";
+  const { name: project } = await post("/api/new", { name });
+  $("workTitle").textContent = `Making “${project}”…`;
+  const total = files.reduce((a, f) => a + f.size, 0); let sent = 0;
+  for (const f of files) {   // one upload per clip, straight to disk
+    showWork(0, Math.round((sent / total) * 15), `Copying ${f.name}…`);
+    const res = await fetch(`/api/upload?project=${encodeURIComponent(project)}&file=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
+    if (!res.ok) { $("workErr").hidden = false; $("workErr").textContent = (await res.json()).error; return; }
+    sent += f.size;
+  }
+  const { job } = await post("/api/make", { project, preset, title: $("vtitle").value });
+  follow(job, project);
+};
+async function remake(enc) {
+  const project = decodeURIComponent(enc);
+  $("workTitle").textContent = `Making “${project}”…`;
+  const { job } = await post("/api/make", { project, preset, title: "" });
+  follow(job, project);
+}
+function follow(job, project) {
+  const map = { "ingest": 1, "draft": 2, "keeping": 2, "apply": 3, "rough": 4, "quality": 5 };
+  const t = setInterval(async () => {
+    const j = await (await fetch(`/api/job?id=${job}`)).json();
+    const key = Object.keys(map).find((k) => (j.doing || "").toLowerCase().startsWith(k));
+    const stage = key ? map[key] : 1;
+    showWork(stage, 15 + Math.round((stage / 6) * 85), STAGES[stage] + "…");
+    if (j.state === "done") {
+      clearInterval(t); showWork(6, 100, "Done! Opening your video…");
+      await post("/api/open", { project }); location.href = "/studio";
+    } else if (j.state === "failed") {
+      clearInterval(t);
+      $("workErr").hidden = false;
+      $("workErr").innerHTML = `Something went wrong. Ask Claude: <code>my video "${esc(project)}" failed to make — can you fix it?</code><br><small>${esc((j.log || []).slice(-3).join(" · "))}</small>`;
+    }
+  }, 1500);
+}
+
+async function openVideo(enc) {
+  const r = await post("/api/open", { project: decodeURIComponent(enc) });
+  if (!r.ok) return toast(r.error);
+  location.href = "/studio";
+}
+async function reveal(enc, what) { await post("/api/reveal", { project: decodeURIComponent(enc), what }); toast("Opened in a folder window."); }
+$("openLib").onclick = async () => { await post("/api/reveal", { what: "library" }); toast("Opened your videos folder."); };
+
+load();
+setInterval(load, 8000);  // keep "My videos" current (new jobs, clips added to the folder by hand)
+</script>
+</body>
+</html>

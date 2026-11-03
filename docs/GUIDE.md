@@ -1,42 +1,59 @@
 # AI Video Editor — user guide
 
-A free, local video editor that you drive by talking to Claude Code. You drop raw clips in a
-folder; Claude cuts, captions, styles and exports them; you review and approve every step in
-the **Review Studio** before anything final is rendered. Nothing is uploaded anywhere — the
-only paid piece is your Claude plan.
+A free video editor that runs on your own computer. Drag in your clips, pick a style, and it
+cuts, captions and styles them for you. Claude is there when you want it smarter. Nothing is
+uploaded anywhere — the only paid piece is your Claude plan.
 
 ---
 
-## 1. Everyday use
+## 0. Never used anything like this? Start here
+
+**You need:** a computer and the Claude app (Claude Code). That's it.
+
+**Step 1 — install (once).** Open Claude Code and paste this sentence:
+
+> Please install the AI Video Editor plugin from theaisolopreneurs-stack/video-use and set it up for me.
+
+Claude does the rest (it may ask you to click "Allow" a few times). When it's finished, the
+editor opens in your web browser and an **AI Video Editor** icon appears on your Desktop.
+
+**Step 2 — make a video (every time).**
+
+1. Double-click **AI Video Editor** on your Desktop. It opens in your browser.
+2. **Drag your video clips** into the big box (or click it to choose them).
+3. **Pick a style** — Reel/TikTok, Viral talking-head, YouTube, How-to, or Podcast clip.
+4. Click **✨ Make my video** and wait a couple of minutes.
+5. Watch it. Like it? Click **Approve plan → Approve rough cut → Export**, tick where it's
+   going (TikTok, Instagram, YouTube…), and click **📁 Open the folder** to get your file.
+
+**Step 3 (optional) — make it better with Claude.** In Claude, say things like
+*"improve my Texans video"*, *"make the captions bigger"*, *"cut the part about the weather"*.
+Then click **Open** on that video again to see the changes.
+
+You never need to make folders, type file names or remember any web address. Your videos are
+kept in **Videos → AI Video Editor** (one folder per video) — the **📁 Open my videos folder**
+button takes you there.
+
+---
+
+## 1. Everyday use (more detail)
 
 ### Start an edit
 
-1. Make a folder for the video and put every clip in it (phone videos, screen recordings,
-   B-roll — any mix of shapes and frame rates):
+- **Easiest:** the Home screen (Desktop icon) — drag clips, pick a style, **Make my video**.
+- **By chat:** tell Claude what you want, in plain English. Claude finds or creates the
+  video's folder for you:
 
-   ```
-   footage/texans-part-2/
-     main-take.MOV
-     second-take.MOV
-     screen-recording.mp4
-   ```
+  > Make a 45-second reel from the clips I just added to "Texans part 2". Justyn style, title
+  > "Claude fixed the Texans", and cut to the screen recording when I talk about the results.
 
-2. Tell Claude what you want, in plain English:
+- **By command** (for the technical): `uv run python helpers/make.py "<video folder>" --preset justyn --title "…" --studio`
 
-   > Edit the clips in footage/texans-part-2 into a 45-second reel. Use the Justyn style,
-   > title "Claude fixed the Texans", and cut to the screen recording when I talk about the results.
+Either way: everything is transcribed on your machine, pauses and mistakes are cut, the style
+is applied, and you get a preview in a couple of minutes. Claude adds the judgement work (best
+takes, order, hook, graphics) when you ask it to.
 
-   Or run the one-liner yourself:
-
-   ```bash
-   uv run python helpers/make.py footage/texans-part-2 --preset justyn --title "Claude fixed the Texans" --studio
-   ```
-
-3. Claude transcribes everything (on your machine), drafts the cuts, applies the preset, and
-   does the editor's judgement work: best takes, order, hook, graphics. You get a rough cut in
-   a couple of minutes and the Studio opens.
-
-### Review in the Studio (http://127.0.0.1:8765)
+### Review in the editor
 
 | Area | What you do there |
 |---|---|
