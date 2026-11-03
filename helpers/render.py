@@ -258,11 +258,14 @@ def extract_segment(
     draft: bool = False,
     rate: str | None = None,
     crop: str | None = None,
+    out_size: tuple[int, int] | None = None,
 ) -> None:
     """Extract a cut range as its own MP4 with grade + 30ms audio fades baked in.
 
     `-ss` before `-i` for fast accurate seeking. Scale to 1080p from 4K.
     Portrait sources (height > width) are scaled by height to preserve orientation.
+    With `out_size` (plan target aspect), `crop` has already fitted the shape (a crop,
+    or a blurred-background pad from framing.reframe_pad) and the result is scaled exactly.
 
     Quality ladder:
       - final (default): 1080p libx264 fast CRF 20
@@ -273,7 +276,9 @@ def extract_segment(
 
     # A reframe crop (landscape -> vertical, framing.py) makes the output portrait.
     portrait = is_portrait_source(source) or crop is not None
-    if draft:
+    if out_size:
+        scale = f"scale={out_size[0]}:{out_size[1]},setsar=1"
+    elif draft:
         scale = "scale=-2:1280" if portrait else "scale=1280:-2"
     else:
         scale = "scale=-2:1920" if portrait else "scale=1920:-2"
@@ -376,11 +381,13 @@ def extract_all_segments(
         else:
             seg_filter = resolved
 
-        crop = None
+        crop, out_size = None, None
         aspect = (edl.get("target") or {}).get("aspect")
         if "status" in edl and aspect:
-            from framing import reframe_crop
-            crop = reframe_crop(src_path, start, end, aspect)
+            from framing import output_size, reframe_crop, reframe_pad
+            out_size = output_size(aspect, draft)
+            if out_size:
+                crop = reframe_crop(src_path, start, end, aspect) or reframe_pad(src_path, aspect, *out_size)
 
         note = r.get("beat") or r.get("note") or ""
         print(f"  [{i:02d}] {src_name}  {start:7.2f}-{end:7.2f}  ({duration:5.2f}s)  {note}"
@@ -388,7 +395,7 @@ def extract_all_segments(
         if is_auto:
             print(f"        grade: {seg_filter or '(none)'}")
         extract_segment(src_path, start, duration, seg_filter, out_path, preview=preview, draft=draft,
-                        rate=out_rate, crop=crop)
+                        rate=out_rate, crop=crop, out_size=out_size)
         seg_paths.append(out_path)
 
     return seg_paths

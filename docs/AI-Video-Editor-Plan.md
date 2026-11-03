@@ -139,8 +139,11 @@ Tested on the Texans clip (v7: 🏈 pop, "0 – 4" card, typing prompt box, chec
 Change from plan: the rough cut shows the real graphics instead of placeholder boxes — one extra render (~30 s) was worth seeing the real thing.
 Not yet: still mockups of graphics in the Studio (waiting for the UI redesign), graphics editing in the Studio (ask Claude for now), screen-recording inserts beyond the PiP template.
 
-**Phase 8 — Self-review loop and exports**
-Frame checks at cuts/overlays, safe-zone and text-over-face checks, loudness check, an "anti-slop" cap on effects per 10 seconds. Multi-ratio exports, thumbnails, chapters.
+**Phase 8 — Self-review loop and exports** ✅ done 2026-11-02
+`helpers/qc.py`: measured checks — length, loudness/true peak, clicks at cuts, black frames, **text/graphics over the face** (pixel diff of render vs plain base inside the detected face box), **9:16 app safe zones**, caption flashes/reading speed, **anti-slop cap** (≤5 effects per 10 s), plus a before/after frame sheet of every cut. ~15 s per video. Verified on a deliberately bad render (caught the card over the face and under the right-hand buttons) and on the real cut (clean pass).
+`helpers/export.py`: one command → 9:16, 4:5, 1:1, 16:9 exports, each QC'd; SRT captions; YouTube chapters from beats; 3 thumbnail candidates (sharpest frames with a big face + title). Renderer now outputs exact sizes per aspect; vertical→16:9 uses a blurred-background fill with graphics in the side panel; 4:5/1:1 crops keep headroom; square/wide captions sit lower.
+Tested: all four Texans exports pass QC. Draft export of all four ≈ 5 min.
+Not yet: title/description writing is Claude's job in chat (no template); thumbnails are simple (no cut-out or arrows).
 
 **Phase 9 — Presets**
 One-command recipes: "YouTube video", "Short/Reel", "Podcast clip", and *new* "Justyn-style reel" (hook title behind subject → pill captions → proof inserts → revision demo → CTA end card).

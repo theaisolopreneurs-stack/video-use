@@ -63,7 +63,12 @@ def settings(plan: dict, brand: dict, style_override: str | None = None) -> dict
 
 
 def canvas(plan: dict, edit_dir: Path) -> tuple[int, int]:
-    """Output canvas: render.py scales portrait to 1080x1920 and landscape to 1920x1080."""
+    """Output canvas: the plan's target aspect if set, else render.py's default
+    (portrait -> 1080x1920, landscape -> 1920x1080)."""
+    import framing
+    size = framing.output_size((plan.get("target") or {}).get("aspect"))
+    if size:
+        return size
     src = next(iter(plan["sources"].values()))
     p = Path(src) if Path(src).is_absolute() else edit_dir / src
     out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams",
@@ -256,7 +261,10 @@ class Writer:
         unit = W / 1080 if H > W else H / 1080
         self.size = int(s["size"] * self.p.get("size", 1.0) * unit)
         self.upper = self.p["upper"] if "upper" in self.p else bool(s["uppercase"])
-        self.y = int(H * POSITIONS.get(s["position"], 0.70))
+        frac = POSITIONS.get(s["position"], 0.70)
+        if W / H > 0.9 and s["position"] == "lower":
+            frac = 0.86  # square/wide frames have no app UI at the bottom, and the face sits lower
+        self.y = int(H * frac)
         self.events: list[str] = []
         self.n_cue = 0
 

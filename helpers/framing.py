@@ -173,19 +173,56 @@ def zoom_filter(plan: dict, edit_dir: Path, W: int, H: int, fps: str) -> str | N
 
 # ---- reframe --------------------------------------------------------------
 
+OUTPUT_SIZES = {"9:16": (1080, 1920), "4:5": (1080, 1350), "1:1": (1080, 1080), "16:9": (1920, 1080)}
+
+
+def output_size(aspect: str | None, draft: bool = False) -> tuple[int, int] | None:
+    """Exact output canvas for a target aspect (draft renders at 2/3 size)."""
+    if aspect not in OUTPUT_SIZES:
+        return None
+    w, h = OUTPUT_SIZES[aspect]
+    k = 2 / 3 if draft else 1
+    return int(w * k) // 2 * 2, int(h * k) // 2 * 2
+
+
 def reframe_crop(source: Path, start: float, end: float, aspect: str) -> str | None:
-    """Crop filter that turns a landscape source vertical around the face, or None."""
-    if aspect not in ("9:16", "4:5", "1:1"):
+    """Crop that fits a source to `aspect` around the face, or None if it already fits.
+
+    Wider source -> crop the sides around the face. Taller source -> crop top/bottom,
+    keeping the face in the upper-middle (where it sits in a talking-head frame).
+    A much wider target (vertical source -> 16:9) can't be cropped; see reframe_pad.
+    """
+    if aspect not in OUTPUT_SIZES:
         return None
     w, h = probe_size(source)
     num, den = (int(x) for x in aspect.split(":"))
-    if w / h <= num / den + 0.01:
-        return None  # already as narrow as the target
-    cw = int(h * num / den) // 2 * 2
+    target, src = num / den, w / h
+    if abs(src - target) < 0.01 or target / src > 2.0:
+        return None
     f = face(str(source), start, end)
-    cx = f["x"] if f else 0.5
-    x = int(min(max(0, cx * w - cw / 2), w - cw))
-    return f"crop={cw}:{h}:{x}:0"
+    if src > target:
+        cw = int(h * target) // 2 * 2
+        cx = f["x"] if f else 0.5
+        x = int(min(max(0, cx * w - cw / 2), w - cw))
+        return f"crop={cw}:{h}:{x}:0"
+    ch = int(w / target) // 2 * 2
+    cy = f["y"] if f else 0.45
+    # 4:5: face a little below centre (headroom for graphics, captions still under the chin).
+    # 1:1: face centred; graphics go small at the top and captions near the bottom (captions.py).
+    y = int(min(max(0, cy * h - ch * (0.56 if target < 0.9 else 0.5)), h - ch))
+    return f"crop={w}:{ch}:0:{y}"
+
+
+def reframe_pad(source: Path, aspect: str, W: int, H: int) -> str | None:
+    """Vertical source into a much wider frame: the video centred over a blurred copy of itself."""
+    if aspect not in OUTPUT_SIZES:
+        return None
+    w, h = probe_size(source)
+    num, den = (int(x) for x in aspect.split(":"))
+    if (num / den) / (w / h) <= 2.0:
+        return None
+    return (f"split[fg][bg];[bg]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+            f"boxblur=24:2,eq=brightness=-0.12[bgb];[fg]scale=-2:{H}[fgs];[bgb][fgs]overlay=(W-w)/2:0")
 
 
 # ---- person mask ----------------------------------------------------------

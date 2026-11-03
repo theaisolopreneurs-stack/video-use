@@ -57,11 +57,31 @@ def _asset(p: str, edit_dir: Path, assets: Path) -> str:
     return f"assets/{dst.name}"
 
 
-def composition(items: list[dict], brand: dict, W: int, H: int, fps: str) -> str:
+def layout(W: int, H: int, side_panels: bool) -> dict:
+    """Where graphics go for a canvas shape, so they stay off the speaker's face.
+
+    9:16: full size above the face. 4:5 / 1:1: smaller and higher (less room above the
+    face). 16:9 with a blurred fill (vertical source): in the left-hand panel.
+    """
+    r = W / H
+    if r < 0.65:
+        return {"scale": 1.0, "tops": POSITIONS, "left": None}
+    if r < 1.2:
+        k = 0.78 if r < 0.9 else 0.58
+        return {"scale": k, "tops": {"upper": 0.03, "middle": 0.1, "lower": 0.2}, "left": None}
+    if side_panels:
+        return {"scale": 0.62, "tops": {"upper": 0.18, "middle": 0.32, "lower": 0.46}, "left": (0.0, 0.33)}
+    return {"scale": 0.7, "tops": {"upper": 0.05, "middle": 0.2, "lower": 0.35}, "left": None}
+
+
+def composition(items: list[dict], brand: dict, W: int, H: int, fps: str, lay: dict | None = None) -> str:
     c = brand.get("colors") or {}
     f = brand.get("fonts") or {}
     total = sum(i["_dur"] for i in items)
-    css_vars = (f"--u:{min(W, H) / 1080:.5f}px;--primary:{c.get('primary', '#1F5C4A')};"
+    lay = lay or layout(W, H, False)
+    side = (f'box.style.left = "{lay["left"][0] * 100:.1f}%"; box.style.right = "auto"; '
+            f'box.style.width = "{(lay["left"][1] - lay["left"][0]) * 100:.1f}%";') if lay["left"] else ""
+    css_vars = (f"--u:{min(W, H) / 1080 * lay['scale']:.5f}px;--primary:{c.get('primary', '#1F5C4A')};"
                 f"--accent:{c.get('accent', '#F2C14E')};--ink:{c.get('text', '#FFFFFF')};"
                 f"--panel-ink:{c.get('pill_text', '#F6F1E7')};"
                 f"--sans:'{(f.get('sans') or {}).get('family', 'Segoe UI')}',sans-serif;"
@@ -82,7 +102,7 @@ items.forEach((g, i) => {{
   box.className = "slot clip";
   box.dataset.start = g._t0; box.dataset.duration = g._dur; box.dataset.trackIndex = String(i);
   if (g.type === "progress") {{ box.style.inset = "0"; }}
-  else {{ box.style.top = ({json.dumps(POSITIONS)}[g.position] ?? 0.12) * 100 + "%"; }}
+  else {{ box.style.top = ({json.dumps(lay["tops"])}[g.position] ?? {lay["tops"]["upper"]}) * 100 + "%"; {side} }}
   root.appendChild(box);
   (window.HF_TEMPLATES[g.type] || window.HF_TEMPLATES.text_card)(g, box, tl, g._t0, g._dur);
 }});
@@ -122,6 +142,7 @@ def build_graphics_overlays(plan: dict, edit_dir: Path, base: Path, draft: bool 
     brand = load_brand(edit_dir)
 
     key_src = json.dumps([graphics, brand.get("colors"), brand.get("fonts"), W, H, fps, draft,
+                          (plan.get("target") or {}).get("aspect"), (Path(__file__)).stat().st_mtime,
                           (GFX / "templates.js").stat().st_mtime, (GFX / "templates.css").stat().st_mtime],
                          sort_keys=True)
     proj = edit_dir / "animations" / f"gfx_{hashlib.sha1(key_src.encode()).hexdigest()[:10]}"
@@ -145,7 +166,12 @@ def build_graphics_overlays(plan: dict, edit_dir: Path, base: Path, draft: bool 
         g["_t0"], g["_dur"] = round(t, 3), dur
         items.append(g)
         t += dur
-    (proj / "index.html").write_text(composition(items, brand, W, H, fps), encoding="utf-8")
+    first = plan["ranges"][0]
+    src = Path(plan["sources"][first["source"]])
+    src = src if src.is_absolute() else edit_dir / src
+    aspect = (plan.get("target") or {}).get("aspect") or ""
+    padded = bool(aspect) and framing.reframe_pad(src, aspect, W, H) is not None
+    (proj / "index.html").write_text(composition(items, brand, W, H, fps, layout(W, H, padded)), encoding="utf-8")
 
     packed = proj / "packed.mov"
     print(f"graphics: rendering {len(items)} graphic(s) with HyperFrames ({t:.1f}s of animation)…", flush=True)
