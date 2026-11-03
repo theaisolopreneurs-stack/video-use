@@ -145,8 +145,10 @@ Not yet: still mockups of graphics in the Studio (waiting for the UI redesign), 
 Tested: all four Texans exports pass QC. Draft export of all four ≈ 5 min.
 Not yet: title/description writing is Claude's job in chat (no template); thumbnails are simple (no cut-out or arrows).
 
-**Phase 9 — Presets**
-One-command recipes: "YouTube video", "Short/Reel", "Podcast clip", and *new* "Justyn-style reel" (hook title behind subject → pill captions → proof inserts → revision demo → CTA end card).
+**Phase 9 — Presets** ✅ done 2026-11-02
+`presets/*.json` recipes: **reel** (Short/Reel/TikTok), **justyn** (Justyn-style reel), **youtube**, **podcast** clip, **tutorial**. Each sets shape and length target, cut tightness, caption style and pops, look, audio (pops, music level), zoom policy, progress bar / CTA end card, hook title style, export formats, and editor notes for Claude.
+`helpers/make.py footage/<project> --preset <name> [--title …] [--music …] [--studio]`: ingest → draft cuts → apply preset (automatic number pops, punch-ins spaced by the preset, brand CTA card) → draft rough cut → QC. Re-running with another preset keeps your cuts and edits and saves a new plan version.
+Tested on a fresh copy of the Texans clip: `--preset justyn --title "How to fix the Texans"` → reviewed-ready rough cut in 2 min 14 s (title behind you, pill captions popping "0 and 4", warm look, 2 punch-ins, CTA end card); switching to `reel` on the same plan in ~1 min, QC pass.
 
 ---
 

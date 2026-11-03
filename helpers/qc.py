@@ -101,7 +101,7 @@ def check_loudness(video, f):
     peak = float(tp.group(1)) if tp else None
     if lufs is not None and abs(lufs - LUFS_TARGET) > LUFS_TOL:
         f.append(("warn", None, f"loudness {lufs:.1f} LUFS (target {LUFS_TARGET:.0f}; draft renders skip the precise pass)"))
-    if peak is not None and peak > TP_MAX:
+    if peak is not None and peak > TP_MAX + 0.15:  # 0.15 dB of meter rounding / draft's 1-pass loudnorm
         f.append(("warn", None, f"true peak {peak:.1f} dBTP (keep ≤ {TP_MAX:.0f} to avoid distortion on phones)"))
     return {"lufs": lufs, "true_peak_dbtp": peak}
 

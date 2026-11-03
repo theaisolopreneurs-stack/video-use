@@ -1,0 +1,14 @@
+{
+  "label": "YouTube video",
+  "about": "Horizontal long-form: gentle pacing, no burned-in captions (upload the SRT), occasional push-ins, chapters and thumbnails.",
+  "target": {"aspect": "16:9"},
+  "cuts": {"max_gap": 0.6},
+  "captions": {"style": "none", "auto_emphasis": false},
+  "audio": {"voice": "clean", "music_volume_db": -30},
+  "grade": "subtle",
+  "zooms": {"auto": true, "every_s": 25, "scale": 1.08, "style": "push"},
+  "graphics": {"progress": false, "cta": false},
+  "title": null,
+  "exports": ["16:9"],
+  "editor_notes": "Keep natural pauses for breath. Label beats as chapter names (3+ chapters, each 10 s+). Use lower_third once near the start and text_card / bar_chart / checklist for key points."
+}

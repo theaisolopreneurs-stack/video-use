@@ -71,6 +71,7 @@ Helpers (`helpers/transcribe.py`, `helpers/render.py`, etc.) live alongside this
 
 ## Helpers
 
+- **`make.py <videos_dir> --preset <name> [--title "..."] [--music file] [--fresh] [--studio]`** — the fast path: ingest → draft cuts → apply a preset (shape, caption style, look, audio, automatic popped numbers, punch-ins, progress bar, CTA end card) → draft rough cut → QC, in ~2 min for a short clip. On an existing plan it keeps the cuts and edits and re-applies only the preset settings as a new version. Presets: `reel`, `justyn`, `youtube`, `podcast`, `tutorial` (`presets/*.json`, `make.py --list`). Then do the editor's work the preset can't: pick takes, reorder for the hook, write the hook title, add proof graphics per the preset's `editor_notes`, tighten to the target length.
 - **`ingest.py <videos_dir>`** — **start here.** Inventory (ffprobe) → `transcribe_batch` → `pack_transcripts` → one timestamped contact sheet per source in `<edit>/storyboard/`. Writes `<edit>/inventory.md`. Cached; safe to re-run.
 - **`transcribe.py <video>`** — single file, word-level. Local faster-whisper by default (`--model small.en`; `base.en` faster, `medium.en` more accurate). Keeps fillers (um/uh/like) for filler cuts. No diarization locally — all words are `speaker_0`. `--engine scribe --num-speakers N` for paid ElevenLabs. Cached.
 - **`transcribe_batch.py <videos_dir>`** — every source in a folder. 1 worker locally (the model already uses all cores), 4 for Scribe.

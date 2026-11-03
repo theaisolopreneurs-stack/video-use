@@ -1,0 +1,14 @@
+{
+  "label": "Tutorial / explainer",
+  "about": "Teaching clip: bold captions, checklists and text cards for each step, calm pacing, every format exported.",
+  "target": {"aspect": "9:16", "max_duration_s": 90},
+  "cuts": {"max_gap": 0.4},
+  "captions": {"style": "bold", "position": "lower", "auto_emphasis": true},
+  "audio": {"voice": "clean", "music_volume_db": -28},
+  "grade": "subtle",
+  "zooms": {"auto": true, "every_s": 12, "scale": 1.1, "style": "push"},
+  "graphics": {"progress": true, "cta": true},
+  "title": {"behind_subject": true, "font": "sans", "duration": 2.0},
+  "exports": ["9:16", "4:5", "16:9"],
+  "editor_notes": "Structure: hook (the result) -> steps -> recap. One checklist or text_card per step, timed to when the step is named."
+}

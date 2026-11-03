@@ -1,0 +1,14 @@
+{
+  "label": "Short / Reel / TikTok",
+  "about": "Fast vertical clip: tight cuts, word-highlight captions, punch-ins on key words, pops, progress bar.",
+  "target": {"aspect": "9:16", "max_duration_s": 60},
+  "cuts": {"max_gap": 0.3},
+  "captions": {"style": "highlight", "position": "lower", "auto_emphasis": true},
+  "audio": {"voice": "clean", "sfx_on_emphasis": "pop", "music_volume_db": -24},
+  "grade": "subtle",
+  "zooms": {"auto": true, "every_s": 8, "scale": 1.15, "style": "punch"},
+  "graphics": {"progress": true, "cta": false},
+  "title": {"behind_subject": true, "font": "sans", "duration": 2.0},
+  "exports": ["9:16"],
+  "editor_notes": "Open on the strongest line (a number, a result, a bold claim) even if it was said later. Aim for 30-45 s. One idea per clip."
+}

@@ -1,0 +1,14 @@
+{
+  "label": "Podcast / interview clip",
+  "about": "One strong moment from a longer conversation: stacked two-line captions, name lower-third, no zooms or sound effects.",
+  "target": {"aspect": "9:16", "max_duration_s": 90},
+  "cuts": {"max_gap": 0.45},
+  "captions": {"style": "stacked", "position": "lower", "auto_emphasis": true},
+  "audio": {"voice": "clean"},
+  "grade": "subtle",
+  "zooms": {"auto": false},
+  "graphics": {"progress": true, "cta": false},
+  "title": {"behind_subject": false, "font": "sans", "duration": 2.5},
+  "exports": ["9:16", "1:1"],
+  "editor_notes": "Find the single most quotable 30-90 s stretch; it must make sense with no context. Start mid-thought only if the first line hooks. Add a lower_third with the speaker's name."
+}

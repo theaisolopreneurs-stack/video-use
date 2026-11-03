@@ -1,0 +1,14 @@
+{
+  "label": "Justyn-style reel",
+  "about": "The viral 'I didn't edit this' look: serif hook title behind you, brand-pill captions with italic-serif pops, proof inserts, CTA end card.",
+  "target": {"aspect": "9:16", "max_duration_s": 60},
+  "cuts": {"max_gap": 0.3},
+  "captions": {"style": "pill", "position": "lower", "emphasis_look": "serif", "auto_emphasis": true},
+  "audio": {"voice": "clean", "music_volume_db": -26},
+  "grade": "lut:warm_soft.cube",
+  "zooms": {"auto": true, "every_s": 7, "scale": 1.15, "style": "punch"},
+  "graphics": {"progress": false, "cta": true},
+  "title": {"behind_subject": true, "font": "serif", "duration": 2.5},
+  "exports": ["9:16"],
+  "editor_notes": "Hook title = the bold claim in 2-4 words. Add proof inserts (pip of raw footage / screenshots, timer card, prompt box, chat bubbles) where the script mentions them. End on the CTA card with the brand's comment-to-DM line."
+}
