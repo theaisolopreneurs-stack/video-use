@@ -84,3 +84,7 @@ luts/generated/
 
 # Session worktrees and local preview config
 .claude/worktrees/
+
+# Python installed here, not AppData: the Claude desktop app redirects AppData, so anything
+# installed there from inside the app is invisible to a Desktop shortcut.
+.python/

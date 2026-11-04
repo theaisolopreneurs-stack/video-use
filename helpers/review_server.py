@@ -213,7 +213,7 @@ class Studio:
 
         def work():
             proc = subprocess.run(
-                [sys.executable, str(HELPERS / "render.py"), str(self.plan_path),
+                [__import__("library").worker_python(), str(HELPERS / "render.py"), str(self.plan_path),
                  "-o", str(self.edit_dir / "rough.mp4"), "--draft"],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 env={**os.environ, "PYTHONUTF8": "1"})  # helpers print "→"; Windows pipes default to cp1252
@@ -496,7 +496,23 @@ def make_handler(app: App):
     return Handler
 
 
+def run_windowless() -> None:
+    """Settings for when the desktop icon starts us under pythonw.exe (no console at all)."""
+    if sys.stdout is None or sys.stderr is None:  # keep errors somewhere they can be found
+        import tempfile
+        log = open(Path(tempfile.gettempdir()) / "ai_video_editor.log", "a", encoding="utf-8", buffering=1)
+        sys.stdout, sys.stderr = log, log
+    if os.name == "nt":  # no console window flashing for each ffmpeg/ffprobe call
+        original = subprocess.Popen.__init__
+
+        def hidden(self, *args, **kwargs):
+            kwargs["creationflags"] = kwargs.get("creationflags", 0) | subprocess.CREATE_NO_WINDOW
+            original(self, *args, **kwargs)
+        subprocess.Popen.__init__ = hidden
+
+
 def main() -> None:
+    run_windowless()
     ap = argparse.ArgumentParser(description="Open the video editor (Home) or one video's Review Studio")
     ap.add_argument("edit_dir", type=Path, nargs="?", help="<videos_dir>/edit for a single video; omit for Home")
     ap.add_argument("--library", type=Path, default=None, help="video library folder (Home mode)")

@@ -54,8 +54,29 @@ def python_for_launch() -> Path:
     return exe
 
 
+def python_home_problem() -> str | None:
+    """The Claude desktop app redirects AppData, so a Python installed there from inside the app
+    doesn't exist for a shortcut started from the Desktop ("No Python at ..."). Catch it here,
+    where it can be fixed, because a check run from inside the app can't see the failure."""
+    if os.name != "nt":
+        return None
+    cfg = Path(sys.prefix) / "pyvenv.cfg"
+    home = next((ln.split("=", 1)[1].strip() for ln in cfg.read_text(encoding="utf-8").splitlines()
+                 if ln.startswith("home")), "") if cfg.exists() else sys.base_prefix
+    for var in ("APPDATA", "LOCALAPPDATA"):
+        base = os.environ.get(var)
+        if base and home.lower().startswith(base.lower()):
+            return (f"This environment's Python is under {var} ({home}). A Desktop shortcut may not be able "
+                    "to see it. Rebuild it with Python in the editor's folder: see Windows Python in "
+                    "skills/video-editor-setup/SKILL.md.")
+    return None
+
+
 def create() -> list[Path]:
     from library import default_library
+    problem = python_home_problem()
+    if problem:
+        sys.exit(problem)
     lib = default_library()
     lib.mkdir(parents=True, exist_ok=True)
     server = HELPERS / "review_server.py"

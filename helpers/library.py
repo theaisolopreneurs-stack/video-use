@@ -25,6 +25,16 @@ REPO = HELPERS.parent
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".avi", ".m4v", ".webm"}
 
 
+def worker_python() -> str:
+    """Python for background jobs. The desktop icon runs windowless pythonw.exe; jobs use the console
+    python.exe beside it, started hidden, so the FFmpeg calls they make share that hidden console
+    rather than each flashing a window."""
+    exe = Path(sys.executable)
+    if exe.name.lower() == "pythonw.exe" and exe.with_name("python.exe").exists():
+        return str(exe.with_name("python.exe"))
+    return str(exe)
+
+
 def default_library() -> Path:
     env = os.environ.get("AI_VIDEO_LIBRARY")
     if env:
@@ -155,12 +165,12 @@ class Library:
         return jid
 
     def start_make(self, project: str, preset: str, title: str | None) -> str:
-        cmd = [sys.executable, str(HELPERS / "make.py"), str(self.folder(project)), "--preset", preset]
+        cmd = [worker_python(), str(HELPERS / "make.py"), str(self.folder(project)), "--preset", preset]
         if title:
             cmd += ["--title", title]
         return self.start("make", project, cmd)
 
     def start_export(self, project: str, aspects: list[str], draft: bool = False) -> str:
-        cmd = [sys.executable, str(HELPERS / "export.py"), str(self.folder(project) / "edit" / "plan.json"),
+        cmd = [worker_python(), str(HELPERS / "export.py"), str(self.folder(project) / "edit" / "plan.json"),
                "--aspects", ",".join(aspects)] + (["--draft"] if draft else [])
         return self.start("export", project, cmd)

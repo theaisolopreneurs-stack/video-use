@@ -22,16 +22,22 @@ On Windows, open a new shell (or refresh PATH) after installing.
 
 ## 2. Python environment
 
+**Windows: Python must be installed inside `ROOT`.** The Claude desktop app silently redirects
+`AppData`, so a Python installed there from inside the app doesn't exist for the Desktop icon
+("No Python at ..."). Checks run from Claude's own shell still pass, so don't skip this.
+
 ```bash
+export UV_PYTHON_INSTALL_DIR="ROOT/.python"
+uv python install cpython-3.12-windows-x86_64-none   # x64 on Intel/AMD and on ARM (Snapdragon)
+uv venv --clear --project "ROOT" --python "ROOT/.python/cpython-3.12-windows-x86_64-none/python.exe" "ROOT/.venv"
 uv sync --project "ROOT"
 ```
 
-**Windows on ARM (Snapdragon):** several audio/AI packages have no ARM wheels. Create the
-environment on x64 Python first (it runs under emulation), then sync:
+x64 is deliberate on ARM: several audio/AI packages have no ARM wheels, and it runs under emulation.
+
+**macOS / Linux:**
 
 ```bash
-uv python install cpython-3.12-windows-x86_64-none
-uv venv --project "ROOT" --python cpython-3.12-windows-x86_64-none "ROOT/.venv"
 uv sync --project "ROOT"
 ```
 
