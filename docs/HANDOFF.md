@@ -37,7 +37,7 @@ of Claude editing raw footage (video-use, justyn.ai's viral reel). Forked from
 - Remote: https://github.com/theaisolopreneurs-stack/video-use (public fork; can't be made private
   while it's a fork)
 - `origin` = the fork, `upstream` = browser-use/video-use
-- Currently on `main` at `64c32da`, matching origin. Phase branches (`phase-0/setup` ...
+- `main` holds all the work and is pushed to origin; run `git log -1` for the current commit. Phase branches (`phase-0/setup` ...
   `phase-10/creative-toolkit`, `studio-redesign`) are all contained in main and can be deleted.
 - A leftover worktree may exist at `.claude/worktrees/studio-redesign` (git-ignored).
 - Git-ignored: `footage/`, `renders/`, video/audio files, `.env`, `sfx/`, `models/`,
@@ -106,7 +106,7 @@ uv installed Python there. Inside the app the path looks real; from Explorer it 
 A probe launched via Explorer confirmed only `uv\python` was missing. FFmpeg, ffprobe, uv, Node,
 Chrome, the Hugging Face models and both shortcuts are all visible outside.
 
-**Fix (uncommitted until the user says otherwise; check `git status`):**
+**Fix (committed and pushed in `2a4c838`):**
 - Python now lives in `<repo>/.python` (git-ignored; `UV_PYTHON_INSTALL_DIR`), `.venv` rebuilt on it.
 - `skills/video-editor-setup/SKILL.md` does the same on Windows for every user.
 - `shortcut.py` refuses to create a shortcut if the venv's Python is under AppData.
