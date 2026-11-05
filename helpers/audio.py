@@ -39,6 +39,31 @@ AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
 VOICE_CLEAN = ("highpass=f=80,afftdn=nr=10:nf=-40:tn=1,deesser=i=0.4,"
                "acompressor=threshold=-21dB:ratio=2.5:attack=8:release=120:makeup=1.5")
 
+# Voice changer, as in CapCut's Voice effects. Pitch moves use asetrate + atempo so length is kept.
+def _pitch(k: float) -> str:
+    return f"asetrate=48000*{k},aresample=48000,atempo={1 / k:.4f}"
+
+
+VOICE_FX = {
+    "chipmunk": ("Chipmunk", _pitch(1.45)),
+    "high": ("High", _pitch(1.2)),
+    "deep": ("Deep", _pitch(0.82)),
+    "monster": ("Monster", _pitch(0.68) + ",aecho=0.6:0.5:40:0.3"),
+    "robot": ("Robot", "afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)':win_size=512:overlap=0.75,volume=1.4"),
+    "megaphone": ("Megaphone", "highpass=f=500,lowpass=f=3200,acompressor=threshold=-20dB:ratio=6,volume=1.6"),
+    "phone": ("Phone call", "highpass=f=350,lowpass=f=3000,volume=1.3"),
+    "radio": ("Old radio", "highpass=f=250,lowpass=f=4200,acrusher=bits=10:mode=log:mix=0.4"),
+    "echo": ("Echo", "aecho=0.8:0.6:260|520:0.35|0.2"),
+    "hall": ("Big hall", "aecho=0.8:0.85:90|170|310:0.4|0.3|0.2"),
+    "underwater": ("Underwater", "lowpass=f=500,tremolo=f=4:d=0.3"),
+    "whisper": ("Whisper", "highpass=f=900,volume=1.5,aphaser=speed=0.3"),
+}
+
+
+def voice_fx_filter(name: str) -> str:
+    return VOICE_FX[name][1] if name in VOICE_FX else ""
+
+
 # Synthesised SFX: (ffmpeg lavfi source, duration). Short, soft, brand-neutral.
 SFX_KIT = {
     "pop": "aevalsrc='0.7*sin(2*PI*(1100-700*t/0.09)*t)*exp(-t*38)':s=48000:d=0.14",
@@ -106,7 +131,8 @@ def emphasis_times(plan: dict, edit_dir: Path) -> list[float]:
 def has_work(plan: dict) -> bool:
     a = plan.get("audio") or {}
     return (a.get("voice", "clean") != "off" or bool((a.get("music") or {}).get("file"))
-            or bool(a.get("sfx")) or bool(a.get("sfx_on_emphasis")))
+            or bool(a.get("sfx")) or bool(a.get("sfx_on_emphasis")) or bool(a.get("sfx_on_zoom"))
+            or bool(a.get("voiceover")) or bool(plan.get("fade")))
 
 
 def mix(base: Path, plan: dict, edit_dir: Path, out: Path) -> Path:
@@ -142,10 +168,17 @@ def mix(base: Path, plan: dict, edit_dir: Path, out: Path) -> Path:
         else:
             mix_inputs.append("[mus]")
 
-    kit = make_sfx() if (a.get("sfx") or a.get("sfx_on_emphasis")) else {}
+    kit = make_sfx() if (a.get("sfx") or a.get("sfx_on_emphasis") or a.get("sfx_on_zoom")) else {}
     sfx = list(a.get("sfx") or [])
     if a.get("sfx_on_emphasis"):
         sfx += [{"name": a["sfx_on_emphasis"], "at": t, "volume_db": -10} for t in emphasis_times(plan, edit_dir)]
+    if a.get("sfx_on_zoom"):
+        sfx += [{"name": a["sfx_on_zoom"], "at": float(z["start_in_output"]), "volume_db": -20}
+                for z in plan.get("zooms") or []]
+    if a.get("voiceover"):  # text-to-speech lines: [{"text": "...", "at": 2.0, "voice": null}]
+        import tts
+        sfx += [{"file": tts.speak(v["text"], edit_dir, v.get("voice")), "at": float(v.get("at", 0)),
+                 "volume_db": float(v.get("volume_db", 0))} for v in a["voiceover"]]
     for k, s in enumerate(sfx):
         p = Path(s["file"]) if s.get("file") else kit.get(s.get("name", ""))
         if not p or not Path(p).exists():
@@ -164,6 +197,12 @@ def mix(base: Path, plan: dict, edit_dir: Path, out: Path) -> Path:
         parts.append(f"{voice_label}{''.join(mix_inputs)}amix=inputs={n}:duration=first:normalize=0[aout]")
     else:
         parts.append(f"{voice_label}anull[aout]")
+    fd = plan.get("fade") or {}
+    if fd.get("in") or fd.get("out"):  # sound fades with the picture
+        bits = [f"afade=t=in:st=0:d={float(fd['in']):.2f}"] if fd.get("in") else []
+        bits += [f"afade=t=out:st={max(0.0, total - float(fd['out'])):.2f}:d={float(fd['out']):.2f}"] if fd.get("out") else []
+        parts[-1] = parts[-1].replace("[aout]", "[afd]")
+        parts.append(f"[afd]{','.join(bits)}[aout]")
 
     run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", ";".join(parts),
          "-map", "0:v", "-map", "[aout]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",

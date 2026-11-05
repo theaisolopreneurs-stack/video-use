@@ -133,7 +133,7 @@ class Library:
             d = json.loads(p.read_text(encoding="utf-8"))
             out.append({"id": p.stem, "label": d["label"], "about": d["about"],
                         "aspect": (d.get("target") or {}).get("aspect"), "title": bool(d.get("title"))})
-        order = ["reel", "justyn", "youtube", "tutorial", "podcast"]
+        order = ["viral", "reel", "justyn", "youtube", "tutorial", "podcast"]
         return sorted(out, key=lambda x: order.index(x["id"]) if x["id"] in order else 99)
 
     # ---- background jobs --------------------------------------------------

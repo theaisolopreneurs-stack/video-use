@@ -75,8 +75,69 @@ def auto_emphasis(plan: dict, edit_dir: Path, min_gap: float = 4.0) -> list[str]
     return phrases
 
 
+# Words that tend to make a line a stronger opener. Only used to rank a video's own sentences.
+HOOK_WORDS = {"secret", "mistake", "mistakes", "never", "stop", "why", "how", "nobody", "best", "worst", "wrong",
+              "truth", "fail", "failed", "money", "free", "easy", "fast", "only", "actually", "biggest", "problem",
+              "fix", "hack", "changed", "quit", "broke", "lost", "made", "instead", "without", "forget"}
+
+
+def best_hook_line(plan: dict, edit_dir: Path) -> dict | None:
+    """The kept sentence most likely to stop a scroll: a number, "you", a strong word, a question,
+    and short enough to say in a few seconds. Returns source, start, end, text, score."""
+    best = None
+    for r in plan["ranges"]:
+        tp = edit_dir / "transcripts" / f"{r['source']}.json"
+        if not tp.exists():
+            continue
+        words = [w for w in json.loads(tp.read_text(encoding="utf-8")).get("words", []) if w.get("type") == "word"
+                 and w["end"] > float(r["start"]) and w["start"] < float(r["end"])]
+        sent: list[dict] = []
+        for i, w in enumerate(words):
+            sent.append(w)
+            nxt = words[i + 1] if i + 1 < len(words) else None
+            if nxt is not None and w["text"].strip()[-1:] not in ".?!" and nxt["start"] - w["end"] < 0.7:
+                continue
+            text = " ".join(x["text"].strip() for x in sent)
+            toks = [re.sub(r"[^\w%$]", "", x["text"].lower()) for x in sent]
+            n, length = len(toks), sent[-1]["end"] - sent[0]["start"]
+            score = (3 if any(re.search(r"\d", t) or t in NUMBER_WORDS for t in toks) else 0) \
+                + (1 if {"you", "your", "youre"} & set(toks) else 0) + 2 * min(2, len(HOOK_WORDS & set(toks))) \
+                + (1.5 if text.rstrip().endswith("?") else 0) + (1 if 4 <= n <= 14 else -2) - (2 if length > 5 else 0)
+            if float(sent[0]["start"]) >= float(r["start"]) and float(sent[-1]["end"]) <= float(r["end"]) + 0.05 \
+                    and (best is None or score > best["score"]):
+                best = {"source": r["source"], "start": max(float(r["start"]), sent[0]["start"] - 0.03),
+                        "end": min(float(r["end"]), sent[-1]["end"] + 0.06), "text": text, "score": score}
+            sent = []
+    return best
+
+
+def apply_hook(plan: dict, edit_dir: Path, hook: dict, title: str | None) -> list[str]:
+    """Open on the strongest line: play it once as a teaser, before the video starts properly."""
+    notes: list[str] = []
+    plan["ranges"] = [r for r in plan["ranges"] if r.get("beat") != "HOOK TEASER"]
+    line = best_hook_line(plan, edit_dir)
+    if not line or line["score"] < 3:
+        return ["hook: no line stood out, so the opening stays as it is"]
+    first = plan["ranges"][0]
+    already_first = line["source"] == first["source"] and line["start"] - float(first["start"]) < 2.0
+    if hook.get("teaser") and not already_first:
+        plan["ranges"].insert(0, {"source": line["source"], "start": round(line["start"], 3), "end": round(line["end"], 3),
+                                  "beat": "HOOK TEASER", "quote": line["text"],
+                                  "reason": "strongest line, played first to stop the scroll; you hear it again in context"})
+        notes.append(f"opens on your strongest line: \"{line['text']}\"")
+    else:
+        notes.append(f"your opening line is already the strongest: \"{line['text']}\"")
+    if hook.get("auto_title") and not title and not (plan.get("title") or {}).get("text"):
+        words = line["text"].rstrip(".,!?").split()
+        if len(words) <= 6:
+            plan["_auto_title"] = " ".join(words)
+    return notes
+
+
 def auto_zooms(plan: dict, edit_dir: Path, z: dict, skip_until: float) -> list[dict]:
-    """Punch-ins on popped phrases (else on section starts), at most one per every_s seconds."""
+    """Punch-ins on popped phrases (else on section starts), at most one per every_s seconds.
+    With "fill", gaps are topped up at sentence starts, so there's a steady change on screen.
+    "scale" can be a list, alternated, so the framing keeps changing rather than just pulsing."""
     import captions
     s = captions.settings(plan, captions.load_brand(edit_dir))
     words = captions.output_words(plan, edit_dir, s.get("corrections") or [])
@@ -93,14 +154,24 @@ def auto_zooms(plan: dict, edit_dir: Path, z: dict, skip_until: float) -> list[d
             t += planlib.range_len(r)
     total = planlib.total_duration(plan)
     dur = 1.5 if z.get("style", "punch") == "punch" else 2.6
+    every = float(z.get("every_s", 8))
+    if z.get("fill"):
+        for i, w in enumerate(words):
+            if i == 0 or words[i - 1]["text"].strip()[-1:] in ".?!," or w["start"] - words[i - 1]["end"] > 0.25:
+                cands.append(w["start"])
     out, last_t = [], -99.0
-    for t in sorted(cands):
+    scales = z.get("scale", 1.15)
+    scales = scales if isinstance(scales, list) else [scales]
+    for t in sorted(set(cands)):
         t = max(0.0, t - 0.1)
-        if t < skip_until or t - last_t < float(z.get("every_s", 8)) or t + dur > total - 0.3:
+        if t < skip_until or t - last_t < every or t + dur > total - 0.3:
             continue
-        out.append({"start_in_output": round(t, 2), "duration": dur, "scale": z.get("scale", 1.15),
+        out.append({"start_in_output": round(t, 2), "duration": dur, "scale": scales[len(out) % len(scales)],
                     "style": z.get("style", "punch")})
         last_t = t
+    if z.get("open_push") and total > 3:  # a slow push through the hook, so the opening is never static
+        out.insert(0, {"start_in_output": 0.0, "duration": round(min(2.0, skip_until or 2.0), 2),
+                       "scale": 1.1, "style": "drift"})
     return out
 
 
@@ -119,6 +190,15 @@ def apply_preset(plan: dict, preset: dict, edit_dir: Path, title: str | None, mu
     import captions
     brand = captions.load_brand(edit_dir)
     notes = []
+    if preset.get("hook"):
+        notes += apply_hook(plan, edit_dir, preset["hook"], title)
+        title = title or plan.pop("_auto_title", None)
+    if preset.get("pace"):  # a touch faster than life; pitch stays natural
+        for r in plan["ranges"]:
+            r.setdefault("speed", preset["pace"])
+        notes.append(f"pace: {preset['pace']}× (voice pitch unchanged)")
+    plan["adjust"] = preset.get("adjust") or {}
+    plan["beat_sync"] = preset.get("beat_sync") or {}
     plan["target"] = dict(plan.get("target") or {}, **(preset.get("target") or {}))
     notes.append(f"shape {plan['target'].get('aspect')}"
                  + (f", aim for ≤{plan['target']['max_duration_s']}s" if plan["target"].get("max_duration_s") else ""))
@@ -135,12 +215,20 @@ def apply_preset(plan: dict, preset: dict, edit_dir: Path, title: str | None, mu
 
     a = preset.get("audio") or {}
     plan["audio"] = {k: v for k, v in dict(plan.get("audio") or {}, **{k: v for k, v in a.items()
-                                                                       if k != "music_volume_db"}).items()}
+                                                                       if k not in ("music_volume_db", "music")}).items()}
+    if not music and a.get("music") == "auto" and not (plan["audio"].get("music") or {}).get("file"):
+        import audio  # the user's own tracks only: the editor doesn't ship any music
+        tracks = [p for p in audio.list_music(edit_dir) if not p.name.startswith("_")]
+        music = str(tracks[0]) if tracks else None
+        if not music:
+            notes.append("no music yet: add a track to get a music bed and beat pulses")
     if music:
         plan["audio"]["music"] = {"file": music, "volume_db": a.get("music_volume_db", -22), "duck": True}
         notes.append(f"music: {Path(music).name}, ducked under your voice")
     if a.get("sfx_on_emphasis"):
         notes.append(f"a '{a['sfx_on_emphasis']}' sound on each popped phrase")
+    if a.get("sfx_on_zoom"):
+        notes.append(f"a quiet '{a['sfx_on_zoom']}' on each punch-in")
 
     if "grade" in preset:
         plan["grade"] = preset["grade"]

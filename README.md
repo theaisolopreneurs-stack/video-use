@@ -2,7 +2,7 @@
 
 A free, local AI video editor: drop raw clips in a folder, tell Claude what you want, review
 and approve in the **Review Studio**, export for every platform. Local transcription, smart
-cuts, 13 caption styles, 40+ looks, transitions, effects, speed ramps, B-roll, motion graphics,
+cuts, 76 caption styles, 40+ looks, transitions, effects, speed ramps, B-roll, motion graphics,
 music ducking, QC and multi-format export.
 
 **Install (easiest):** open Claude Code and paste:

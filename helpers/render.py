@@ -317,37 +317,95 @@ def extract_segment(
     speed = float(fx.get("speed") or 1.0)
     hold = float(fx.get("hold") or 0.0)
 
+    from plan import IMAGE_EXTS, curve_slices
+    is_image = source.suffix.lower() in IMAGE_EXTS
+    slices = curve_slices({"start": 0.0, "end": duration, "speed": speed, "speed_curve": fx.get("speed_curve"),
+                           "reverse": fx.get("reverse")})
+    # Frame rate: use the rate the caller resolved once for the whole render
+    # (every segment must share it — concat -c copy in Rule 2 requires a uniform
+    # frame rate). When called standalone with no rate, preserve this source's
+    # own rate; fall back to 24 only if it can't be probed.
+    out_rate = rate if rate is not None else (probe_source_fps(source) or "24")
+
     vf_parts: list[str] = []
     if fx.get("stabilize"):
         vf_parts.append("deshake=rx=32:ry=32")
     if is_hdr_source(source):
         vf_parts.append(TONEMAP_CHAIN)
+    if fx.get("flip") in ("h", "both"):
+        vf_parts.append("hflip")
+    if fx.get("flip") in ("v", "both"):
+        vf_parts.append("vflip")
+    rot = float(fx.get("rotate") or 0) % 360
+    if rot == 90:
+        vf_parts.append("transpose=1")
+    elif rot == 270:
+        vf_parts.append("transpose=2")
+    elif rot == 180:
+        vf_parts.append("hflip,vflip")
+    elif rot:  # a tilted shot: rotate and zoom just enough to hide the corners
+        vf_parts.append(f"rotate={rot}*PI/180:ow=iw:oh=ih")
+        grow = abs(__import__("math").cos(rot * 3.14159265 / 180)) + abs(__import__("math").sin(rot * 3.14159265 / 180))
+        vf_parts.append(f"scale=iw*{grow:.3f}:-2,crop=iw/{grow:.3f}:ih/{grow:.3f}")
     if crop:
         vf_parts.append(crop)
     vf_parts.append(scale)
+    if fx.get("gains"):
+        r_, g_, b_ = fx["gains"]
+        vf_parts.append(f"colorchannelmixer=rr={r_:.3f}:gg={g_:.3f}:bb={b_:.3f}")
     if grade_filter:
         vf_parts.append(grade_filter)
+    if fx.get("adjust"):
+        from looks import adjust_filter
+        chain = adjust_filter(fx["adjust"])
+        if chain:
+            vf_parts.append(chain)
+    if fx.get("motion") and out_size:
+        vf_parts.append(motion_filter(fx["motion"], duration / speed, out_size, out_rate))
     if fx.get("reverse"):
         vf_parts.append("reverse")
-    if speed != 1.0:
+    if slices:
+        X, expr = "(T-STARTT)", ""
+        o = sum((b - a) / sp for a, b, sp in slices[:-1])
+        a, _, sp = slices[-1]
+        expr = f"({o:.4f}+({X}-{a:.4f})/{sp})"
+        for a, b, sp in reversed(slices[:-1]):
+            o -= (b - a) / sp
+            expr = f"if(lt({X},{b:.4f}),{o:.4f}+({X}-{a:.4f})/{sp},{expr})"
+        vf_parts.append(f"setpts='({expr})/TB'")
+    elif speed != 1.0:
         vf_parts.append(f"setpts=(PTS-STARTPTS)/{speed:.4f}")
+    if fx.get("smooth") and not draft and (slices or speed < 1.0):
+        vf_parts.append(f"minterpolate=fps={out_rate}:mi_mode=mci:mc_mode=aobmc:vsbmc=1")  # real in-between frames
     if hold > 0:
         vf_parts.append(f"tpad=stop_mode=clone:stop_duration={hold:.3f}")  # freeze the last frame
+    exact = fx.get("frames")  # the section's exact length, so small errors can't add up over a video
+    if exact:
+        vf_parts.append("tpad=stop_mode=clone:stop_duration=0.5")  # never a frame short
     vf = ",".join(vf_parts)
 
     # 30ms audio fades at both edges (Rule 3) — prevent pops. Speed/reverse/freeze happen first,
     # so the fades land on the edges of what actually plays.
-    play = duration / speed
+    play = sum((b - a) / sp for a, b, sp in slices) if slices else duration / speed
     af_parts = ["areverse"] if fx.get("reverse") else []
-    if speed != 1.0:
+    if speed != 1.0 and not slices:
         af_parts += atempo_chain(speed)
+    if fx.get("voice_fx"):
+        from audio import voice_fx_filter
+        chain = voice_fx_filter(fx["voice_fx"])
+        if chain:
+            af_parts.append(chain)
+    if fx.get("volume") is not None:
+        af_parts.append(f"volume={float(fx['volume']):.3f}")
     af_parts.append(f"afade=t=in:st=0:d=0.03,afade=t=out:st={max(0.0, play - 0.03):.3f}:d=0.03")
     if hold > 0:
         af_parts.append(f"apad=pad_dur={hold:.3f}")
+    if exact:
+        af_parts.append(f"apad,atrim=0:{exact / Fraction(out_rate):.5f}")
     af = ",".join(af_parts)
-    has_audio = bool(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
-                                     "stream=index", "-of", "csv=p=0", str(source)],
-                                    capture_output=True, text=True).stdout.strip())
+    has_audio = not is_image and bool(subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
+         "stream=index", "-of", "csv=p=0", str(source)], capture_output=True, text=True).stdout.strip())
 
     if draft:
         preset, crf = "ultrafast", "28"
@@ -356,31 +414,46 @@ def extract_segment(
     else:
         preset, crf = "fast", "20"
 
-    # Frame rate: use the rate the caller resolved once for the whole render
-    # (every segment must share it — concat -c copy in Rule 2 requires a uniform
-    # frame rate). When called standalone with no rate, preserve this source's
-    # own rate; fall back to 24 only if it can't be probed.
-    out_rate = rate if rate is not None else (probe_source_fps(source) or "24")
-
     # -t is an *input* option so speed changes and freezes can make the output longer.
     # Clips without sound (B-roll, screen recordings) get silence so every segment concats.
     silence = [] if has_audio else ["-f", "lavfi", "-t", f"{duration:.3f}",
                                     "-i", "anullsrc=r=48000:cl=stereo"]
+    a_in = "0:a:0" if has_audio else "1:a:0"
+    if slices:  # a speed curve: each slice of sound at its own tempo, then joined
+        n = len(slices)
+        parts = [f"[{a_in}]asplit={n}" + "".join(f"[as{i}]" for i in range(n))]
+        for i, (a, b, sp) in enumerate(slices):
+            parts.append(f"[as{i}]atrim={a:.4f}:{b:.4f},asetpts=PTS-STARTPTS,{','.join(atempo_chain(sp))}[at{i}]")
+        parts.append("".join(f"[at{i}]" for i in range(n)) + f"concat=n={n}:v=0:a=1,{af}[aout]")
+        audio_args = ["-filter_complex", ";".join(parts), "-map", "0:v:0", "-map", "[aout]"]
+    else:
+        audio_args = ["-map", "0:v:0", "-map", a_in, "-af", af]
+    image_in = ["-loop", "1", "-framerate", out_rate] if is_image else ["-ss", f"{seg_start:.3f}"]
     cmd = [
         "ffmpeg", "-y",
-        "-ss", f"{seg_start:.3f}", "-t", f"{duration:.3f}",
+        *image_in, "-t", f"{duration:.3f}",
         "-i", str(source),
         *silence,
-        "-map", "0:v:0", "-map", "0:a:0" if has_audio else "1:a:0",
+        *audio_args,
         "-vf", vf,
-        "-af", af,
         "-c:v", "libx264", "-preset", preset, "-crf", crf,
-        "-pix_fmt", "yuv420p", "-r", out_rate,
+        "-pix_fmt", "yuv420p", "-r", out_rate, *(["-frames:v", str(exact)] if exact else []),
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
         "-movflags", "+faststart",
         str(out_path),
     ]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+
+
+def motion_filter(kind: str, play: float, size: tuple[int, int], rate: str) -> str:
+    """Slow camera move over one section (and the classic Ken Burns move for photos)."""
+    W, H = size
+    D = f"{max(0.1, play):.3f}"
+    p = f"min(1,it/{D})"
+    z = {"zoom_in": f"1+0.16*{p}", "zoom_out": f"1.16-0.16*{p}"}.get(kind, "1.16")
+    x = {"pan_left": f"(iw-iw/zoom)*(1-{p})", "pan_right": f"(iw-iw/zoom)*{p}"}.get(kind, "(iw-iw/zoom)/2")
+    y = {"pan_up": f"(ih-ih/zoom)*(1-{p})", "pan_down": f"(ih-ih/zoom)*{p}"}.get(kind, "(ih-ih/zoom)/2")
+    return f"scale={W * 2}:{H * 2},zoompan=z='{z}':x='{x}':y='{y}':d=1:s={W}x{H}:fps={rate},setsar=1"
 
 
 def extract_all_segments(
@@ -441,9 +514,9 @@ def extract_all_segments(
         a, b = ranges[i - 1], ranges[i]
         sa, sb = float(a.get("speed") or 1), float(b.get("speed") or 1)
         a_src = resolve_path(sources[a["source"]], edit_dir)
-        avail_post = 0.0 if (a.get("hold") or a.get("reverse")) else \
+        avail_post = 0.0 if (a.get("hold") or a.get("reverse") or a.get("speed_curve")) else \
             max(0.0, (_duration(a_src) - float(a["end"])) / sa)
-        avail_pre = 0.0 if b.get("reverse") else max(0.0, float(b["start"]) / sb)
+        avail_pre = 0.0 if (b.get("reverse") or b.get("speed_curve")) else max(0.0, float(b["start"]) / sb)
         p_ = min(avail_pre, want / 2)
         q_ = min(avail_post, want / 2)
         p_ = min(avail_pre, want - q_)
@@ -451,7 +524,14 @@ def extract_all_segments(
         pre[i], post[i - 1] = round(p_, 3), round(q_, 3)
         joins.append((TRANSITIONS[kind][0], round(p_ + q_, 3)) if p_ + q_ >= 0.08 else ("cut", 0.0))
 
+    from plan import range_len
+    rate_f, clock = Fraction(out_rate), 0.0
     for i, r in enumerate(ranges):
+        # Whole frames, rounded against the running total: each section's rounding is corrected by
+        # the next, so captions and sound stay in step however many sections there are.
+        length = range_len(r)
+        n_frames = round((clock + length) * rate_f) - round(clock * rate_f) + round((pre[i] + post[i]) * rate_f)
+        clock += length
         src_name = r["source"]
         src_path = resolve_path(sources[src_name], edit_dir)
         speed = float(r.get("speed") or 1.0)
@@ -460,7 +540,9 @@ def extract_all_segments(
         duration = end - start
         out_path = clips_dir / f"seg_{i:02d}_{src_name}.mp4"
 
-        if is_auto:
+        if r.get("grade"):  # a look on just this section
+            seg_filter = resolve_grade_filter(r["grade"])
+        elif is_auto:
             seg_filter, _stats = auto_grade_for_clip(src_path, start=start, duration=duration, verbose=False)
         else:
             seg_filter = resolved
@@ -475,16 +557,31 @@ def extract_all_segments(
             from framing import output_size, reframe_crop, reframe_pad
             out_size = output_size(aspect, draft)
             if out_size:
-                crop = reframe_crop(src_path, start, end, aspect) or reframe_pad(src_path, aspect, *out_size)
+                if r.get("fit") or (edl.get("target") or {}).get("fit"):  # show the whole shot on a canvas
+                    from framing import fit_canvas
+                    crop = fit_canvas(*out_size, r.get("fit") or edl["target"]["fit"], r.get("fill_color") or "#000000")
+                else:
+                    crop = reframe_crop(src_path, start, end, aspect) or reframe_pad(src_path, aspect, *out_size)
 
         note = r.get("beat") or r.get("note") or ""
         print(f"  [{i:02d}] {src_name}  {start:7.2f}-{end:7.2f}  ({duration:5.2f}s)  {note}"
               + (f"  reframe {crop}" if crop else ""))
         if is_auto:
             print(f"        grade: {seg_filter or '(none)'}")
+        fx = {k: r.get(k) for k in ("speed", "hold", "stabilize", "reverse", "speed_curve", "smooth", "flip",
+                                    "rotate", "volume", "motion")}
+        fx["voice_fx"] = r.get("voice_fx") or (edl.get("audio") or {}).get("voice_fx")
+        fx["adjust"] = {**(edl.get("adjust") or {}), **(r.get("adjust") or {})}
+        fx["frames"] = max(1, n_frames)
+        if edl.get("color_match") and "status" in edl:
+            from grade import match_gains
+            fx["gains"] = match_gains(edl, edit_dir, i)
         extract_segment(src_path, start, duration, seg_filter, out_path, preview=preview, draft=draft,
-                        rate=out_rate, crop=crop, out_size=out_size,
-                        fx={k: r.get(k) for k in ("speed", "hold", "stabilize", "reverse")})
+                        rate=out_rate, crop=crop, out_size=out_size, fx=fx)
+        spec = r.get("background") or edl.get("background")
+        if spec and (spec.get("mode") if isinstance(spec, dict) else spec) not in (None, "keep"):
+            from background import replace_background
+            replace_background(out_path, spec, edit_dir, draft)
         seg_paths.append(out_path)
 
     extract_all_segments.joins = joins  # read by main() to pick lossless concat vs transitions
@@ -495,7 +592,10 @@ def extract_all_segments(
 def _duration(p: Path) -> float:
     out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
                           "-of", "default=nw=1:nk=1", str(p)], capture_output=True, text=True)
-    return float(out.stdout.strip() or 0)
+    try:
+        return float(out.stdout.strip() or 0)
+    except ValueError:  # a photo has no duration
+        return 0.0
 
 
 def join_with_transitions(segment_paths: list[Path], joins: list[tuple[str, float]], out_path: Path,
@@ -812,7 +912,8 @@ def build_final_composite(
     # PTS-shift every overlay so its frame 0 lands at start_in_output
     for idx, ov in enumerate(overlays, start=1):
         t = float(ov["start_in_output"])
-        filter_parts.append(f"[{idx}:v]setpts=PTS-STARTPTS+{t}/TB[a{idx}]")
+        extra = f",{ov['vf']}" if ov.get("vf") else ""
+        filter_parts.append(f"[{idx}:v]setpts=PTS-STARTPTS+{t}/TB{extra}[a{idx}]")
 
     # Zooms act on the picture only, before overlays and captions, so text stays put.
     current = "[0:v]"
@@ -827,9 +928,16 @@ def build_final_composite(
         end = t + dur
         next_label = f"[v{idx}]"
         xy = f":x='{ov['x']}':y='{ov['y']}'" if "x" in ov else ""  # e.g. a picture-in-picture B-roll
-        filter_parts.append(
-            f"{current}[a{idx}]overlay=enable='between(t,{t:.3f},{end:.3f})'{xy}{next_label}"
-        )
+        if ov.get("blend"):  # screen, multiply, overlay... over just this window
+            filter_parts.append(
+                f"{current}format=gbrp,split[bb{idx}][bc{idx}];[a{idx}]format=gbrp[bf{idx}];"
+                f"[bb{idx}][bf{idx}]blend=all_mode={ov['blend']}:all_opacity={float(ov.get('opacity', 1)):.2f}:"
+                f"eof_action=pass[bd{idx}];"
+                f"[bc{idx}][bd{idx}]overlay=enable='between(t,{t:.3f},{end:.3f})',format=yuv420p{next_label}")
+        else:
+            filter_parts.append(
+                f"{current}[a{idx}]overlay=enable='between(t,{t:.3f},{end:.3f})':eval=frame{xy}{next_label}"
+            )
         current = next_label
 
     # Subtitles LAST — Rule 1
@@ -967,7 +1075,7 @@ def main() -> None:
         if status is not None and not args.build_subtitles and not edl.get("subtitles"):
             # plan.json: styled captions from the brand kit + plan "captions" (style "none" = off).
             from captions import build_ass, load_brand, settings
-            if settings(edl, load_brand(edit_dir))["style"] != "none":
+            if settings(edl, load_brand(edit_dir))["style"] != "none" or edl.get("texts"):
                 subs_path = edit_dir / "captions.ass"
                 n = build_ass(edl, edit_dir, subs_path)
                 print(f"captions → {subs_path.name} ({n} events)")
@@ -986,6 +1094,7 @@ def main() -> None:
         zoom = zoom_filter(edl, edit_dir, bw, bh, probe_source_fps(base_path) or "30")
         # Effects (and glitch/shake/flash cuts) act on the picture after zooms, before any text.
         from effects import build_broll_overlays, effects_chain
+        edl["_edit_dir"] = str(edit_dir)
         fx = effects_chain(edl, bw, bh)
         if fx:
             zoom = f"{zoom or 'null'}{fx}"
@@ -993,6 +1102,16 @@ def main() -> None:
         if edl.get("broll"):
             overlays = build_broll_overlays(edl, edit_dir, bw, bh, probe_source_fps(base_path) or "30",
                                             args.draft) + overlays
+        # Stickers and emoji (plan "stickers", and captions "emoji": true).
+        from stickers import build_sticker_overlays
+        sticker_ovs = build_sticker_overlays(edl, edit_dir, bw, bh, probe_source_fps(base_path) or "30")
+        # Video fade in/out from black (plan "fade": {"in": 0.5, "out": 1}).
+        fd = edl.get("fade") or {}
+        if fd.get("in") or fd.get("out"):
+            tot = _duration(base_path)
+            bits = [f"fade=t=in:st=0:d={float(fd['in']):.2f}"] if fd.get("in") else []
+            bits += [f"fade=t=out:st={max(0.0, tot - float(fd['out'])):.2f}:d={float(fd['out']):.2f}"] if fd.get("out") else []
+            zoom = f"{zoom or 'null'},{','.join(bits)}"
         # Hook titles (title.py) render as alpha overlays; built here so the rough cut shows them.
         if edl.get("title"):
             from title import build_title_overlay
@@ -1010,6 +1129,7 @@ def main() -> None:
             bar = progress_chain(edl, edit_dir, bw, bh, probe_source_fps(base_path) or "30", total)
             if bar:
                 zoom = f"{zoom or 'null'}{bar}"
+        overlays += sticker_ovs  # on top of graphics, under the captions
     if args.no_loudnorm:
         # Composite directly to final output
         build_final_composite(base_path, overlays, subs_path, out_path, edit_dir, zoom)

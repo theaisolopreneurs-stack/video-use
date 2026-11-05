@@ -131,6 +131,12 @@
     <div class="videos" id="videos"></div>
   </section>
 
+  <div class="tip" id="iconOffer" hidden>
+    <b>Want a shortcut?</b> We can add an <b>AI Video Editor</b> icon to your Desktop and Start menu, so you can open
+    this page with a double-click. It's only a link, and you can delete it any time.
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button onclick="addIcon()">Add it</button><button onclick="hideIcon()">No thanks</button></div>
+  </div>
+
   <div class="tip">
     <b>Want it even better?</b> Open Claude and say <code>improve my <span id="tipName">video</span></code> — Claude picks the best takes,
     rewrites the hook and adds graphics. Then come back here and press <b>Open</b>.
@@ -147,8 +153,8 @@ function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = fals
 const post = async (url, body) => (await fetch(url, { method: "POST", body: JSON.stringify(body || {}) })).json();
 
 let H = null, files = [], preset = "reel";
-const EMOJI = { reel: "📱", justyn: "🔥", youtube: "▶️", tutorial: "🎓", podcast: "🎙️" };
-const FRIENDLY = { reel: "Reel / TikTok / Short", justyn: "Viral talking-head", youtube: "YouTube video", tutorial: "How-to / tutorial", podcast: "Podcast clip" };
+const EMOJI = { viral: "🚀", reel: "📱", justyn: "🔥", youtube: "▶️", tutorial: "🎓", podcast: "🎙️" };
+const FRIENDLY = { viral: "Viral", reel: "Reel / TikTok / Short", justyn: "Viral talking-head", youtube: "YouTube video", tutorial: "How-to / tutorial", podcast: "Podcast clip" };
 const STATUS = { new: "Not edited yet", draft: "Ready to review", plan_approved: "Plan approved", rough_approved: "Ready to export", final: "Finished" };
 
 async function load() {
@@ -171,8 +177,16 @@ async function load() {
       </div></div>`).join("")
     : `<div class="empty">No videos yet. Make your first one above! 👆</div>`;
   if (H.projects[0]) $("tipName").textContent = H.projects[0].name + " video";
+  let hidden = false; try { hidden = localStorage.getItem("hide-shortcut-offer") === "1"; } catch {}
+  $("iconOffer").hidden = H.shortcut || hidden;
 }
 function pickStyle(id) { preset = id; load(); }
+async function addIcon() {
+  const r = await post("/api/shortcut");
+  if (r.ok) { $("iconOffer").hidden = true; toast("Done! Look for AI Video Editor on your Desktop."); }
+  else toast("Sorry, that didn't work. Ask Claude to add the icon for you.");
+}
+function hideIcon() { $("iconOffer").hidden = true; try { localStorage.setItem("hide-shortcut-offer", "1"); } catch {} }
 
 // ---- adding clips ------------------------------------------------------------
 const drop = $("drop"), picker = $("picker");

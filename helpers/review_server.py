@@ -95,6 +95,10 @@ class Studio:
             "effects_kit": __import__("effects").effect_list(),
             "transitions": sorted(__import__("render").TRANSITIONS) + sorted(__import__("effects").CUT_EFFECTS),
             "caption_styles": __import__("captions").style_list(),
+            "caption_groups": __import__("captions").STYLE_GROUPS,
+            "speed_curves": {k: round(planlib.range_len({"start": 0, "end": 1, "speed_curve": k}), 4)
+                             for k in planlib.SPEED_CURVES},
+            "voice_fx": [{"id": k, "label": v[0]} for k, v in __import__("audio").VOICE_FX.items()],
         }
 
     def music_files(self) -> list[Path]:
@@ -135,7 +139,12 @@ class Studio:
                 new_n = {e.get("type") for e in new_fx}
                 changed.append("effects: " + (", ".join(sorted(new_n)) or "none") +
                                (f" (removed {', '.join(sorted(old_n - new_n))})" if old_n - new_n else ""))
-            for field in ("captions", "audio", "title"):
+            for field in ("texts", "stickers"):
+                new_list = body.get(field)
+                if new_list is not None and new_list != (plan.get(field) or []):
+                    settings_changed[field] = new_list
+                    changed.append(f"{field}: {len(new_list)} on screen")
+            for field in ("captions", "audio", "title", "adjust", "beat_sync", "fade", "background"):
                 new = body.get(field)
                 old = plan.get(field) or {}
                 if new is None or new == old:
@@ -398,7 +407,8 @@ def make_handler(app: App):
                 return self.send_file(STUDIO_HTML)
             if lib and url.path == "/api/home":
                 return self.send_json({"library": str(lib.root), "projects": lib.projects(),
-                                       "presets": lib.presets(), "current": studio.edit_dir.parent.name if studio else None})
+                                       "presets": lib.presets(), "current": studio.edit_dir.parent.name if studio else None,
+                                       "shortcut": __import__("shortcut").installed()})
             if lib and url.path == "/project-thumb":
                 p = lib.thumb(q.get("name", [""])[0])
                 return self.send_file(p) if p else self.send_error(404)
@@ -465,6 +475,13 @@ def make_handler(app: App):
             if lib and url.path == "/api/make":
                 return self.send_json({"ok": True, "job": lib.start_make(body["project"], body.get("preset", "reel"),
                                                                          (body.get("title") or "").strip() or None)})
+            if lib and url.path == "/api/shortcut":  # the person clicked "Add it" on the Home screen
+                import shortcut
+                try:
+                    shortcut.create()
+                except (SystemExit, OSError, subprocess.SubprocessError) as e:
+                    return self.send_json({"ok": False, "error": str(e)})
+                return self.send_json({"ok": True})
             if lib and url.path == "/api/open":
                 try:
                     app.open(body["project"])
@@ -532,6 +549,9 @@ def main() -> None:
 
     url = f"http://127.0.0.1:{args.port}/"
     try:
+        # Windows lets two programs share a port when address reuse is on, which would leave two
+        # editors answering at once instead of reopening the running one.
+        ThreadingHTTPServer.allow_reuse_address = os.name != "nt"
         server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(app))
     except OSError:
         # Already running (e.g. the desktop icon was clicked twice): just open it.

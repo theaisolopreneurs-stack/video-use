@@ -170,6 +170,7 @@ def main() -> None:
     ap.add_argument("--name", default=None, help="file name stem (default: project folder name)")
     ap.add_argument("--draft", action="store_true", help="fast low-res exports for testing")
     ap.add_argument("--no-qc", action="store_true")
+    ap.add_argument("--audio", action="store_true", help="also save the finished sound as an .mp3")
     args = ap.parse_args()
 
     plan_path = args.plan.resolve()
@@ -187,6 +188,9 @@ def main() -> None:
         out = out_dir / f"{name}_{aspect.replace(':', 'x')}{'_draft' if args.draft else ''}.mp4"
         print(f"rendering {aspect} → {out.name}", flush=True)
         render_aspect(plan_path, aspect, out, args.draft)
+        if args.audio:
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(out), "-vn", "-q:a", "2",
+                            str(out_dir / f"{name}.mp3")], check=True)
         if not args.no_qc:
             tmp = plan_path.with_name(f"plan.qc_{aspect.replace(':', 'x')}.json")
             planlib.save(tmp, dict(plan, target=dict(plan.get("target") or {}, aspect=aspect)))

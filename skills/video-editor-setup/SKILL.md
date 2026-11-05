@@ -57,14 +57,24 @@ It makes a spoken test clip, transcribes it locally, and cuts the silence. `PASS
 editor is ready. The first run downloads the small Whisper model (~250 MB) and two tiny MediaPipe
 models; nothing else leaves the machine.
 
-## 5. Desktop icon and video library
+## 5. Ask before adding a Desktop icon
 
-```bash
-uv run --project "ROOT" python "ROOT/helpers/shortcut.py"
-```
+**Never add a shortcut without a clear yes.** Things appearing on someone's Desktop can look like
+a virus, especially to a new user. If this is a re-run after an update, skip the question and just
+run `shortcut.py --refresh`: it repairs a shortcut they already have and adds nothing otherwise.
 
-This puts an **AI Video Editor** icon on the Desktop (and Start menu / Applications) and creates
-the video library folder `~/Videos/AI Video Editor/`.
+Otherwise ask, in these words or close to them, and wait for the answer (use the question tool if
+you have one):
+
+> "Would you like a shortcut to open your video editor? It adds an **AI Video Editor** icon to your
+> Desktop and Start menu, so you can open it with a double-click. It's only a link: it doesn't run
+> by itself, and you can delete it any time. If you'd rather not, just ask me to open the editor
+> whenever you want it."
+
+- **Yes:** `uv run --project "ROOT" python "ROOT/helpers/shortcut.py" --yes`
+- **No:** add nothing and don't ask again. Say they can get one later with the button on the Home screen.
+
+The editor creates its own video folder, `~/Videos/AI Video Editor/`, either way.
 
 ## 6. Open it and tell the user
 
@@ -73,5 +83,6 @@ Start the editor in the background (it opens their browser):
 
 - "All set! Your video editor is open in your browser."
 - "Drag your clips in, pick a style, click **Make my video**."
-- "Next time, double-click **AI Video Editor** on your Desktop. Come back here any time to ask
-  me to improve a video."
+- If they said yes to the icon: "Next time, double-click **AI Video Editor** on your Desktop."
+  If they said no: "Next time, just ask me to open the video editor."
+- "Come back here any time to ask me to improve a video."

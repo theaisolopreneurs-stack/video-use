@@ -315,6 +315,31 @@ def apply_grade(input_path: Path, output_path: Path, filter_string: str) -> None
     subprocess.run(cmd, check=True)
 
 
+def match_gains(plan: dict, edit_dir: Path, index: int) -> tuple[float, float, float] | None:
+    """Colour match: RGB gains that bring section `index` close to the first section's colour
+    balance, so clips from different cameras or lighting sit together. None for the first."""
+    from framing import grab
+    import numpy as np
+    cache = plan.setdefault("_match_cache", {})
+
+    def mean(i: int):
+        if i not in cache:
+            r = plan["ranges"][i]
+            p = Path(plan["sources"][r["source"]])
+            p = p if p.is_absolute() else edit_dir / p
+            frames = [grab(p, float(r["start"]) + (float(r["end"]) - float(r["start"])) * f, 240) for f in (0.25, 0.75)]
+            frames = [f for f in frames if f is not None]
+            cache[i] = np.mean([f.reshape(-1, 3).mean(axis=0) for f in frames], axis=0) if frames else None
+        return cache[i]
+    if index == 0:
+        return None
+    a, b = mean(0), mean(index)
+    if a is None or b is None:
+        return None
+    gains = [float(min(1.3, max(0.75, x / max(1.0, y)))) for x, y in zip(a, b)]
+    return tuple(gains)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Apply a color grade via ffmpeg filter chain")
     ap.add_argument("input", type=Path, nargs="?", help="Input video")

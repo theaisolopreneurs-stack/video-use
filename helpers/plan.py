@@ -35,6 +35,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+
+# Speed curves, as in CapCut: (position through the section's footage 0-1, speed there).
+SPEED_CURVES = {
+    "montage": [(0, 3), (.2, 3), (.3, .6), (.5, .6), (.6, 3), (.8, 3), (.9, .6), (1, .6)],
+    "hero": [(0, 2.5), (.35, 2.5), (.45, .3), (.6, .3), (.7, 2.5), (1, 2.5)],
+    "bullet": [(0, 4), (.4, 4), (.48, .25), (.62, .25), (.7, 4), (1, 4)],
+    "jump_cut": [(0, 1), (.45, 1), (.5, 4), (.6, 4), (.65, 1), (1, 1)],
+    "flash_in": [(0, 5), (.5, 5), (.7, 1), (1, 1)],
+    "flash_out": [(0, 1), (.4, 1), (.6, 5), (1, 5)],
+    "ease_in": [(0, .4), (.4, 1), (1, 1.5)],
+}
 STATUSES = ["draft", "plan_approved", "rough_approved", "final"]
 APPROVALS = {"plan": ("draft", "plan_approved"),
              "rough": ("plan_approved", "rough_approved"),
@@ -89,6 +101,8 @@ def validate(plan: dict, edit_dir: Path) -> list[str]:
         if s < 0 or e <= s:
             problems.append(f"{tag}: bad times {s}-{e}")
         dur = durations.get(r["source"])
+        if Path(sources[r["source"]]).suffix.lower() in IMAGE_EXTS:
+            dur = None  # a photo lasts as long as the section says
         if dur is not None and e > dur + 0.05:
             problems.append(f"{tag}: ends at {e:.2f}s but source is {dur:.2f}s")
         if e - s < 0.2:
@@ -96,9 +110,52 @@ def validate(plan: dict, edit_dir: Path) -> list[str]:
     return problems
 
 
+def curve_slices(r: dict, n: int = 16) -> list[tuple[float, float, float]]:
+    """A speed-curved section as (start, end, speed) slices, in seconds from the section start.
+    Neighbouring slices at the same speed are merged."""
+    pts = r.get("speed_curve")
+    pts = SPEED_CURVES.get(pts) if isinstance(pts, str) else pts
+    if not pts or r.get("reverse"):
+        return []
+    dur = float(r["end"]) - float(r["start"])
+    base = float(r.get("speed") or 1.0)
+
+    def at(x: float) -> float:
+        for (x0, s0), (x1, s1) in zip(pts, pts[1:]):
+            if x <= x1:
+                return s0 + (s1 - s0) * (x - x0) / max(1e-6, x1 - x0)
+        return pts[-1][1]
+    out: list[list[float]] = []
+    for i in range(n):
+        a, b = dur * i / n, dur * (i + 1) / n
+        sp = round(max(0.1, at((i + 0.5) / n) * base), 3)
+        if out and out[-1][2] == sp:
+            out[-1][1] = b
+        else:
+            out.append([a, b, sp])
+    return [tuple(x) for x in out]
+
+
+def play_pos(r: dict, t_src: float) -> float:
+    """Seconds from the start of the section at which source second `t_src` plays."""
+    x = max(0.0, t_src - float(r["start"]))
+    slices = curve_slices(r)
+    if not slices:
+        return x / float(r.get("speed") or 1.0)
+    out = 0.0
+    for a, b, sp in slices:
+        if x <= b:
+            return out + (x - a) / sp
+        out += (b - a) / sp
+    return out
+
+
 def range_len(r: dict) -> float:
-    """How long a section plays in the output: source length at its speed, plus any freeze."""
-    return (float(r["end"]) - float(r["start"])) / float(r.get("speed") or 1.0) + float(r.get("hold") or 0.0)
+    """How long a section plays in the output: source length at its speed/curve, plus any freeze."""
+    slices = curve_slices(r)
+    body = (sum((b - a) / sp for a, b, sp in slices) if slices
+            else (float(r["end"]) - float(r["start"])) / float(r.get("speed") or 1.0))
+    return body + float(r.get("hold") or 0.0)
 
 
 def total_duration(plan: dict) -> float:
@@ -128,12 +185,14 @@ def cut_signature(plan: dict) -> list:
              {k: r[k] for k in RANGE_FX if r.get(k)}]
             for r in plan.get("ranges", [])] + [plan.get(k) or {} for k in
                                                 ("captions", "audio", "title", "zooms", "grade", "target",
-                                                 "graphics", "effects", "broll")]
+                                                 "graphics", "effects", "broll", "texts", "stickers",
+                                                 "adjust", "background", "beat_sync", "fade", "color_match")]
 
 
 # Per-section edit options (render.py): speed, freeze at the end, stabilise, reverse,
 # and the transition *into* this section from the previous one.
-RANGE_FX = ("speed", "hold", "stabilize", "reverse", "transition")
+RANGE_FX = ("speed", "hold", "stabilize", "reverse", "transition", "speed_curve", "smooth", "flip", "rotate",
+            "volume", "voice_fx", "motion", "adjust", "grade", "fit", "background", "fill_color")
 
 
 def range_key(r: dict) -> tuple:

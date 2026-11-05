@@ -62,6 +62,7 @@ of Claude editing raw footage (video-use, justyn.ai's viral reel). Forked from
 | 8 | Measured QC; exports (9:16, 4:5, 1:1, 16:9, SRT, chapters, thumbnails) | `helpers/qc.py`, `export.py` |
 | 9 | 5 presets + one-command pipeline | `presets/*.json`, `helpers/make.py` |
 | 10 | 35 recipe looks; caption position (named or x/y); 21 transitions + 3 effect cuts; per-section speed/freeze/stabilize/reverse; 15 effects; multi-video + B-roll; warm UI; plugin | `helpers/looks.py`, `effects.py`, `.claude-plugin/`, `skills/` |
+| 11 | CapCut comparison (`docs/CAPCUT-FEATURES.md`) and everything feasible from it; 76 caption styles with groups; **Best** caption position; **Viral** preset; ask before adding a shortcut; exact section lengths so sync can't drift | `helpers/stickers.py`, `background.py`, `beats.py`, `tts.py`, `presets/viral.json`, `captions.best_spots`, `plan.curve_slices` |
 | Later | 21 Studio colour themes; in-app How-to; **Home screen** (drag clips, pick style, Make my video), library, Export dialog, desktop icon | `helpers/studio/theme.css`, `home.html`, `helpers/library.py`, `shortcut.py` |
 
 **Pipeline:** ingest → `suggest_cuts` → preset/Claude refine `plan.json` → Gate 1 approve plan →
@@ -136,7 +137,9 @@ copy in the app's LocalCache. Neither is used.
 - Studio has no graphics editing or still graphic mockups (ask Claude; deferred until after redesign).
 - Not built: beat sync, moving-face tracking within a section, speed ramps (speed is per section),
   thumbnails with cut-outs, 16:9 long-form testing on real landscape footage, HDR mode (tabled).
-- Home has no delete button; a server started by the icon runs in the background with no quit button.
+- Home has no delete button; a server started by the icon runs in the background with no quit button, and keeps running old code after an update until it's stopped or the computer restarts.
+- CapCut gaps worth doing next: drag-and-drop timeline, photos on the Home screen, vocal isolation (needs a Demucs download), better text-to-speech voices, bundled open-licence fonts for Mac/Linux and a stronger viral look.
+- Many effects at once are slow: every effect processes the whole video (24 hadn't finished after 15 min on a 20 s test; 5 took under a minute).
 - `make.py` applies the preset mechanically; Claude's judgement pass only happens if asked.
 
 ---
@@ -179,4 +182,6 @@ It is not in the Home library (that folder is empty).
 - Each section adds about one frame of length drift; QC tolerance scales with section count.
 - Exports overwrite `edit/base_*`, so QC must run right after each render to get a matching base.
 - A true-peak of -0.9 on drafts is normal (1-pass loudnorm); QC allows 0.15 dB.
+- `framing.person_mask` must copy: MediaPipe's view dangles once its result is freed (crashed Python when a mask was kept between frames).
+- Windows lets two servers share port 8765 if address reuse is on; `review_server.py` turns it off there. Test servers should use `--port`, because the real icon may be running on 8765.
 - Commit on the right branch: Phase 4 once landed on the Phase 3 branch by mistake.

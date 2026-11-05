@@ -242,6 +242,13 @@ Only after both approvals: build animations, grade, mix audio, render full quali
 - **No speaker labels** with free local transcription.
 - **Claude usage:** long footage uses a lot of your plan's allowance; transcripts and contact sheets keep it down.
 
+## Phase 11: CapCut parity, Viral preset, consent
+
+Compared the editor against CapCut's features (`docs/CAPCUT-FEATURES.md`) and built what's possible for
+free and locally. Caption library grew from 13 to 76 styles, with a Best position computed from the face.
+Added the Viral preset and made the desktop shortcut opt-in. Section lengths are now exact whole frames
+rounded against a running total, which removed about a second of drift over a 14-section video.
+
 ## Open items
 
 - Confirm faster-whisper word timestamps on real footage are tight enough for word-by-word captions (try `small.en` if `base.en` drifts).

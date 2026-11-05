@@ -28,6 +28,34 @@ from pathlib import Path
 
 import numpy as np
 
+def adjust_filter(a: dict) -> str:
+    """Manual sliders, like CapCut's Adjust panel. Each value runs -1..1 (0 = untouched), except
+    sharpen / vignette / fade / grain which run 0..1. Empty string when nothing is set."""
+    g = lambda k: float(a.get(k) or 0)  # noqa: E731
+    parts = []
+    if any(g(k) for k in ("brightness", "contrast", "saturation", "exposure")):
+        parts.append(f"eq=brightness={g('brightness') * 0.25:.3f}:contrast={1 + g('contrast') * 0.5:.3f}:"
+                     f"saturation={max(0.0, 1 + g('saturation')):.3f}:gamma={2 ** g('exposure'):.3f}")
+    if g("temperature"):  # + warmer, - cooler
+        parts.append(f"colortemperature=temperature={int(6500 - g('temperature') * 3000)}")
+    if g("tint"):  # + magenta, - green
+        parts.append(f"colorbalance=gm={-g('tint') * 0.3:.3f}")
+    if g("hue"):
+        parts.append(f"hue=h={g('hue') * 180:.1f}")
+    if g("highlights") or g("shadows"):
+        low, high = 0.25 + g("shadows") * 0.15, 0.75 + g("highlights") * 0.15
+        parts.append(f"curves=all='0/0 0.25/{low:.3f} 0.75/{high:.3f} 1/1'")
+    if g("fade"):  # lifted blacks, the matte film look
+        parts.append(f"curves=all='0/{g('fade') * 0.2:.3f} 1/{1 - g('fade') * 0.05:.3f}'")
+    if g("sharpen"):
+        parts.append(f"unsharp=5:5:{g('sharpen') * 1.6:.2f}")
+    if g("vignette"):
+        parts.append(f"vignette=angle={0.25 + g('vignette') * 0.65:.2f}")
+    if g("grain"):
+        parts.append(f"noise=alls={int(g('grain') * 25)}:allf=t+u")
+    return ",".join(parts)
+
+
 GEN_DIR = Path(__file__).resolve().parent.parent / "luts" / "generated"
 N = 25
 

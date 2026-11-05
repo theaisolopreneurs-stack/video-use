@@ -6,7 +6,9 @@ plan.json "captions":
     "captions": {
       "style": "pill",              # see PRESETS: clean, karaoke, pill, hormozi, beast, bold,
                                     # highlight, classic, minimal, neon, typewriter, one_word, stacked, none
-      "position": "bottom",         # top | middle | bottom, or an exact spot {"x": 0.5, "y": 0.3}
+      "position": "best",           # best (picked from where the face is) | top | middle | bottom,
+                                    # or an exact spot {"x": 0.5, "y": 0.3}
+      "emoji": true,                # matching emoji above the words (stickers.py)
       "max_words": 3,               # optional: overrides the style's own words-per-caption
       "uppercase": false,
       "size": 72,                   # px at 1080-wide portrait / 1080-tall landscape
@@ -15,9 +17,9 @@ plan.json "captions":
       "corrections": [{"from": "drive", "to": "derive", "source": "clip", "at": 24.6}]
     }
 
-Styles: 13 presets (PRESETS below) modelled on the caption looks short-form tools ship
-most - word-by-word highlight (karaoke, hormozi, beast, highlight box), clean/bold/minimal,
-boxed (pill, classic bar), neon glow, typewriter, one word at a time, stacked two-liners.
+Styles: PRESETS below, modelled on the caption looks short-form tools ship most: word-by-word
+highlight, boxes and markers, clean and editorial, neon glow, retro 3D and glitch, handwritten,
+and animated entrances. Free text anywhere on screen goes in plan "texts" (see add_texts).
 
 Brand kit lookup: <videos_dir>/brand.json, else <repo>/brand/brand.json.
 
@@ -108,7 +110,7 @@ def norm(t: str) -> str:
 def output_words(plan: dict, edit_dir: Path, corrections: list[dict]) -> list[dict]:
     """Every kept word, re-timed onto the output timeline, with corrections applied.
     Speed-changed sections scale word times; reversed sections get no captions."""
-    from plan import range_len
+    from plan import play_pos, range_len
     words: list[dict] = []
     offset = 0.0
     cache: dict[str, list[dict]] = {}
@@ -136,8 +138,8 @@ def output_words(plan: dict, edit_dir: Path, corrections: list[dict]) -> list[di
                 trail = re.search(r"[^\w']+$", text)
                 text = c["to"] + (trail.group(0) if trail else "")
             words.append({"text": text,
-                          "start": (max(w["start"], s) - s) / speed + offset,
-                          "end": (min(w["end"], e) - s) / speed + offset})
+                          "start": play_pos(r, max(w["start"], s)) + offset,
+                          "end": play_pos(r, min(w["end"], e)) + offset})
         offset += range_len(r)
     return words
 
@@ -198,9 +200,9 @@ def ts(t: float) -> str:
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
 
-def clean_text(w: dict, upper: bool) -> str:
+def clean_text(w: dict, upper: bool, lower: bool = False) -> str:
     t = w["text"].rstrip(",;:.")
-    t = t.upper() if upper else t
+    t = t.upper() if upper else (t.lower() if lower else t)
     return t.replace("{", "(").replace("}", ")")
 
 
@@ -211,6 +213,19 @@ SYSTEM_FONTS = {
     "impact": {"family": "Impact", "bold": False, "file": f"{FONTS_DIR}/impact.ttf"},
     "semibold": {"family": "Segoe UI Semibold", "bold": False, "file": f"{FONTS_DIR}/seguisb.ttf"},
     "mono": {"family": "Consolas", "bold": True, "file": f"{FONTS_DIR}/consolab.ttf"},
+    "franklin": {"family": "Franklin Gothic Medium", "bold": False, "file": f"{FONTS_DIR}/framd.ttf"},
+    "bahn": {"family": "Bahnschrift", "bold": True, "file": f"{FONTS_DIR}/bahnschrift.ttf"},
+    "narrow": {"family": "Arial Narrow", "bold": True, "file": f"{FONTS_DIR}/ARIALNB.TTF"},
+    "tahoma": {"family": "Tahoma", "bold": True, "file": f"{FONTS_DIR}/tahomabd.ttf"},
+    "georgia_i": {"family": "Georgia", "bold": True, "italic": True, "file": f"{FONTS_DIR}/georgiaz.ttf"},
+    "times": {"family": "Times New Roman", "bold": True, "file": f"{FONTS_DIR}/timesbd.ttf"},
+    "constantia": {"family": "Constantia", "bold": True, "file": f"{FONTS_DIR}/constanb.ttf"},
+    "palatino": {"family": "Palatino Linotype", "bold": True, "file": f"{FONTS_DIR}/palab.ttf"},
+    "courier": {"family": "Courier New", "bold": True, "file": f"{FONTS_DIR}/courbd.ttf"},
+    "script": {"family": "Segoe Script", "bold": True, "file": f"{FONTS_DIR}/segoescb.ttf"},
+    "print": {"family": "Segoe Print", "bold": True, "file": f"{FONTS_DIR}/segoeprb.ttf"},
+    "ink": {"family": "Ink Free", "bold": False, "file": f"{FONTS_DIR}/Inkfree.ttf"},
+    "comic": {"family": "Comic Sans MS", "bold": True, "file": f"{FONTS_DIR}/comicbd.ttf"},
 }
 
 # Caption presets, modelled on the styles short-form tools ship most (Submagic, Opus, CapCut).
@@ -261,12 +276,214 @@ PRESETS: dict[str, dict] = {
                     font="sans", size=0.82, max_words=8, lines=2, fill="#FFFFFF",
                     outline=("#000000", 0.08), active=dict(color="accent"), anim="fade"),
 }
+
+# ---- the wider library -------------------------------------------------------------------
+# Extra keys used below:
+#   group: section in the Studio's picker         hollow: outline only, no fill
+#   outline2: (colour, width) second outer ring   extrude: (colour, steps) stacked 3D edge
+#   ghost: [(colour, dx, dy)...] offset copies    reveal: words appear only as they're spoken
+#   progressive: spoken words stay lit            word_cycle: a colour per word
+#   last_big: scale of the cue's last word        spacing: letter spacing (fraction of size)
+#   shadow_xy: (x, y) hard offset shadow          shadow_color: its colour
+#   box_color / box_radius / box_alpha / box_cycle: the box behind the cue
+#   active: {color, scale, bounce, box, radius, underline, cycle, solid}
+RAINBOW = ["#FF4D4D", "#FFB02E", "#FFE135", "#3DDC5A", "#4DB8FF", "#B57BFF"]
+PRESETS.update({
+    # --- viral / word-by-word ---
+    "viral": dict(label="Viral", group="Viral", blurb="Heavy caps, 2-3 words, spoken word pops yellow, key words green.",
+                  font="black", upper=True, size=1.22, max_words=3, fill="#FFFFFF", outline=("#000000", 0.13),
+                  shadow=0.05, active=dict(color="#FFE135", scale=1.1, bounce=True), emph="#3DDC5A", anim="pop"),
+    "viral_green": dict(label="Green pop", group="Viral", blurb="Spoken word in bright green. A short-form staple.",
+                        font="heavy", upper=True, size=1.1, max_words=3, fill="#FFFFFF", outline=("#000000", 0.12),
+                        active=dict(color="#39FF6A", scale=1.12), emph="#FFE135", anim="pop"),
+    "viral_red": dict(label="Red alert", group="Viral", blurb="Spoken word in red. Urgent, news-like energy.",
+                      font="heavy", upper=True, size=1.1, max_words=3, fill="#FFFFFF", outline=("#000000", 0.12),
+                      active=dict(color="#FF3B3B", scale=1.12), emph="#FFE135", anim="pop"),
+    "viral_cyan": dict(label="Electric blue", group="Viral", blurb="Spoken word in electric blue.",
+                       font="heavy", upper=True, size=1.1, max_words=3, fill="#FFFFFF", outline=("#000000", 0.12),
+                       active=dict(color="#22D3FF", scale=1.12), emph="#FFE135", anim="pop"),
+    "viral_purple": dict(label="Purple pop", group="Viral", blurb="Spoken word in vivid purple.",
+                         font="heavy", upper=True, size=1.1, max_words=3, fill="#FFFFFF", outline=("#000000", 0.12),
+                         active=dict(color="#C77DFF", scale=1.12), emph="#FFE135", anim="pop"),
+    "impact_yellow": dict(label="Yellow Impact", group="Viral", blurb="Solid yellow Impact caps with a black edge.",
+                          font="impact", upper=True, size=1.35, max_words=3, fill="#FFE135", outline=("#000000", 0.12),
+                          active=dict(color="#FFFFFF", scale=1.08), emph="#FF4D4D", anim="pop"),
+    "stamp": dict(label="Stamp", group="Viral", blurb="Each caption slams in from huge.",
+                  font="impact", upper=True, size=1.35, max_words=2, fill="#FFFFFF", outline=("#000000", 0.12),
+                  emph="#FFE135", anim="stamp"),
+    "reveal": dict(label="Word reveal", group="Viral", blurb="Words appear only as they're spoken.",
+                   font="black", upper=True, size=1.12, max_words=4, fill="#FFFFFF", outline=("#000000", 0.11),
+                   reveal=True, active=dict(color="#FFFFFF"), emph="#FFE135", anim="none"),
+    "reveal_soft": dict(label="Soft reveal", group="Viral", blurb="Sentence-case words appear as they're spoken.",
+                        font="sans", size=0.95, max_words=6, lines=2, fill="#FFFFFF", shadow=0.06, shadow_alpha=0x50,
+                        reveal=True, active=dict(color="#FFFFFF"), anim="none"),
+    "spotlight": dict(label="Spotlight", group="Viral", blurb="Grey text; only the spoken word lights up white.",
+                      font="black", upper=True, size=1.08, max_words=4, fill="#9A9A9A", outline=("#000000", 0.08),
+                      active=dict(color="#FFFFFF", scale=1.08), anim="pop"),
+    "progress_fill": dict(label="Fill as spoken", group="Viral", blurb="Grey words fill with colour as you say them.",
+                          font="black", upper=True, size=1.05, max_words=4, fill="#A8A8A8", outline=("#000000", 0.08),
+                          progressive=True, active=dict(color="accent"), anim="pop"),
+    "big_finish": dict(label="Big finish", group="Viral", blurb="The last word of each caption lands bigger.",
+                       font="black", upper=True, size=1.05, max_words=3, fill="#FFFFFF", outline=("#000000", 0.11),
+                       last_big=1.3, emph="#FFE135", anim="pop"),
+
+    # --- boxes ---
+    "box_white": dict(label="White box", group="Boxes", blurb="Black text on a white rounded box.",
+                      font="sans", size=0.95, max_words=4, fill="#111111", box="pill", box_color="#FFFFFF", anim="pop"),
+    "box_black": dict(label="Black box", group="Boxes", blurb="White text on a solid black box.",
+                      font="sans", size=0.95, max_words=4, fill="#FFFFFF", box="pill", box_color="#000000", anim="pop"),
+    "box_yellow": dict(label="Yellow box", group="Boxes", blurb="Black on bright yellow. Impossible to miss.",
+                       font="heavy", upper=True, size=0.9, max_words=3, fill="#111111", box="pill",
+                       box_color="#FFE135", box_radius=0.12, anim="pop"),
+    "box_red": dict(label="Red box", group="Boxes", blurb="White on red, breaking-news style.",
+                    font="heavy", upper=True, size=0.9, max_words=3, fill="#FFFFFF", box="pill",
+                    box_color="#E5242A", box_radius=0.12, anim="pop"),
+    "box_glass": dict(label="Glass", group="Boxes", blurb="White text on a see-through dark panel.",
+                      font="semibold", size=0.92, max_words=5, fill="#FFFFFF", box="pill", box_color="#000000",
+                      box_alpha=0x70, anim="fade"),
+    "box_cycle": dict(label="Colour boxes", group="Boxes", blurb="The box changes colour with every caption.",
+                      font="heavy", upper=True, size=0.9, max_words=3, fill="#FFFFFF", box="pill",
+                      box_cycle=["#E5242A", "#2A7BE5", "#1FA85A", "#8B3FD9", "#E58A2A"], box_radius=0.2, anim="pop"),
+    "tape": dict(label="Tape", group="Boxes", blurb="A tilted strip of tape behind the words.",
+                 font="heavy", upper=True, size=0.88, max_words=3, fill="#111111", box="pill", box_color="#FFE9A8",
+                 box_radius=0.02, tilt=True, anim="stamp"),
+    "label_maker": dict(label="Label maker", group="Boxes", blurb="Sharp black strip, typewriter letters.",
+                        font="courier", upper=True, size=0.82, max_words=4, fill="#FFFFFF", box="pill",
+                        box_color="#111111", box_radius=0.0, anim="none"),
+    "highlighter": dict(label="Highlighter", group="Boxes", blurb="A yellow marker swipes each spoken word.",
+                        font="sans", size=1.05, max_words=3, fill="#FFFFFF", outline=("#000000", 0.05),
+                        active=dict(box="#FFE135", color="#111111", radius=0.06), anim="none"),
+    "highlight_red": dict(label="Red marker", group="Boxes", blurb="A red box jumps to each spoken word.",
+                          font="heavy", upper=True, size=0.98, max_words=3, fill="#FFFFFF", outline=("#000000", 0.08),
+                          active=dict(box="#E5242A", color="#FFFFFF"), anim="pop"),
+    "highlight_green": dict(label="Green marker", group="Boxes", blurb="A green box jumps to each spoken word.",
+                            font="heavy", upper=True, size=0.98, max_words=3, fill="#FFFFFF", outline=("#000000", 0.08),
+                            active=dict(box="#1FBF5F", color="#FFFFFF"), anim="pop"),
+    "highlight_pill": dict(label="Round marker", group="Boxes", blurb="A soft round pill follows the spoken word.",
+                           font="sans", size=1.02, max_words=3, fill="#FFFFFF", outline=("#000000", 0.05),
+                           active=dict(box="#7C5CFF", color="#FFFFFF", radius=0.5), anim="none"),
+    "underline": dict(label="Underline", group="Boxes", blurb="A bar slides under each spoken word.",
+                      font="sans", size=1.02, max_words=3, fill="#FFFFFF", shadow=0.05, shadow_alpha=0x50,
+                      active=dict(underline="accent", color="#FFFFFF"), anim="none"),
+
+    # --- clean / premium ---
+    "clean_shadow": dict(label="Soft shadow", group="Clean", blurb="Plain white text with a soft shadow.",
+                         font="semibold", size=0.92, max_words=4, fill="#FFFFFF", shadow=0.05, shadow_alpha=0x50,
+                         blur=True, anim="fade"),
+    "lowercase": dict(label="all lowercase", group="Clean", blurb="Casual, quiet, all lowercase.",
+                      font="semibold", lower=True, size=0.92, max_words=4, fill="#FFFFFF", shadow=0.05,
+                      shadow_alpha=0x50, anim="fade"),
+    "wide": dict(label="Wide spaced", group="Clean", blurb="Thin capitals with airy letter spacing.",
+                 font="semibold", upper=True, size=0.68, max_words=4, spacing=0.14, fill="#FFFFFF", shadow=0.05,
+                 shadow_alpha=0x50, anim="fade"),
+    "tech": dict(label="Tech", group="Clean", blurb="Squared-off modern letters.",
+                 font="bahn", size=1.0, max_words=4, fill="#FFFFFF", outline=("#000000", 0.07), anim="slide_up"),
+    "narrow": dict(label="Tall narrow", group="Clean", blurb="Tall condensed letters; fits more on a line.",
+                   font="narrow", upper=True, size=1.25, max_words=5, fill="#FFFFFF", outline=("#000000", 0.07), anim="fade"),
+    "news": dict(label="News", group="Clean", blurb="Sober, like a TV news subtitle.",
+                 font="franklin", size=0.9, max_words=6, fill="#FFFFFF", plate=("#10243F", 0x18), anim="none"),
+    "subtitle": dict(label="Movie subtitle", group="Clean", blurb="Yellow-white cinema subtitles.",
+                     font="tahoma", size=0.72, max_words=8, lines=2, fill="#FFF7B0", outline=("#000000", 0.08), anim="none"),
+
+    # --- editorial ---
+    "editorial": dict(label="Editorial", group="Editorial", blurb="Elegant italic serif, magazine style.",
+                      font="georgia_i", size=1.05, max_words=4, fill="#FFFFFF", shadow=0.05, shadow_alpha=0x50, anim="fade"),
+    "editorial_mix": dict(label="Serif pop", group="Editorial", blurb="Clean sans with key words in italic serif.",
+                          font="sans", size=1.0, max_words=4, fill="#FFFFFF", shadow=0.05, shadow_alpha=0x50,
+                          emph_serif=True, anim="fade"),
+    "classic_serif": dict(label="Classic serif", group="Editorial", blurb="Timeless bold serif.",
+                          font="times", size=1.1, max_words=4, fill="#FFFFFF", outline=("#000000", 0.06), anim="fade"),
+    "luxury": dict(label="Luxury", group="Editorial", blurb="Gold spaced capitals on dark footage.",
+                   font="constantia", upper=True, size=0.72, max_words=4, spacing=0.16, fill="#E9CF8E", shadow=0.05,
+                   shadow_alpha=0x40, anim="fade"),
+    "storybook": dict(label="Storybook", group="Editorial", blurb="Warm serif for narrated stories.",
+                      font="palatino", size=0.95, max_words=6, lines=2, fill="#FFF3DC", shadow=0.05, shadow_alpha=0x50, anim="fade"),
+
+    # --- glow ---
+    "neon_pink": dict(label="Neon pink", group="Glow", blurb="Hot pink glowing tube.",
+                      font="sans", size=1.05, max_words=3, fill="#FFFFFF", glow="#FF2BD6", emph="#FFF6D6", anim="pop"),
+    "neon_blue": dict(label="Neon blue", group="Glow", blurb="Cold blue glowing tube.",
+                      font="sans", size=1.05, max_words=3, fill="#FFFFFF", glow="#1EA7FF", emph="#FFF6D6", anim="pop"),
+    "neon_green": dict(label="Neon green", group="Glow", blurb="Toxic green glow.",
+                       font="sans", size=1.05, max_words=3, fill="#FFFFFF", glow="#2BFF88", emph="#FFF6D6", anim="pop"),
+    "neon_script": dict(label="Neon sign", group="Glow", blurb="Handwritten neon sign.",
+                        font="script", size=1.25, max_words=3, fill="#FFFFFF", glow="#FF2F6E", emph="#FFF6D6", anim="blur_in"),
+    "fire": dict(label="Fire", group="Glow", blurb="Orange-hot glow behind heavy caps.",
+                 font="heavy", upper=True, size=1.05, max_words=3, fill="#FFF2B0", glow="#FF5A00", anim="pop"),
+    "ice": dict(label="Ice", group="Glow", blurb="Frosty blue-white glow.",
+                font="heavy", upper=True, size=1.05, max_words=3, fill="#F0FBFF", glow="#1E90FF", emph="#FFFFFF", anim="fade"),
+
+    # --- retro ---
+    "retro_3d": dict(label="Retro 3D", group="Retro", blurb="Chunky stacked 3D letters.",
+                     font="heavy", upper=True, size=1.08, max_words=3, fill="#FFE135", outline=("#000000", 0.03),
+                     extrude=("#E5242A", 7), anim="pop"),
+    "synthwave": dict(label="Synthwave", group="Retro", blurb="80s pink and cyan offset.",
+                      font="heavy", upper=True, size=1.05, max_words=3, fill="#FFFFFF",
+                      ghost=[("#FF2BD6", -0.07, 0.045), ("#22D3FF", 0.07, -0.045)], emph="#FFFFFF", anim="pop"),
+    "glitch": dict(label="Glitch", group="Retro", blurb="Red and cyan broken-signal text.",
+                   font="heavy", upper=True, size=1.05, max_words=3, fill="#FFFFFF",
+                   ghost=[("#FF0044", -0.055, 0.0), ("#00F0FF", 0.055, 0.0)], emph="#FFFFFF", tilt=True, anim="stamp"),
+    "vhs": dict(label="VHS", group="Retro", blurb="Camcorder on-screen-display letters.",
+                font="courier", upper=True, size=0.95, max_words=4, fill="#FFFFFF", shadow=0.04, shadow_alpha=0x20,
+                ghost=[("#00F0FF", 0.018, 0.0)], anim="none"),
+    "arcade": dict(label="Arcade", group="Retro", blurb="Hard black shadow, video-game colours.",
+                   font="mono", upper=True, size=0.98, max_words=3, fill="#39FF6A", shadow=0.1, shadow_xy=(0.09, 0.09),
+                   shadow_alpha=0x00, emph="#FFE135", anim="none"),
+    "pop_art": dict(label="Pop art", group="Retro", blurb="Comic-book colours and a hard offset shadow.",
+                    font="impact", upper=True, size=1.25, max_words=2, fill="#FFE135", outline=("#000000", 0.07),
+                    shadow=0.1, shadow_xy=(0.1, 0.1), shadow_color="#E5242A", shadow_alpha=0x00, tilt=True, anim="stamp"),
+    "double_outline": dict(label="Sticker", group="Retro", blurb="White ring and dark ring, like a die-cut sticker.",
+                           font="heavy", upper=True, size=0.98, max_words=3, fill="#111111", outline=("#FFFFFF", 0.14),
+                           outline2=("#000000", 0.2), emph="#E5242A", anim="pop"),
+    "outline_only": dict(label="Outline", group="Retro", blurb="Hollow letters; the footage shows through.",
+                         font="heavy", upper=True, size=1.22, max_words=2, fill="#FFFFFF", outline=("#FFFFFF", 0.035),
+                         hollow=True, active=dict(color="#FFFFFF", solid=True), anim="none"),
+
+    # --- fun / handwritten ---
+    "handwritten": dict(label="Handwritten", group="Fun", blurb="Neat pen handwriting.",
+                        font="print", size=1.05, max_words=4, fill="#FFFFFF", outline=("#000000", 0.06), emph="#FFE135", anim="fade"),
+    "marker": dict(label="Marker", group="Fun", blurb="Loose felt-tip letters.",
+                   font="ink", size=1.35, max_words=4, fill="#FFFFFF", outline=("#000000", 0.04), shadow=0.05, emph="#FFE135", anim="pop"),
+    "script": dict(label="Script", group="Fun", blurb="Flowing cursive.",
+                   font="script", size=1.15, max_words=4, fill="#FFFFFF", outline=("#000000", 0.04), shadow=0.05, emph="#FFE135", anim="fade"),
+    "comic": dict(label="Comic", group="Fun", blurb="Friendly comic letters.",
+                  font="comic", size=1.0, max_words=3, fill="#FFFFFF", outline=("#000000", 0.1), emph="#FFE135", anim="pop"),
+    "rainbow": dict(label="Rainbow", group="Fun", blurb="Every word a different colour.",
+                    font="heavy", upper=True, size=1.05, max_words=3, fill="#FFFFFF", outline=("#000000", 0.11),
+                    word_cycle=RAINBOW, anim="pop"),
+    "party": dict(label="Party", group="Fun", blurb="Bouncy, tilted, a new colour each spoken word.",
+                  font="impact", upper=True, size=1.3, max_words=2, fill="#FFFFFF", outline=("#000000", 0.13),
+                  active=dict(cycle=RAINBOW, bounce=True), tilt=True, anim="pop"),
+    "wobble": dict(label="Wobble", group="Fun", blurb="Captions land with a little wobble.",
+                   font="heavy", upper=True, size=1.05, max_words=3, fill="#FFFFFF", outline=("#000000", 0.11), anim="wobble"),
+    "drop_in": dict(label="Drop in", group="Fun", blurb="Each caption drops in from above.",
+                    font="black", size=1.08, max_words=3, fill="#FFFFFF", outline=("#000000", 0.09), anim="drop"),
+    "slide_up": dict(label="Slide up", group="Fun", blurb="Each caption glides up into place.",
+                     font="sans", size=1.0, max_words=4, fill="#FFFFFF", outline=("#000000", 0.08), anim="slide_up"),
+    "zoom_in": dict(label="Zoom in", group="Fun", blurb="Each caption rushes in from big to normal.",
+                    font="black", upper=True, size=1.08, max_words=3, fill="#FFFFFF", outline=("#000000", 0.09), anim="zoom_in"),
+    "flip_in": dict(label="Flip in", group="Fun", blurb="Each caption flips round to face you.",
+                    font="heavy", upper=True, size=1.02, max_words=3, fill="#FFFFFF", outline=("#000000", 0.09), anim="flip"),
+    "spin_in": dict(label="Spin in", group="Fun", blurb="Each caption twists into place.",
+                    font="heavy", upper=True, size=1.02, max_words=3, fill="#FFFFFF", outline=("#000000", 0.09), anim="spin_in"),
+})
+for _k, _g in {"clean": "Clean", "karaoke": "Viral", "pill": "Boxes", "hormozi": "Viral", "beast": "Viral", "bold": "Clean",
+               "highlight": "Boxes", "classic": "Boxes", "minimal": "Clean", "neon": "Glow", "typewriter": "Retro",
+               "one_word": "Viral", "stacked": "Clean"}.items():
+    PRESETS[_k]["group"] = _g
+STYLE_GROUPS = ["Viral", "Clean", "Boxes", "Editorial", "Glow", "Retro", "Fun"]
 STYLES = tuple(PRESETS) + ("none",)
 
 
+def strip_colors(text: str) -> str:
+    """Remove colour tags, so a copy of the line can be drawn entirely in one colour."""
+    return re.sub(r"\\1?c&H[0-9A-Fa-f]+&", "", text)
+
+
 def style_list() -> list[dict]:
-    """For UIs: id, label, one-line description of every style."""
-    return [{"id": k, "label": p["label"], "blurb": p["blurb"]} for k, p in PRESETS.items()]
+    """For UIs: id, label, group, one-line description of every style."""
+    return [{"id": k, "label": p["label"], "blurb": p["blurb"], "group": p.get("group", "Clean")}
+            for k, p in PRESETS.items()]
 
 
 class Writer:
@@ -288,10 +505,28 @@ class Writer:
         unit = W / 1080 if H > W else H / 1080
         self.size = int(s["size"] * self.p.get("size", 1.0) * unit)
         self.upper = self.p["upper"] if "upper" in self.p else bool(s["uppercase"])
+        self.lower = bool(self.p.get("lower"))
         fx, fy = caption_xy(s["position"], W, H)
         self.x, self.y = int(W * fx), int(H * fy)
         self.events: list[str] = []
         self.n_cue = 0
+        self.spots: list[tuple[float, float, float]] = []  # position "best": (from, to, y)
+        self.fs_tag = ""
+
+    def prepare_spots(self, plan: dict, edit_dir: Path) -> None:
+        if self.s["position"] == "best":
+            self.spots = best_spots(plan, edit_dir, self.W, self.H, self.size * 1.35 * self.p.get("lines", 1))
+            # In 9:16 the apps' like/comment buttons run down the right edge, so sit a little left.
+            self.x = int(self.W * (0.47 if self.H / self.W > 1.5 else 0.5))
+
+    def y_at(self, t: float) -> int:
+        for a, b, fy in self.spots:
+            if a <= t < b:
+                return int(self.H * fy)
+        return int(self.H * self.spots[-1][2]) if self.spots else self.y
+
+    def txt(self, w: dict) -> str:
+        return clean_text(w, self.upper, self.lower)
 
     def c(self, name_or_hex: str, alpha: int = 0) -> str:
         return ass_color(self.col.get(name_or_hex, name_or_hex), alpha)
@@ -311,6 +546,9 @@ class Writer:
         back = self.c("#000000", p.get("shadow_alpha", 0x40))
         fill = self.c(p["fill"])
         pc = self.col["primary"]
+        spacing = round(self.size * p.get("spacing", 0), 1)
+        if p.get("shadow_color"):
+            back = self.c(p["shadow_color"], p.get("shadow_alpha", 0))
         return "\n".join([
             "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {self.W}", f"PlayResY: {self.H}",
             "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
@@ -319,7 +557,7 @@ class Writer:
             "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
             "Alignment, MarginL, MarginR, MarginV, Encoding",
             f"Style: Cap,{font['family']},{self.size},{fill},{fill},{outline_c},{back},{bold},{italic},0,0,"
-            f"100,100,0,0,{border},{outline_w},{shadow_w},5,40,40,0,1",
+            f"100,100,{spacing},0,{border},{outline_w},{shadow_w},5,40,40,0,1",
             f"Style: Box,{font['family']},{self.size},{ass_color(pc, 0x10)},{ass_color(pc)},{ass_color(pc)},"
             f"{ass_color('#000000', 0xB0)},0,0,0,0,100,100,0,0,1,0,{max(2, self.size // 20)},5,0,0,0,1",
             "", "[Events]",
@@ -333,36 +571,59 @@ class Writer:
         if not w.get("emph"):
             return "", "", 1.0, self.font
         base = self.c(self.p["fill"])
-        if self.s["emphasis_look"] == "serif":
+        if self.s["emphasis_look"] == "serif" or self.p.get("emph_serif"):
             sf = self.fonts["serif"]
             return (f"{{\\fn{sf['family']}\\i1\\fscx115\\fscy115}}",
                     f"{{\\fn{self.font['family']}\\i0\\fscx100\\fscy100}}", 1.15, sf)
         cycle = self.p.get("emph_cycle")
-        colour = cycle[(int(w["emph"]) - 1) % len(cycle)] if cycle else self.p.get("emph", "accent")
+        default = self.p["fill"] if self.p.get("box_color") or self.p.get("box_cycle") else "accent"
+        colour = cycle[(int(w["emph"]) - 1) % len(cycle)] if cycle else self.p.get("emph", default)
         return (f"{{\\c{self.c(colour)}\\fscx118\\fscy118}}",
                 f"{{\\c{base}\\fscx100\\fscy100}}", 1.18, self.font)
 
     def word_text(self, w: dict, active: bool, since_ms: int = 0) -> str:
         pre, post, _, _ = self.emph_look(w)
         a = self.p.get("active") or {}
+        base = self.c(self.p["fill"])
+        wc = self.p.get("word_cycle")
+        if wc and not w.get("emph"):
+            pre = f"{{\\c{self.c(wc[int(w.get('idx', 0)) % len(wc)])}}}"
+            post = f"{{\\c{base}}}"
         if active and a and not a.get("box"):
-            colour = self.c(a.get("color", "accent"))
+            cyc = a.get("cycle")
+            colour = self.c(cyc[int(w.get("idx", 0)) % len(cyc)] if cyc else a.get("color", "accent"))
             scale = int(100 * a.get("scale", 1.0))
-            base = self.c(self.p["fill"])
-            if a.get("bounce"):
+            if a.get("solid"):  # a hollow style fills in the spoken word
+                pre = f"{{\\1a&H00&\\c{colour}}}"
+                post = "{\\1a&HFF&}"
+            elif a.get("bounce"):
                 pre = f"{{\\c{colour}\\fscx128\\fscy128\\t(0,140,\\fscx108\\fscy108)}}"
                 post = f"{{\\c{base}\\fscx100\\fscy100}}"
             elif not w.get("emph"):
                 pre = f"{{\\c{colour}\\fscx{scale}\\fscy{scale}}}"
                 post = f"{{\\c{base}\\fscx100\\fscy100}}"
+            elif w.get("emph") and a.get("color") and not self.p.get("emph"):
+                pass
         elif active and a.get("box"):
             # Box text colour goes last so it beats an emphasis colour (else the word vanishes).
             pre = pre + f"{{\\c{self.c(a.get('color', '#111111'))}\\bord0\\shad0}}"
             post = post + f"{{\\c{self.c(self.p['fill'])}\\bord{round(self.size * (self.p.get('outline') or ('', 0))[1], 1)}}}"
-        return pre + clean_text(w, self.upper) + post
+        return pre + self.txt(w) + post
 
     def line(self, cue: list[dict], active: int | None = None) -> str:
-        parts = [self.word_text(w, i == active) for i, w in enumerate(cue)]
+        p = self.p
+        parts = []
+        hide = "{\\1a&HFF&\\3a&HFF&\\4a&HFF&}"
+        show = f"{{\\1a&H00&\\3a&H00&\\4a&H{p.get('shadow_alpha', 0x40):02X}&}}"
+        for i, w in enumerate(cue):
+            lit = i == active or bool(p.get("progressive") and active is not None and i < active)
+            t = self.word_text(w, lit)
+            if p.get("last_big") and i == len(cue) - 1 and len(cue) > 1:
+                k = int(100 * p["last_big"])
+                t = f"{{\\fscx{k}\\fscy{k}}}{t}{{\\fscx100\\fscy100}}"
+            if p.get("reveal") and active is not None and i > active:
+                t = hide + t + show  # keeps its space on the line, so the words don't shift
+            parts.append(t)
         if self.p.get("lines", 1) == 2 and len(parts) > 3:
             half = (len(parts) + 1) // 2
             return " ".join(parts[:half]) + "\\N" + " ".join(parts[half:])
@@ -384,7 +645,9 @@ class Writer:
         out = []
         for w in cue:
             _, _, scale, font = self.emph_look(w)
-            out.append(self._measure(font, self.size * scale, clean_text(w, self.upper)))
+            t = self.txt(w)
+            sp = self.size * self.p.get("spacing", 0) * len(t)
+            out.append(self._measure(font, self.size * scale, t) + sp)
         return out, self._measure(self.font, self.size, " ")
 
     def add(self, layer: int, a: float, b: float, style: str, text: str) -> None:
@@ -394,6 +657,15 @@ class Writer:
 
     def cue(self, cue: list[dict], end: float) -> None:
         self.n_cue += 1
+        # A long line shrinks to fit: inside the frame always, clear of the apps' side buttons in "best".
+        full, self.fs_tag = self.size, ""
+        ws, sp = self.widths(cue)
+        lines = 2 if self.p.get("lines", 1) == 2 and len(cue) > 3 else 1
+        width = (sum(ws) + sp * (len(ws) - 1)) / lines + self.size * 0.9
+        limit = self.W * (0.76 if self.spots and self.H / self.W > 1.5 else 0.94)
+        if width > limit:
+            self.size = max(12, int(self.size * limit / width))
+            self.fs_tag = f"\\fs{self.size}"
         if self.p.get("active"):
             for i, w in enumerate(cue):
                 a = cue[0]["start"] if i == 0 else w["start"]
@@ -401,6 +673,7 @@ class Writer:
                 self.emit(cue, a, b, active=i, first=(i == 0))
         else:
             self.emit(cue, cue[0]["start"], end, active=None, first=True)
+        self.size = full
 
     def emit(self, cue: list[dict], a: float, b: float, active: int | None, first: bool) -> None:
         p = self.p
@@ -409,13 +682,30 @@ class Writer:
         half = (sum(ws_all) + sp_all * (len(ws_all) - 1)) / (2 if p.get("lines", 1) == 1 or len(cue) <= 3 else 4)
         half += self.size * 0.6
         cx_line = int(min(max(self.x, half), self.W - half)) if half * 2 < self.W else self.W // 2
-        cy_line = int(min(max(self.y, self.size * 1.2), self.H - self.size * 1.2))
-        pos = f"\\an5\\pos({cx_line},{cy_line})"
+        base_y = self.y_at(a) if self.spots else self.y
+        cy_line = int(min(max(base_y, self.size * 1.2), self.H - self.size * 1.2))
+        pos = f"\\an5\\pos({cx_line},{cy_line}){self.fs_tag}"
         anim = ""
-        if first and p["anim"] == "pop":
+        kind = p["anim"] if first else ""
+        if kind == "pop":
             anim = "\\fscx90\\fscy90\\t(0,90,\\fscx100\\fscy100)"
-        elif first and p["anim"] == "fade":
+        elif kind == "fade":
             anim = "\\fad(120,0)"
+        elif kind == "stamp":
+            anim = "\\fscx210\\fscy210\\t(0,80,\\fscx100\\fscy100)"
+        elif kind == "zoom_in":
+            anim = "\\fscx160\\fscy160\\t(0,140,\\fscx100\\fscy100)"
+        elif kind == "blur_in":
+            anim = "\\blur14\\t(0,180,\\blur0)"
+        elif kind == "spin_in":
+            anim = "\\frz-14\\fscx85\\fscy85\\t(0,140,\\frz0\\fscx100\\fscy100)"
+        elif kind == "flip":
+            anim = "\\fry85\\t(0,170,\\fry0)"
+        elif kind == "wobble":
+            anim = "\\frz-5\\t(0,90,\\frz4)\\t(90,190,\\frz-2)\\t(190,280,\\frz0)"
+        elif kind in ("slide_up", "drop"):
+            off = int(self.size * (0.7 if kind == "slide_up" else -1.3))
+            pos = f"\\an5\\move({cx_line},{cy_line + off},{cx_line},{cy_line},0,{130 if kind == 'slide_up' else 170}){self.fs_tag}"
         if p.get("tilt"):
             anim += f"\\frz{(-2.5, 2.0, -1.5, 2.5)[self.n_cue % 4]}"
         if p.get("blur"):
@@ -425,23 +715,34 @@ class Writer:
             ws, sp = self.widths(cue)
             bw = sum(ws) + sp * (len(ws) - 1) + self.size * 0.9
             bh = self.size * 1.25 + self.size * 0.34
-            r = min(bh / 2, self.size * 0.35)
-            self.add(0, a, b, "Box", f"{{{pos}{anim}\\p1}}{rounded_rect(bw, bh, r)}{{\\p0}}")
+            r = min(bh / 2, self.size * p.get("box_radius", 0.35))
+            cyc = p.get("box_cycle")
+            bc = cyc[self.n_cue % len(cyc)] if cyc else p.get("box_color")
+            tag = (f"\\1c{ass_color(self.col.get(bc, bc))}" if bc else "") + \
+                  (f"\\1a&H{p['box_alpha']:02X}&" if p.get("box_alpha") else "")
+            self.add(0, a, b, "Box", f"{{{pos}{anim}{tag}\\p1}}{rounded_rect(bw, bh, r)}{{\\p0}}")
 
-        if active is not None and (p.get("active") or {}).get("box"):
+        act = p.get("active") or {}
+        if active is not None and (act.get("box") or act.get("underline")):
             # Place every word ourselves so the box and its word share exact coordinates
             # (libass word spacing differs slightly from PIL's, which would misalign the box).
             ws, sp = self.widths(cue)
             sp += self.size * 0.12  # room for the box padding between words
             x = cx_line - (sum(ws) + sp * (len(ws) - 1)) / 2
-            colour = self.col.get(p["active"]["box"], p["active"]["box"])
+            key = act.get("box") or act.get("underline")
+            colour = self.col.get(key, key)
             for j, w in enumerate(cue):
                 cx = x + ws[j] / 2
-                if j == active:
+                if j == active and act.get("box"):
                     bw, bh = ws[j] + self.size * 0.36, self.size * 1.22
+                    r = min(bh / 2, self.size * act.get("radius", 0.22))
                     self.add(0, a, b, "Box", f"{{\\an5\\pos({cx:.0f},{cy_line}){anim}\\1c{ass_color(colour)}"
-                                             f"\\shad0\\p1}}{rounded_rect(bw, bh, self.size * 0.22)}{{\\p0}}")
-                self.add(1, a, b, "Cap", f"{{\\an5\\pos({cx:.0f},{cy_line}){anim}}}" + self.word_text(w, j == active))
+                                             f"\\shad0\\p1}}{rounded_rect(bw, bh, r)}{{\\p0}}")
+                elif j == active:
+                    bw, bh = ws[j], max(4, self.size * 0.11)
+                    self.add(0, a, b, "Box", f"{{\\an5\\pos({cx:.0f},{cy_line + self.size * 0.62:.0f})\\1c{ass_color(colour)}"
+                                             f"\\shad0\\p1}}{rounded_rect(bw, bh, bh / 2)}{{\\p0}}")
+                self.add(1, a, b, "Cap", f"{{\\an5\\pos({cx:.0f},{cy_line}){self.fs_tag}{anim}}}" + self.word_text(w, j == active))
                 x += ws[j] + sp
             return
 
@@ -453,8 +754,29 @@ class Writer:
         elif p["anim"] == "type":
             text = f"{{{pos}}}" + self.typed(cue, a)
         else:
-            text = f"{{{pos}{anim}}}" + self.line(cue, active)
+            line = self.line(cue, active)
+            self.under_layers(line, a, b, cx_line, cy_line, anim)
+            extra = "\\1a&HFF&" if p.get("hollow") else ""
+            if p.get("shadow_xy"):
+                extra += f"\\xshad{self.size * p['shadow_xy'][0]:.0f}\\yshad{self.size * p['shadow_xy'][1]:.0f}"
+            text = f"{{{pos}{anim}{extra}}}" + line
         self.add(1, a, b, "Cap", text)
+
+    def under_layers(self, line: str, a: float, b: float, x: int, y: int, anim: str) -> None:
+        """Copies of the line under the real one: a second outline, a 3D edge, offset ghosts."""
+        p = self.p
+        plain = strip_colors(line)
+        at = lambda dx, dy: f"\\an5\\pos({x + dx:.0f},{y + dy:.0f}){self.fs_tag}{anim}"  # noqa: E731
+        if p.get("outline2"):
+            col, w = p["outline2"]
+            self.add(0, a, b, "Cap", f"{{{at(0, 0)}\\3c{self.c(col)}\\bord{self.size * w:.1f}\\shad0}}" + plain)
+        if p.get("extrude"):
+            col, steps = p["extrude"]
+            step = max(1.0, self.size * 0.013)
+            for k in range(steps, 0, -1):
+                self.add(0, a, b, "Cap", f"{{{at(k * step, k * step)}\\c{self.c(col)}\\3c{self.c(col)}\\shad0}}" + plain)
+        for col, dx, dy in p.get("ghost") or []:
+            self.add(0, a, b, "Cap", f"{{{at(self.size * dx, self.size * dy)}\\c{self.c(col)}\\bord0\\shad0}}" + plain)
 
     def typed(self, cue: list[dict], a: float) -> str:
         """Each letter starts invisible and appears as its word is spoken."""
@@ -462,13 +784,85 @@ class Writer:
         for i, w in enumerate(cue):
             t0 = max(0.0, w["start"] - a)
             t1 = max(t0 + 0.05, w["end"] - a)
-            chars = clean_text(w, self.upper)
+            chars = self.txt(w)
             for k, ch in enumerate(chars):
                 ms = int(1000 * (t0 + (t1 - t0) * k / max(1, len(chars))))
                 out.append(f"{{\\alpha&HFF&\\t({ms},{ms + 1},\\alpha&H00&)}}{ch}")
             if i < len(cue) - 1:
                 out.append(" ")
         return "".join(out)
+
+    def add_texts(self, items: list[dict]) -> None:
+        """Free text, CapCut's Text tool. plan "texts": [{"text": "SALE", "start_in_output": 2, "duration": 3,
+        "x": 0.5, "y": 0.2, "size": 90, "font": "heavy", "color": "#FFFFFF", "outline": "#000000",
+        "box": "#E5242A", "anim": "pop", "anim_out": "fade", "loop": "pulse"}]
+        anim: fade pop stamp zoom_in blur_in spin_in flip wobble slide_up slide_down slide_left slide_right
+        drop type; anim_out: fade slide_up slide_down zoom_out; loop: pulse float wiggle blink."""
+        unit = self.W / 1080 if self.H > self.W else self.H / 1080
+        for t in items:
+            if not t.get("text"):
+                continue
+            a = float(t.get("start_in_output", 0))
+            d = float(t.get("duration", 3))
+            ms = int(d * 1000)
+            x, y = int(self.W * float(t.get("x", 0.5))), int(self.H * float(t.get("y", 0.2)))
+            size = int(float(t.get("size", 90)) * unit)
+            font = self.fonts.get(t.get("font", "heavy"), self.fonts["heavy"])
+            kind, out_kind, loop = t.get("anim", "pop"), t.get("anim_out"), t.get("loop")
+            off = int(size * 0.9)
+            start = {"slide_up": (x, y + off), "slide_down": (x, y - off), "slide_left": (x + off * 2, y),
+                     "slide_right": (x - off * 2, y), "drop": (x, y - off * 2)}.get(kind)
+            end = {"slide_up": (x, y - off), "slide_down": (x, y + off)}.get(out_kind)
+            if start:
+                place = f"\\move({start[0]},{start[1]},{x},{y},0,180)"
+            elif end:
+                place = f"\\move({x},{y},{end[0]},{end[1]},{ms - 180},{ms})"
+            else:
+                place = f"\\pos({x},{y})"
+            tags = {"pop": "\\fscx70\\fscy70\\t(0,110,\\fscx100\\fscy100)",
+                    "stamp": "\\fscx210\\fscy210\\t(0,80,\\fscx100\\fscy100)",
+                    "zoom_in": "\\fscx160\\fscy160\\t(0,160,\\fscx100\\fscy100)",
+                    "blur_in": "\\blur14\\t(0,200,\\blur0)",
+                    "spin_in": "\\frz-20\\t(0,170,\\frz0)",
+                    "flip": "\\fry85\\t(0,190,\\fry0)",
+                    "wobble": "\\frz-6\\t(0,100,\\frz5)\\t(100,210,\\frz-2)\\t(210,300,\\frz0)"}.get(kind, "")
+            fade_in = 150 if kind == "fade" else 0
+            fade_out = 180 if out_kind == "fade" else 0
+            if fade_in or fade_out:
+                tags += f"\\fad({fade_in},{fade_out})"
+            if out_kind == "zoom_out":
+                tags += f"\\t({ms - 160},{ms},\\fscx10\\fscy10\\alpha&HFF&)"
+            if loop in ("pulse", "wiggle", "float", "blink"):
+                step, i = 500, 0
+                while (i + 1) * step < ms:
+                    u = i * step
+                    v = (i + 1) * step
+                    up = i % 2 == 0
+                    tags += {"pulse": f"\\t({u},{v},\\fscx{108 if up else 100}\\fscy{108 if up else 100})",
+                             "wiggle": f"\\t({u},{v},\\frz{4 if up else -4})",
+                             "float": f"\\t({u},{v},\\fry{10 if up else -10})",
+                             "blink": f"\\t({u},{v},\\alpha&H{'70' if up else '00'}&)"}[loop]
+                    i += 1
+            col = self.c(t.get("color", "#FFFFFF"))
+            oc = self.c(t.get("outline", "#000000"))
+            bord = 0 if t.get("box") else max(2, int(size * float(t.get("outline_width", 0.09))))
+            base = (f"\\an5{place}\\fn{font['family']}\\fs{size}\\b{1 if font.get('bold') else 0}"
+                    f"\\i{1 if font.get('italic') else 0}\\c{col}\\3c{oc}\\bord{bord}\\shad0{tags}")
+            words = str(t["text"]).replace("{", "(").replace("}", ")")
+            shown = words.upper() if t.get("uppercase") else words
+            if t.get("box"):
+                lines = shown.split("\\N")
+                bw = max(self._measure(font, size, ln) for ln in lines) + size * 0.9
+                bh = size * (1.3 * len(lines) + 0.3)
+                self.add(2, a, a + d, "Box", f"{{\\an5{place}{tags}\\1c{self.c(t['box'])}\\shad0\\p1}}"
+                                             f"{rounded_rect(bw, bh, size * 0.2)}{{\\p0}}")
+            if kind == "type":
+                n = max(1, len(shown))
+                body = "".join(f"{{\\alpha&HFF&\\t({int(i * min(ms * 0.6, n * 45) / n)},{int(i * min(ms * 0.6, n * 45) / n) + 1},\\alpha&H00&)}}{ch}"
+                               for i, ch in enumerate(shown))
+                self.add(3, a, a + d, "Cap", f"{{{base}}}{body}")
+            else:
+                self.add(3, a, a + d, "Cap", f"{{{base}}}{shown}")
 
     def text(self) -> str:
         return self.header() + "\n" + "\n".join(self.events) + "\n"
@@ -495,9 +889,14 @@ def build_ass(plan: dict, edit_dir: Path, out_path: Path, style: str | None = No
     s = settings(plan, brand, style)
     W, H = canvas(plan, edit_dir)
     wr = Writer(brand, s, W, H)
+    wr.prepare_spots(plan, edit_dir)
+    if plan.get("texts") and words is None:
+        wr.add_texts(plan["texts"])
     if s["style"] != "none":
         if words is None:
             words = output_words(plan, edit_dir, s.get("corrections") or [])
+        for i, w in enumerate(words):
+            w.setdefault("idx", i)
         mark_emphasis(words, s["emphasis"])
         cues = chunk(words, words_per_cue(plan, s))
         for i, c in enumerate(cues):
@@ -507,6 +906,87 @@ def build_ass(plan: dict, edit_dir: Path, out_path: Path, style: str | None = No
             wr.cue(c, end)
     out_path.write_text(wr.text(), encoding="utf-8")
     return len(wr.events)
+
+
+# ---- best position ----------------------------------------------------------
+
+def _face_cached(edit_dir: Path, src: Path, start: float, end: float) -> dict | None:
+    """Face position for a section, remembered on disk: every render and preview needs it."""
+    import framing
+    path = edit_dir / "storyboard" / "face_cache.json"
+    key = f"{src.name}|{start:.2f}|{end:.2f}"
+    try:
+        cache = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        cache = {}
+    if key not in cache:
+        cache[key] = framing.face(str(src), start, end, 3)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(cache), encoding="utf-8")
+    return cache[key]
+
+
+def best_spots(plan: dict, edit_dir: Path, W: int, H: int, cap_h: float) -> list[tuple[float, float, float]]:
+    """Where captions should sit: [(from, to, y)] on the output timeline, y as a fraction of the height.
+
+    The rules, in order:
+    1. Stay inside the apps' safe area. In 9:16, aim for 62% down and never go below 72% or above
+       14%: TikTok, Reels and Shorts all stack their own text in the bottom of the frame.
+    2. Never cover the face, including when a punch-in makes it bigger.
+    3. Close to the mouth is easiest to follow, so just under the chin beats anywhere further away.
+    4. Hold one spot for the whole video if it works everywhere, because captions that jump around
+       are harder to read. Only move for the sections that need it.
+    """
+    import framing
+    from plan import range_len
+    if H > W * 1.2:      # 9:16, 4:5
+        lo, hi, pref = (0.14, 0.72, 0.62) if H / W > 1.5 else (0.10, 0.86, 0.80)
+    else:                # 1:1, 16:9
+        lo, hi, pref = 0.10, 0.90, 0.86
+    h = cap_h / H
+    margin = 0.012
+    aspect = (plan.get("target") or {}).get("aspect")
+    zooms = plan.get("zooms") or []
+    rows = []  # (from, to, lowest y under the face, highest y over the face)
+    t = 0.0
+    for r in plan.get("ranges") or []:
+        d = range_len(r)
+        src = Path(plan["sources"][r["source"]])
+        src = src if src.is_absolute() else edit_dir / src
+        below, above = None, None
+        f = _face_cached(edit_dir, src, float(r["start"]), float(r["end"]))
+        if f:
+            cy, fh = f["y"], f["h"]
+            crop = framing.reframe_crop(src, float(r["start"]), float(r["end"]), aspect) if aspect else None
+            m = re.match(r"crop=(\d+):(\d+):.*:(\d+)$", crop or "")
+            if m and not r.get("fit"):  # a crop top and bottom moves the face within the frame
+                _, sh = framing.probe_size(src)
+                ch, y0 = int(m.group(2)), int(m.group(3))
+                cy, fh = (cy * sh - y0) / ch, fh * sh / ch
+            s = max([float(z.get("scale", 1.15)) for z in zooms
+                     if float(z["start_in_output"]) < t + d and float(z["start_in_output"]) + float(z.get("duration", 0)) > t]
+                    or [1.0])
+            chin = cy + fh * 0.62 * s    # the detector's box stops at the mouth; leave room for the chin
+            brow = cy - fh * 0.85 * s  # hair and forehead sit above the detector's box
+            below, above = chin + margin + h / 2, brow - margin - h / 2
+        rows.append((t, t + d, below, above))
+        t += d
+    if not rows:
+        return []
+    need = max((b for _, _, b, _ in rows if b is not None), default=pref)
+    if need <= hi:
+        return [(0.0, t + 60, round(max(pref, need), 4))]
+    out = []
+    for a, b, below, above in rows:
+        if below is None or below <= hi:
+            y = pref if below is None else max(pref, below)
+        elif above is not None and above >= lo:
+            y = above
+        else:
+            y = hi  # a huge face: the bottom of the safe area covers it least
+        out.append((a, b, round(y, 4)))
+    out[-1] = (out[-1][0], out[-1][1] + 60, out[-1][2])
+    return out
 
 
 def subtitles_filter(ass_path: Path) -> str:
@@ -522,18 +1002,27 @@ def sample_frame(plan: dict, edit_dir: Path, style: str, out_jpg: Path, height: 
     words = output_words(plan, edit_dir, s.get("corrections") or [])
     mark_emphasis(words, s["emphasis"])
     cues = chunk(words, words_per_cue(plan, s))
-    # Show a multi-word caption, ideally one with a popped word so the whole look shows.
-    first = next((c for c in cues if len(c) >= 2 and any(w.get("emph") for w in c)),
+    # Show a multi-word caption, ideally one with a popped word so the whole look shows. A style
+    # built around the spoken word is shown on plain words instead, mid-caption, so that's visible.
+    moving = bool(PRESETS.get(style, {}).get("active"))
+    first = next((c for c in cues if len(c) >= 2 and (not any(w.get("emph") for w in c) if moving
+                                                       else any(w.get("emph") for w in c))),
                  next((c for c in cues if len(c) >= 2), cues[0] if cues else []))
     t0 = first[0]["start"] if first else 0.0
     cue = [dict(w, start=w["start"] - t0 + 0.05, end=w["end"] - t0 + 0.05) for w in first]
+    if s["position"] == "best":  # show the spot "best" picks for this moment
+        probe = Writer(load_brand(edit_dir), s, *canvas(plan, edit_dir))
+        probe.prepare_spots(plan, edit_dir)
+        plan = dict(plan, captions=dict(plan.get("captions") or {}, position={"x": 0.5, "y": probe.y_at(t0) / probe.H}))
     # Map the cue's output time back to its source frame.
     offset, src, src_t = 0.0, plan["ranges"][0]["source"], float(plan["ranges"][0]["start"])
+    sample_range = plan["ranges"][0]
     from plan import range_len
     for r in plan["ranges"]:
         d = range_len(r)
         if offset <= t0 < offset + d:
             src, src_t = r["source"], float(r["start"]) + (t0 - offset) * float(r.get("speed") or 1.0)
+            sample_range = r
             break
         offset += d
     ass = out_jpg.with_suffix(".ass")
@@ -543,8 +1032,16 @@ def sample_frame(plan: dict, edit_dir: Path, style: str, out_jpg: Path, height: 
     src_path = src_path if src_path.is_absolute() else edit_dir / src_path
     # Seek to just after the cue's pop-in finishes so the still shows the settled look.
     hold = min(0.4, (cue[-1]["end"] - 0.05) if cue else 0.4)
+    if moving and len(cue) >= 2:
+        hold = cue[1]["start"] + 0.12
+    import framing
+    crop = framing.reframe_crop(src_path, float(sample_range["start"]), float(sample_range["end"]),
+                                (plan.get("target") or {}).get("aspect"))
+    # A following crop's position changes over time; a still only needs where it starts.
+    crop = re.sub(r":'.*':", ":0:", crop) if crop and "'" in crop else crop
+    crop = f"{crop}," if crop and crop.startswith("crop=") else ""
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{src_t:.3f}", "-i", str(src_path),
-                    "-vf", f"scale={W}:{H},setpts=PTS-STARTPTS,{subtitles_filter(ass)},scale=-2:{height}",
+                    "-vf", f"{crop}scale={W}:{H},setpts=PTS-STARTPTS,{subtitles_filter(ass)},scale=-2:{height}",
                     "-ss", f"{hold:.2f}", "-frames:v", "1", str(out_jpg)], check=True)
     ass.unlink(missing_ok=True)
     return out_jpg

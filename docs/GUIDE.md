@@ -15,7 +15,8 @@ uploaded anywhere — the only paid piece is your Claude plan.
 > Please install the AI Video Editor plugin from theaisolopreneurs-stack/video-use and set it up for me.
 
 Claude does the rest (it may ask you to click "Allow" a few times). When it's finished, the
-editor opens in your web browser and an **AI Video Editor** icon appears on your Desktop.
+editor opens in your web browser. Claude asks before adding an **AI Video Editor** icon to your Desktop; say no
+if you'd rather not have one, and you can add it later from the Home screen.
 
 **Step 2 — make a video (every time).**
 
@@ -40,7 +41,7 @@ button takes you there.
 
 ### Start an edit
 
-- **Easiest:** the Home screen (Desktop icon) — drag clips, pick a style, **Make my video**.
+- **Easiest:** the Home screen (Desktop icon, or ask Claude to open it) — drag clips, pick a style, **Make my video**.
 - **By chat:** tell Claude what you want, in plain English. Claude finds or creates the
   video's folder for you:
 
@@ -60,7 +61,7 @@ takes, order, hook, graphics) when you ask it to.
 | **Top bar** | The four steps: Edit & save → Approve plan → Rough cut → Approve rough cut. The orange button is always the next step. |
 | **Player + timeline** | Watch the rough cut. Coloured blocks are sections; click one to jump. **+ Note at current time** pins a note to a moment. |
 | **Storyboard** | Every kept section with frames, the line, and why it's there. Crossed-out lines between cards are cuts — **Restore** brings one back. Each card's **Edit** drawer: nudge start/end, transition in, speed (slow-mo / fast), freeze at the end, stabilize, a note. Untick a card to drop it; arrows reorder. |
-| **Captions** | 13 styles, each previewed on your footage. **Top / Middle / Bottom / Custom** — Custom lets you click exactly where captions go on the video. Words to pop. |
+| **Captions** | 76 styles, grouped by feel and previewed on your footage. **✨ Best** picks a spot that stays off your face and clear of the apps' buttons; or **Top / Middle / Bottom / Custom** — Custom lets you click exactly where captions go on the video. Matching emoji. Words to pop. |
 | **Look** | 40+ colour looks (natural, warm, cinematic, film, trend, black & white) previewed on your footage, plus any `.cube` LUTs you add. |
 | **Title** | Hook title text, font, length, and "behind me". |
 | **Effects** | Shake, glitch, VHS, flash, grain, blur, cinema bars… added at the player's current time for a set length, or across the whole video. |
@@ -105,7 +106,7 @@ Ask Claude for titles, a description and hashtags.
 | **Timing** | Speed up / slow-mo per section (audio pitch kept), freeze frames, reverse, stabilization |
 | **Transitions** | Crossfade, dissolve, fade to black/white, flash, whip pans, slides, wipes, circle open/close, radial, zoom, pixelate, blur, squeeze, diagonal, glitch cut, shake cut |
 | **Effects** | Shake, glitch, RGB split, flash, VHS, film grain, vignette, blur, B&W, sepia, pixelate, invert, light leak, mirror, cinema bars |
-| **Captions** | 13 styles (Hormozi, MrBeast, highlight box, karaoke, pill, neon, typewriter, one word, stacked…), popped words, spelling fixes, top/middle/bottom or any spot |
+| **Captions** | 76 styles (word-by-word, boxes and markers, editorial, neon, retro 3D, glitch, handwritten, animated…), matching emoji, popped words, spelling fixes, best/top/middle/bottom or any spot |
 | **Look** | 35 recipe looks + basics + your own LUTs |
 | **Framing** | Face-centred punch-in and push-in zooms, automatic vertical reframing, hook title behind you |
 | **Graphics** | 14 animated templates (stat counter, checklist, prompt box, chat bubbles, app window, timer, bar chart, collage, CTA card…), progress bar |

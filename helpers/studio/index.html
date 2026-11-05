@@ -158,6 +158,13 @@
   .capgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   .capopt { border: 2px solid var(--line); border-radius: 9px; padding: 3px; cursor: pointer; text-align: center; font-size: 11px; background: var(--panel-2); color: inherit; font: inherit; font-size: 11px; line-height: 1.3; }
   .capopt.sel { border-color: var(--accent); font-weight: 700; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  .chip { padding: 3px 10px; border-radius: 99px; font-size: 12px; }
+  .chip[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .adjust { margin-bottom: 10px; }
+  .adjust summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+  .slider input { width: 100%; }
+  .sub-h { margin: 16px 0 4px; font-size: 13px; }
   .capimg { position: relative; aspect-ratio: 9 / 16; border-radius: 6px; background: var(--line); overflow: hidden; margin-bottom: 2px; }
   .capimg span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 6px; color: var(--muted); font-size: 10px; }
   .capimg img { position: relative; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -275,10 +282,12 @@
       </div>
       <div class="scroll">
         <div class="tabpanel" role="tabpanel" data-panel="captions">
+          <div class="chips" id="capGroups" role="group" aria-label="Caption style groups"></div>
           <div class="capgrid" id="capgrid"></div>
           <div class="meta" id="capDesc"></div>
           <div class="lbl">Where on screen
             <div class="seg" id="capPosSeg" role="group" aria-label="Caption position">
+              <button type="button" data-pos="best" title="Picks a spot that never covers your face and stays clear of the apps' buttons">✨ Best</button>
               <button type="button" data-pos="top">Top</button>
               <button type="button" data-pos="middle">Middle</button>
               <button type="button" data-pos="bottom">Bottom</button>
@@ -290,12 +299,15 @@
             <label class="lbl">Down (0–100%) <input id="capY" class="field" type="number" min="0" max="100" step="1"></label>
           </div>
           <label class="chk"><input type="checkbox" id="capUpper"> ALL CAPS</label>
+          <label class="chk"><input type="checkbox" id="capEmoji"> Add matching emoji 🔥</label>
           <label class="lbl">Words to pop (comma-separated)
             <input id="capEmph" class="field" placeholder="e.g. 0 and 4, Super Bowl">
           </label>
           <div class="meta" id="capNote"></div>
         </div>
         <div class="tabpanel" role="tabpanel" data-panel="look" hidden>
+          <details class="adjust"><summary>Adjust by hand</summary><div id="adjustBox"></div>
+            <button class="sm" id="adjReset">Reset</button></details>
           <div class="capgrid" id="lookgrid"></div>
           <div class="meta">Add your own looks by dropping .cube LUT files into the luts/ folder.</div>
         </div>
@@ -322,6 +334,26 @@
             </select></label>
           </div>
           <button id="fxAdd">+ Add at the player's current time</button>
+          <h4 class="sub-h">Words on screen</h4>
+          <ul class="fxlist" id="txtList"></ul>
+          <label class="lbl">Text <input id="txtText" class="field" placeholder="e.g. WAIT FOR IT"></label>
+          <div class="grid2">
+            <label class="lbl">Comes in <select id="txtAnim" class="field">
+              <option value="pop">Pop</option><option value="stamp">Stamp</option><option value="fade">Fade</option><option value="type">Typewriter</option>
+              <option value="slide_up">Slide up</option><option value="slide_left">Slide from right</option><option value="drop">Drop</option>
+              <option value="zoom_in">Zoom</option><option value="spin_in">Spin</option><option value="flip">Flip</option><option value="wobble">Wobble</option></select></label>
+            <label class="lbl">Where <select id="txtPos" class="field"><option value="0.15">Top</option><option value="0.5">Middle</option><option value="0.8">Bottom</option></select></label>
+            <label class="lbl">Colour <input id="txtColor" class="field" type="color" value="#ffffff"></label>
+            <label class="lbl">For <select id="txtDur" class="field"><option>1.5</option><option selected>3</option><option>5</option></select></label>
+          </div>
+          <button id="txtAdd">+ Add text at the player's current time</button>
+          <h4 class="sub-h">Stickers</h4>
+          <ul class="fxlist" id="stkList"></ul>
+          <div class="grid2">
+            <label class="lbl">Emoji <input id="stkEmoji" class="field" value="🔥" maxlength="8"></label>
+            <label class="lbl">Moves <select id="stkAnim" class="field"><option value="pop">Pop</option><option value="bounce">Bounce</option><option value="wiggle">Wiggle</option><option value="float">Float</option><option value="spin">Spin</option><option value="pulse">Pulse</option><option value="slide">Slide in</option><option value="none">Still</option></select></label>
+          </div>
+          <button id="stkAdd">+ Add sticker at the player's current time</button>
         </div>
         <div class="tabpanel" role="tabpanel" data-panel="audio" hidden>
           <label class="chk"><input type="checkbox" id="audVoice"> Clean up voice (rumble, hiss, harsh “s”, even levels)</label>
@@ -339,6 +371,12 @@
           <label class="lbl">Sound on popped words
             <span class="row"><select id="audSfx" class="field grow"></select><button id="sfxPlay" title="Listen to this sound">▶</button></span>
           </label>
+          <label class="lbl">Voice effect <select id="audFx" class="field"></select></label>
+          <label class="chk"><input type="checkbox" id="audBeat"> Pulse the picture to the music's beat</label>
+          <div class="grid2">
+            <label class="lbl">Fade in <select id="fadeIn" class="field"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option></select></label>
+            <label class="lbl">Fade out <select id="fadeOut" class="field"><option value="0">None</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></label>
+          </div>
           <audio id="audPlayer" hidden></audio>
           <div class="meta" id="audNote">Make a new rough cut after saving to hear the full mix.</div>
         </div>
@@ -418,7 +456,7 @@
         <li><b>Each card is a kept section</b>: three frames, the line you say, and why Claude kept it. The coloured label (HOOK, STAKES…) is the section's job; click it to rename.</li>
         <li><b>Crossed-out lines between cards are cuts</b> (pauses, “um”s, flubbed takes) with the reason. <b>Restore</b> puts one back.</li>
         <li><b>Untick a card</b> to drop that section. <b>↑ ↓</b> reorder. <b>▶</b> plays it in the rough cut.</li>
-        <li><b>Edit</b> on a card: nudge where it starts/ends (±0.1s), pick a <b>transition</b> into it, change its <b>speed</b> (slow-mo or fast), add a <b>freeze</b> at the end, <b>stabilize</b> shaky footage, or leave a note on just that section.</li>
+        <li><b>Edit</b> on a card: nudge where it starts/ends (±0.1s), pick a <b>transition</b> into it, change its <b>speed</b> or <b>speed curve</b>, add a <b>freeze</b> at the end, <b>flip</b> it, give it a slow <b>camera move</b>, change its <b>volume</b> or <b>voice</b>, blur or replace its <b>background</b>, <b>stabilize</b> shaky footage, or leave a note on just that section.</li>
       </ul>
     </section>
     <section id="ht-player">
@@ -432,11 +470,11 @@
     <section id="ht-tabs">
       <h3>Style tabs (right side)</h3>
       <dl>
-        <dt>Captions</dt><dd>13 caption styles previewed on your footage. <b>Top / Middle / Bottom</b>, or <b>Custom</b> and click on the video where they should go. ALL CAPS, and “words to pop” (the words that get the highlight).</dd>
-        <dt>Look</dt><dd>Colour grades grouped as Natural, Warm, Cinematic, Film, Trend and Black &amp; white. Add your own <code>.cube</code> LUTs to the <code>luts/</code> folder.</dd>
+        <dt>Captions</dt><dd>Dozens of caption styles previewed on your footage, grouped by feel. <b>✨ Best</b> picks a spot that stays off your face and clear of the apps' buttons. Or choose <b>Top / Middle / Bottom</b>, or <b>Custom</b> and click on the video. ALL CAPS, matching emoji, and “words to pop” (the words that get the highlight).</dd>
+        <dt>Look</dt><dd>Colour grades grouped as Natural, Warm, Cinematic, Film, Trend and Black &amp; white, plus <b>Adjust by hand</b> sliders for brightness, warmth, sharpness and more. Add your own <code>.cube</code> LUTs to the <code>luts/</code> folder.</dd>
         <dt>Title</dt><dd>Big hook text over the first seconds. “Behind me” puts the words behind you.</dd>
-        <dt>Effects</dt><dd>Shake, glitch, VHS, flash, film grain, blur, cinema bars and more. Play the video to the moment, pick an effect and a length, click <b>Add</b>. Captions and graphics stay clean on top.</dd>
-        <dt>Audio</dt><dd>Voice clean-up, background music (▶ Listen first), volume, “duck under voice”, and a sound on popped words. Put tracks in the <code>music/</code> folder.</dd>
+        <dt>Effects</dt><dd>Shake, glitch, glow, kaleidoscope, comic book and many more. Play the video to the moment, pick an effect and a length, click <b>Add</b>. Captions and graphics stay clean on top. Add your own <b>words on screen</b> and <b>stickers</b> the same way.</dd>
+        <dt>Audio</dt><dd>Voice clean-up, voice effects, background music (▶ Listen first), volume, “duck under voice”, a beat pulse, fades, and a sound on popped words. Put tracks in the <code>music/</code> folder.</dd>
         <dt>Notes</dt><dd>Anything you'd rather say than click: “hook is too slow”, “cut the second story”, “make it 45 seconds”.</dd>
       </dl>
     </section>
@@ -475,7 +513,8 @@ let dirty = false;
 let sel = -1;          // selected card
 const openCards = new Set();  // cards whose edit drawer is open
 
-const rlen = (r) => (r.end - r.start) / (r.speed || 1) + (r.hold || 0);  // seconds on screen
+// Seconds on screen. S.speed_curves = how long one second of footage plays on each curve.
+const rlen = (r) => (r.end - r.start) * (r.speed_curve && S ? (S.speed_curves[r.speed_curve] ?? 1) : 1) / (r.speed || 1) + (r.hold || 0);
 const fmt = (t) => { const m = Math.floor(t / 60); return `${m}:${(t - m * 60).toFixed(2).padStart(5, "0")}`; };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const beatColor = (() => { const map = {}; let n = 0; return (b) => { const k = (b || "").toUpperCase(); if (!(k in map)) map[k] = `var(--beat-${n++ % 6})`; return map[k]; }; })();
@@ -547,7 +586,9 @@ function markTabs() {
   if (!S) return;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const changed = { captions: !same(caps, S.plan.captions || {}), look: look !== (S.plan.grade || "none"),
-    title: !same(ttl, S.plan.title || {}), audio: !same(aud, S.plan.audio || {}), effects: !same(fxs, S.plan.effects || []) };
+    title: !same(ttl, S.plan.title || {}), audio: !same(aud, S.plan.audio || {}) || !same(beat, S.plan.beat_sync || {}) || !same(fade, S.plan.fade || {}),
+    effects: !same(fxs, S.plan.effects || []) || !same(txts, S.plan.texts || []) || !same(stks, S.plan.stickers || []) };
+  changed.look = changed.look || !same(adj, S.plan.adjust || {});
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("changed", !!changed[b.dataset.tab]));
 }
 
@@ -564,6 +605,11 @@ async function load() {
   look = S.plan.grade || "none";
   ttl = JSON.parse(JSON.stringify(S.plan.title || {}));
   fxs = JSON.parse(JSON.stringify(S.plan.effects || []));
+  adj = JSON.parse(JSON.stringify(S.plan.adjust || {}));
+  beat = JSON.parse(JSON.stringify(S.plan.beat_sync || {}));
+  fade = JSON.parse(JSON.stringify(S.plan.fade || {}));
+  txts = JSON.parse(JSON.stringify(S.plan.texts || []));
+  stks = JSON.parse(JSON.stringify(S.plan.stickers || []));
   setDirty(false);
   render();
   renderCaptions();
@@ -573,8 +619,19 @@ async function load() {
   renderEffects();
 }
 
-let look = "none", ttl = {}, fxs = [];
+let look = "none", ttl = {}, fxs = [], adj = {}, beat = {}, fade = {}, txts = [], stks = [], capGroup = "All";
+const SLIDERS = [["brightness", "Brightness", -1, 1], ["contrast", "Contrast", -1, 1], ["saturation", "Saturation", -1, 1],
+  ["exposure", "Exposure", -1, 1], ["temperature", "Warmth", -1, 1], ["tint", "Tint", -1, 1], ["hue", "Hue", -1, 1],
+  ["highlights", "Highlights", -1, 1], ["shadows", "Shadows", -1, 1], ["sharpen", "Sharpen", 0, 1],
+  ["vignette", "Vignette", 0, 1], ["fade", "Faded", 0, 1], ["grain", "Film grain", 0, 1]];
+function renderAdjust() {
+  $("adjustBox").innerHTML = SLIDERS.map(([k, label, lo, hi]) => `<label class="lbl slider">${label}
+    <input type="range" min="${lo}" max="${hi}" step="0.05" value="${adj[k] || 0}" onchange="setAdj('${k}', +this.value)"></label>`).join("");
+}
+function setAdj(k, v) { if (v) adj[k] = v; else delete adj[k]; setDirty(true); }
+$("adjReset").onclick = () => { adj = {}; setDirty(true); renderAdjust(); };
 function renderLook() {
+  renderAdjust();
   let group = "", html = "";
   S.looks.forEach((L, i) => {
     if (L.group !== group) { group = L.group; html += `<div class="lookgroup">${esc(group)}</div>`; }
@@ -617,6 +674,9 @@ function renderAudio() {
   $("audSfx").innerHTML = `<option value="">None</option>` +
     S.sfx_kit.map((s) => `<option value="${s}" ${aud.sfx_on_emphasis === s ? "selected" : ""}>${s}</option>`).join("");
   $("sfxPlay").disabled = !aud.sfx_on_emphasis;
+  $("audFx").innerHTML = `<option value="">Normal</option>` + S.voice_fx.map((v) => `<option value="${v.id}" ${aud.voice_fx === v.id ? "selected" : ""}>${esc(v.label)}</option>`).join("");
+  $("audBeat").checked = !!beat.pulse; $("audBeat").disabled = !m.file;
+  $("fadeIn").value = String(fade.in || 0); $("fadeOut").value = String(fade.out || 0);
   if (!S.music.length) $("audNote").textContent = "No music yet: put tracks in the music/ folder (see music/README.md for free sources).";
 }
 function renderEffects() {
@@ -625,7 +685,22 @@ function renderEffects() {
   $("fxlist").innerHTML = fxs.length ? fxs.map((e, k) => `<li><span>${esc(name(e.type))} · ${e.duration ? `${fmt(e.start_in_output || 0)} for ${e.duration}s` : "whole video"}</span>
     ${e.duration ? `<button class="sm" onclick="seekRaw(${e.start_in_output || 0})">▶</button>` : ""}<button class="sm" onclick="fxs.splice(${k},1);setDirty(true);renderEffects()" aria-label="Remove">✕</button></li>`).join("")
     : `<li><span class="meta">No effects yet.</span></li>`;
+  const row = (label, t, k, arr) => `<li><span>${esc(label)} · ${fmt(t.start_in_output || 0)} for ${t.duration}s</span>
+    <button class="sm" onclick="seekRaw(${t.start_in_output || 0})">▶</button><button class="sm" onclick="${arr}.splice(${k},1);setDirty(true);renderEffects()" aria-label="Remove">✕</button></li>`;
+  $("txtList").innerHTML = txts.map((t, k) => row(t.text, t, k, "txts")).join("");
+  $("stkList").innerHTML = stks.map((t, k) => row(t.emoji || t.file, t, k, "stks")).join("");
 }
+const nowT = () => { const v = $("player"); return Math.round((v ? v.currentTime : 0) * 100) / 100; };
+$("txtAdd").onclick = () => {
+  const text = $("txtText").value.trim(); if (!text) return toast("Type some text first", true);
+  txts.push({ text, start_in_output: nowT(), duration: +$("txtDur").value, x: 0.5, y: +$("txtPos").value, anim: $("txtAnim").value, anim_out: "fade", color: $("txtColor").value, size: 90 });
+  $("txtText").value = ""; setDirty(true); renderEffects();
+};
+$("stkAdd").onclick = () => {
+  const emoji = $("stkEmoji").value.trim(); if (!emoji) return toast("Pick an emoji first", true);
+  stks.push({ emoji, start_in_output: nowT(), duration: 1.5, x: 0.78, y: 0.2, size: 0.2, anim: $("stkAnim").value });
+  setDirty(true); renderEffects();
+};
 $("fxAdd").onclick = () => {
   const v = $("player"), d = +$("fxDur").value;
   const e = { type: $("fxType").value };
@@ -633,6 +708,10 @@ $("fxAdd").onclick = () => {
   fxs.push(e); setDirty(true); renderEffects();
   if (!v && d) toast("Added at 0:00 — make a rough cut to place effects at a moment.");
 };
+$("audFx").onchange = (e) => setAud((a) => { if (e.target.value) a.voice_fx = e.target.value; else delete a.voice_fx; });
+$("audBeat").onchange = (e) => { beat = e.target.checked ? { pulse: 1.04, every: 2 } : {}; setDirty(true); };
+const setFade = () => { fade = {}; if (+$("fadeIn").value) fade.in = +$("fadeIn").value; if (+$("fadeOut").value) fade.out = +$("fadeOut").value; setDirty(true); };
+$("fadeIn").onchange = setFade; $("fadeOut").onchange = setFade;
 $("audVoice").onchange = (e) => setAud((a) => { if (e.target.checked) delete a.voice; else a.voice = "off"; });
 $("audMusic").onchange = (e) => setAud((a) => { if (e.target.value) a.music = { volume_db: -20, duck: true, ...(a.music || {}), file: e.target.value }; else delete a.music; });
 $("audVol").onchange = (e) => setAud((a) => (a.music.volume_db = +e.target.value));
@@ -655,7 +734,9 @@ function setCap(k, v) {
 }
 function renderCaptions() {
   const style = capEff("style"), v = S.plan.version;
-  const opts = [...S.caption_styles.map((c) => [c.id, c.label, c.blurb]), ["none", "Off", "No captions"]];
+  $("capGroups").innerHTML = ["All", ...S.caption_groups].map((g) => `<button type="button" class="chip" aria-pressed="${capGroup === g}" onclick="capGroup='${g}';renderCaptions()">${g}</button>`).join("");
+  const shown = S.caption_styles.filter((c) => capGroup === "All" || c.group === capGroup || c.id === style);
+  const opts = [...shown.map((c) => [c.id, c.label, c.blurb]), ["none", "Off", "No captions"]];
   $("capgrid").innerHTML = opts.map(([k, label, blurb]) => `<button type="button" class="capopt ${style === k ? "sel" : ""}" aria-pressed="${style === k}" title="${esc(blurb)}" onclick="setCap('style','${k}')">
     ${k === "none" ? `<div class="noimg">No captions</div>` : `<div class="capimg"><span>Rendering preview…</span><img loading="lazy" src="/caption-sample?style=${k}&v=${v}" alt="${esc(label)} captions" onerror="this.previousElementSibling.textContent='Preview failed'"></div>`}${esc(label)}</button>`).join("");
   const cur = S.caption_styles.find((c) => c.id === style);
@@ -667,6 +748,7 @@ function renderCaptions() {
   if (named === "custom" && typeof pos === "object") { $("capX").value = Math.round(pos.x * 100); $("capY").value = Math.round(pos.y * 100); }
   drawCapDot();
   $("capUpper").checked = !!capEff("uppercase");
+  $("capEmoji").checked = !!capEff("emoji");
   if (document.activeElement !== $("capEmph")) $("capEmph").value = (caps.emphasis || []).join(", ");
   const always = S.brand_captions.always_emphasize || [];
   $("capNote").textContent = (always.length ? `Brand always pops: ${always.join(", ")}. ` : "") +
@@ -711,6 +793,7 @@ function drawCapDot() {
 }
 window.addEventListener("resize", drawCapDot);
 $("capUpper").onchange = (e) => setCap("uppercase", e.target.checked);
+$("capEmoji").onchange = (e) => setCap("emoji", e.target.checked);
 $("capEmph").onchange = (e) => setCap("emphasis", e.target.value.split(",").map((x) => x.trim()).filter(Boolean));
 
 function setDirty(v) {
@@ -823,6 +906,14 @@ function cardHtml(r, i, outT) {
           <label class="lbl">Freeze at end <select class="field" onchange="setFx(${i},'hold',+this.value||null)">
             ${[0, 0.5, 1, 1.5, 2].map((v) => `<option value="${v}" ${(r.hold || 0) === v ? "selected" : ""}>${v ? v + "s" : "No freeze"}</option>`).join("")}</select></label>
           <label class="chk" style="align-self:end;padding-bottom:5px"><input type="checkbox" ${r.stabilize ? "checked" : ""} onchange="setFx(${i},'stabilize',this.checked||null)"> Stabilize</label>
+          ${sel_(i, "speed_curve", "Speed curve", r.speed_curve, [["", "None"], ["montage", "Montage"], ["hero", "Hero moment"], ["bullet", "Bullet time"], ["jump_cut", "Jump cut"], ["flash_in", "Flash in"], ["flash_out", "Flash out"], ["ease_in", "Ease in"]])}
+          ${sel_(i, "motion", "Camera move", r.motion, [["", "None"], ["zoom_in", "Slow zoom in"], ["zoom_out", "Slow zoom out"], ["pan_left", "Pan left"], ["pan_right", "Pan right"], ["pan_up", "Pan up"], ["pan_down", "Pan down"]])}
+          ${sel_(i, "flip", "Flip", r.flip, [["", "None"], ["h", "Mirror"], ["v", "Upside down"]])}
+          ${sel_(i, "fit", "Shape", r.fit, [["", "Fill the frame"], ["blur", "Whole shot, blurred sides"], ["color", "Whole shot, black sides"]])}
+          ${sel_(i, "volume", "Volume", r.volume, [["", "Normal"], ["0", "Mute"], ["0.5", "Half"], ["1.5", "Louder"], ["2", "Double"]])}
+          ${sel_(i, "voice_fx", "Voice", r.voice_fx, [["", "Normal"], ...S.voice_fx.map((v) => [v.id, v.label])])}
+          ${sel_(i, "background", "Background (slow)", r.background, [["", "Keep"], ["blur", "Blur it"], ["remove", "Black"]])}
+          ${sel_(i, "grade", "Look", r.grade, [["", "Same as the video"], ...S.looks.filter((l) => l.id.startsWith("look:")).map((l) => [l.id, l.label])])}
         </div>
         <textarea class="field" placeholder="Note on this section (optional)" oninput="cardNotes[${i}]=this.value; setDirty(true)">${esc(note)}</textarea>
       </div>
@@ -852,8 +943,24 @@ function outStartOf(i) {
   return ranges.slice(0, i).reduce((a, r) => a + (r._on ? rlen(r) : 0), 0);
 }
 const trName = (r) => (r.transition && typeof r.transition === "object" ? r.transition.type : r.transition) || "";
+function sel_(i, k, label, cur, options) {
+  const val = cur === undefined || cur === null ? "" : String(cur);
+  return `<label class="lbl">${label} <select class="field" onchange="setOpt(${i},'${k}',this.value)">
+    ${options.map(([v, t]) => `<option value="${esc(v)}" ${val === String(v) ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
+}
+function setOpt(i, k, v) {
+  if (v === "") return setFx(i, k, null);
+  if (k === "background" && v === "remove") return setFx(i, k, { mode: "color", color: "#000000" });
+  setFx(i, k, k === "volume" ? +v : v);
+}
 function fxBadges(r, i) {
   const b = [];
+  if (r.speed_curve) b.push(`curve: ${r.speed_curve.replace(/_/g, " ")}`);
+  if (r.motion) b.push(r.motion.replace(/_/g, " "));
+  if (r.flip) b.push("flipped");
+  if (r.background) b.push("background");
+  if (r.voice_fx) b.push(r.voice_fx);
+  if (r.volume !== undefined && r.volume !== null) b.push(r.volume ? `vol ${r.volume}×` : "muted");
   if (i > 0 && trName(r)) b.push(`↪ ${trName(r).replace(/_/g, " ")}`);
   if (r.speed && r.speed !== 1) b.push(`${r.speed}×`);
   if (r.hold) b.push(`❚❚ ${r.hold}s`);
@@ -1020,7 +1127,7 @@ $("saveBtn").onclick = async () => {
   const cards = Object.entries(cardNotes).filter(([, n]) => n && n.trim()).map(([i, n]) => {
     const r = ranges[i]; return { index: +i, source: r.source, start: r.start, end: r.end, quote: r.quote, note: n.trim() };
   });
-  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, title: ttl, effects: fxs, grade: look === "none" ? null : look, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
+  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, title: ttl, effects: fxs, adjust: adj, beat_sync: beat, fade, texts: txts, stickers: stks, grade: look === "none" ? null : look, notes: { overall: $("overall").value.trim(), cards, timestamped: tnotes } }) })).json();
   openCards.clear(); sel = -1;
   await load();
   toast(res.direct_edits.length ? `Saved. ${res.notes_saved ? 'Now tell Claude "check my notes".' : ""}` :

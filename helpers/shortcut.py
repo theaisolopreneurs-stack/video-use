@@ -4,7 +4,12 @@ Double-clicking it opens the Home screen in the browser: drag in clips, pick a s
 No terminal, no typing, no "localhost". Clicking it again while it's running just reopens
 the page. Also creates the video library folder (~/Videos/AI Video Editor).
 
-    python helpers/shortcut.py            # create / refresh the shortcuts
+Nothing is added to someone's computer without a yes. Claude asks first (setup skill) and the
+Home screen has its own button, so this refuses to run unless told the person agreed:
+
+    python helpers/shortcut.py --yes          # they said yes: create the shortcuts
+    python helpers/shortcut.py --refresh      # after an update: fix existing shortcuts, never add new ones
+    python helpers/shortcut.py --status       # prints installed / not installed
     python helpers/shortcut.py --remove
 """
 
@@ -111,6 +116,16 @@ def create() -> list[Path]:
     return made
 
 
+def installed() -> bool:
+    """Is there a shortcut on the Desktop or in the Start menu / Applications right now?"""
+    if os.name == "nt":
+        return any((windows_folder(k) / f"{NAME}.lnk").exists() for k in ("Desktop", "Programs"))
+    if sys.platform == "darwin":
+        return any((f / f"{NAME}.command").exists() for f in (Path.home() / "Desktop", Path.home() / "Applications"))
+    return any((f / "ai-video-editor.desktop").exists()
+               for f in (Path.home() / "Desktop", Path.home() / ".local" / "share" / "applications"))
+
+
 def remove() -> None:
     if os.name == "nt":
         for folder in (windows_folder("Desktop"), windows_folder("Programs")):
@@ -128,6 +143,17 @@ if __name__ == "__main__":
     if "--remove" in sys.argv:
         remove()
         print("shortcuts removed")
-    else:
+    elif "--status" in sys.argv:
+        print("installed" if installed() else "not installed")
+    elif "--refresh" in sys.argv:
+        if installed():
+            for p in create():
+                print(f"refreshed {p}")
+        else:
+            print("no shortcut to refresh; none added")
+    elif "--yes" in sys.argv:
         for p in create():
             print(f"created {p}")
+    else:
+        sys.exit("Not adding anything: ask the person first, then run this again with --yes. "
+                 "(--refresh updates a shortcut they already have.)")
