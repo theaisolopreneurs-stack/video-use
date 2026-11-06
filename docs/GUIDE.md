@@ -94,6 +94,7 @@ Ask Claude for titles, a description and hashtags.
   only): colours, fonts, caption style, words to always pop, your call-to-action line.
 - **Music**: drop tracks in `music/` (see `music/README.md` for free sources).
 - **Looks**: drop `.cube` LUTs in `luts/`.
+- **Style samples**: on the Home screen, open **Want it to feel like another video?** and add one or more videos you admire. Or tell Claude: *"make my clip feel like this one"* and share the file or link. The editor measures how the sample is edited and applies that to your footage; none of the sample ends up in your video. Links often get blocked by Instagram and TikTok, so saving or screen-recording the video is the dependable route. For the closest match, ask Claude, who can also look at the sample's frames and read its words.
 - **Talk instead of type**: click the 🎤 in any text box in the editor, speak, and click it again. It uses the same free speech model as your captions, on your computer, in English. To talk to Claude in the chat, press Windows + H for Windows' own dictation, which may use Microsoft's online speech service.
 - **Presets**: copy a file in `presets/` and tweak it to make your own recipe.
 

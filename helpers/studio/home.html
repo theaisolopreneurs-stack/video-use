@@ -48,6 +48,8 @@
   .bar { height: 14px; border-radius: 99px; background: var(--panel-2); overflow: hidden; border: 1px solid var(--line); }
   .bar div { height: 100%; background: var(--accent); width: 0; transition: width .4s; }
   .doing { font-size: 17px; font-weight: 600; margin: 10px 0 4px; }
+  .sample { margin-top: 12px; }
+  .sample summary { cursor: pointer; font-weight: 600; }
   .stages { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
   .stages li { display: flex; gap: 10px; align-items: center; color: var(--muted); }
   .stages li.done { color: var(--ink); }
@@ -98,6 +100,16 @@
     <div class="step"><span class="num">2</span><div>
       <h3>Pick a style</h3>
       <div class="styles" id="styles"></div>
+      <details class="sample" id="sampleBox">
+        <summary>✨ Want it to feel like another video? <span class="sub" style="font-weight:400">(optional)</span></summary>
+        <p class="sub">Add a video you admire. We study its pacing, framing, captions and colour, and edit yours the same way. None of it ends up in your video.</p>
+        <button type="button" id="samplePick">Choose a sample video</button>
+        <input type="file" id="samplePicker" accept="video/*,.mov,.mp4,.mkv,.m4v,.webm" multiple hidden>
+        <label class="lbl" style="margin-top:8px">Or paste a link
+          <input class="field no-mic" id="sampleLink" placeholder="https://www.instagram.com/reel/…"></label>
+        <p class="sub" style="margin-top:4px">Links often get blocked by Instagram and TikTok. If one fails, save or screen-record the video and add the file.</p>
+        <ul class="files" id="sampleList"></ul>
+      </details>
     </div></div>
 
     <div class="step"><span class="num">3</span><div>
@@ -153,7 +165,7 @@ try { const t = localStorage.getItem("studio-theme"); const m = { light: "warm-l
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 5000); }
 const post = async (url, body) => (await fetch(url, { method: "POST", body: JSON.stringify(body || {}) })).json();
 
-let H = null, files = [], preset = "reel";
+let H = null, files = [], samples = [], preset = "reel";
 const EMOJI = { viral: "🚀", reel: "📱", justyn: "🔥", youtube: "▶️", tutorial: "🎓", podcast: "🎙️" };
 const FRIENDLY = { viral: "Viral", reel: "Reel / TikTok / Short", justyn: "Viral talking-head", youtube: "YouTube video", tutorial: "How-to / tutorial", podcast: "Podcast clip" };
 const STATUS = { new: "Not edited yet", draft: "Ready to review", plan_approved: "Plan approved", rough_approved: "Ready to export", final: "Finished" };
@@ -201,6 +213,15 @@ drop.addEventListener("drop", (e) => addFiles(e.dataTransfer.files));
 window.addEventListener("dragover", (e) => e.preventDefault());
 window.addEventListener("drop", (e) => { e.preventDefault(); if (e.target !== drop && !drop.contains(e.target)) addFiles(e.dataTransfer.files); });
 
+$("samplePick").onclick = () => $("samplePicker").click();
+$("samplePicker").onchange = () => {
+  for (const f of $("samplePicker").files) if (!samples.some((x) => x.name === f.name && x.size === f.size)) samples.push(f);
+  $("samplePicker").value = ""; renderSamples();
+};
+function renderSamples() {
+  $("sampleList").innerHTML = samples.map((f, i) => `<li>✨ <span>${esc(f.name)}</span><small>${mb(f.size)}</small>
+    <button onclick="samples.splice(${i},1);renderSamples()" aria-label="Remove ${esc(f.name)}" style="padding:2px 8px">✕</button></li>`).join("");
+}
 function addFiles(list) {
   const ok = /\.(mp4|mov|mkv|m4v|webm|avi)$/i;
   let skipped = 0;
@@ -235,6 +256,16 @@ $("make").onclick = async () => {
     const res = await fetch(`/api/upload?project=${encodeURIComponent(project)}&file=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
     if (!res.ok) { $("workErr").hidden = false; $("workErr").textContent = (await res.json()).error; return; }
     sent += f.size;
+  }
+  for (const f of samples) {
+    showWork(0, 15, `Copying your sample ${f.name}…`);
+    await fetch(`/api/upload?sample=1&project=${encodeURIComponent(project)}&file=${encodeURIComponent(f.name)}`, { method: "POST", body: f });
+  }
+  const link = $("sampleLink").value.trim();
+  if (link) {
+    showWork(0, 15, "Getting your sample from its link…");
+    const r = await post("/api/sample", { project, url: link });
+    if (!r.ok) toast(r.error + " Carrying on without it.");
   }
   const { job } = await post("/api/make", { project, preset, title: $("vtitle").value });
   follow(job, project);

@@ -472,7 +472,8 @@ def make_handler(app: App):
                 q = parse_qs(url.query)
                 try:
                     name = lib.save_upload(q.get("project", [""])[0], q.get("file", [""])[0],
-                                           self.rfile, int(self.headers.get("Content-Length", 0)))
+                                           self.rfile, int(self.headers.get("Content-Length", 0)),
+                                           sample=q.get("sample", [""])[0] == "1")
                 except ValueError as e:
                     return self.send_json({"ok": False, "error": str(e)}, 400)
                 return self.send_json({"ok": True, "file": name})
@@ -498,6 +499,13 @@ def make_handler(app: App):
                 except (SystemExit, OSError, subprocess.SubprocessError) as e:
                     return self.send_json({"ok": False, "error": str(e)})
                 return self.send_json({"ok": True})
+            if lib and url.path == "/api/sample":  # a style sample given as a link
+                import inspire
+                try:
+                    path = inspire.fetch(str(body.get("url", "")).strip(), lib.folder(body["project"]) / "inspiration")
+                except (RuntimeError, ValueError) as e:
+                    return self.send_json({"ok": False, "error": str(e)})
+                return self.send_json({"ok": True, "file": path.name})
             if lib and url.path == "/api/open":
                 try:
                     app.open(body["project"])

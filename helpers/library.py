@@ -98,12 +98,15 @@ class Library:
         (self.root / cand).mkdir(parents=True)
         return cand
 
-    def save_upload(self, project: str, filename: str, stream, length: int) -> str:
-        """Write an uploaded clip straight to disk in chunks (clips can be several GB)."""
+    def save_upload(self, project: str, filename: str, stream, length: int, sample: bool = False) -> str:
+        """Write an uploaded clip straight to disk in chunks (clips can be several GB). A style sample
+        goes in its own subfolder, so it's never mistaken for the person's footage."""
         name = Path(filename).name
         if Path(name).suffix.lower() not in VIDEO_EXTS:
             raise ValueError(f"{name} isn't a video file")
-        dest = self.folder(project) / name
+        folder = self.folder(project) / "inspiration" if sample else self.folder(project)
+        folder.mkdir(parents=True, exist_ok=True)
+        dest = folder / name
         remaining = length
         with open(dest, "wb") as f:
             while remaining > 0:

@@ -215,6 +215,9 @@ def apply_preset(plan: dict, preset: dict, edit_dir: Path, title: str | None, mu
     if preset.get("hook"):
         notes += apply_hook(plan, edit_dir, preset["hook"], title)
         title = title or plan.pop("_auto_title", None)
+    if preset.get("pace_forced"):  # matching a style sample
+        for r in plan["ranges"]:
+            r.setdefault("speed", preset["pace_forced"])
     if preset.get("pace"):  # only a slow talker gets sped up; fast speech sped up gets tiring
         import captions
         spoken = captions.output_words(plan, edit_dir, [])
@@ -292,6 +295,49 @@ def apply_preset(plan: dict, preset: dict, edit_dir: Path, title: str | None, mu
     return notes
 
 
+def apply_inspiration(preset: dict, videos: Path, edit: Path, source: str | None, title: str | None) -> tuple[list[str], list[str]]:
+    """Measure the style samples and lay the result over the preset. Only measurements are used:
+    no footage, sound or words from a sample reach the video. Returns (sample names, notes)."""
+    import captions
+    import framing
+    import inspire
+    where = videos / "inspiration"
+    if source and re.match(r"https?://", source):
+        print("   saving the sample from its link")
+        inspire.fetch(source, where)
+    elif source:
+        where = Path(source).resolve()
+    files = inspire.sample_files(where)
+    if source and not files:
+        sys.exit(f"no sample video found at {where}")
+    if not files:
+        return [], []
+    print(f"   studying {len(files)} style sample(s)")
+    items = [inspire.analyze(f) for f in files]
+    target = inspire.combine(items)
+    clips = sorted(p for p in videos.iterdir() if p.is_file() and p.suffix.lower() in inspire.VIDEO_EXTS)
+    words = []
+    for tp in (edit / "transcripts").glob("*.json"):
+        words += [w for w in json.loads(tp.read_text(encoding="utf-8")).get("words", []) if w.get("type") == "word"]
+    span = (max(w["end"] for w in words) - min(w["start"] for w in words)) if words else 1
+    settings, notes = inspire.recipe(target, inspire.colour_stats(clips[0]) if clips else None, len(words) / max(span, 1.0))
+    # Don't copy a caption spot that would sit on this person's face.
+    cap = settings.get("captions")
+    face = framing.face(str(clips[0]), 0.0, None, 6) if clips and cap else None
+    if cap and face and abs(cap["position"]["y"] - face["y"]) < face["h"] * 0.8:
+        cap["position"] = "best"
+        notes.append("captions: that spot would cover your face in this footage, so they use Best instead")
+    if title and not settings.get("title"):
+        settings["title"] = preset.get("title") or {"behind_subject": True, "font": "sans", "duration": 2.0}
+    pace = settings.pop("pace_exact", None)
+    preset["pace_forced"] = pace
+    preset.pop("pace", None)
+    preset.pop("beat_sync", None)
+    for key, value in settings.items():
+        preset[key] = dict(preset.get(key) or {}, **value) if key == "target" else value
+    return [f.name for f in files], notes
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Raw footage -> reviewable rough cut, with a preset")
     ap.add_argument("videos_dir", type=Path, nargs="?")
@@ -299,6 +345,9 @@ def main() -> None:
     ap.add_argument("--title", default=None, help="hook title text (presets with a title)")
     ap.add_argument("--music", default=None, help="music file (music/ folder or project folder)")
     ap.add_argument("--target", type=float, default=None, help="override max length in seconds")
+    ap.add_argument("--inspire", default=None,
+                    help="a sample video, a folder of them, or a link, to take the style from "
+                         "(default: anything in <videos>/inspiration/)")
     ap.add_argument("--fresh", action="store_true", help="redo the cuts from scratch")
     ap.add_argument("--studio", action="store_true", help="open the Review Studio at the end")
     ap.add_argument("--list", action="store_true", help="list presets")
@@ -321,6 +370,13 @@ def main() -> None:
 
     print(f"1/5 ingest {videos.name}")
     step([str(HELPERS / "ingest.py"), str(videos)])
+    try:
+        samples, sample_notes = apply_inspiration(preset, videos, edit, args.inspire, args.title)
+    except (RuntimeError, ValueError) as e:
+        sys.exit(str(e))
+    tgt = preset.get("target") or {}
+    if args.target:
+        tgt["max_duration_s"] = args.target
 
     if args.fresh or not plan_path.exists():
         print("2/5 draft cuts")
@@ -339,6 +395,9 @@ def main() -> None:
     step([str(HELPERS / "plan.py"), "snapshot", str(plan_path), "--change", f"applied the '{args.preset}' preset"])
     plan = planlib.load(plan_path)
     notes = apply_preset(plan, preset, edit, args.title, args.music)
+    if samples:
+        plan["inspiration"] = {"samples": samples, "notes": sample_notes}
+        notes = [f"style taken from {', '.join(samples)} (measurements only; none of it is in your video)"] + sample_notes + notes
     plan["changes"] = (plan.get("changes") or [])[:1] + [f"v{plan['version']}: {n}" for n in notes]
     planlib.save(plan_path, plan)
     for n in notes:

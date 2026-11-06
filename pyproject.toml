@@ -12,6 +12,7 @@ dependencies = [
     "numpy",
     "faster-whisper>=1.2.1",
     "mediapipe>=1.2.0",
+    "yt-dlp",
 ]
 
 [project.optional-dependencies]
