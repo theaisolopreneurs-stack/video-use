@@ -14,7 +14,9 @@ plan.json "captions":
       "size": 72,                   # px at 1080-wide portrait / 1080-tall landscape
       "emphasis": ["0 and 4"],      # phrases to make pop
       "emphasis_look": "accent",    # accent = bigger + accent colour | serif = italic serif
-      "corrections": [{"from": "drive", "to": "derive", "source": "clip", "at": 24.6}]
+      "corrections": [{"from": "drive", "to": "derive", "source": "clip", "at": 24.6}],
+      "text_edits": [{"source": "clip", "start": 12.3, "end": 15.1, "text": "and now, the Texans are 0-4!"}]
+                                    # a line retyped in the Studio; times are seconds in the source clip
     }
 
 Styles: PRESETS below, modelled on the caption looks short-form tools ship most: word-by-word
@@ -34,6 +36,7 @@ import argparse
 import json
 import re
 import subprocess
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from PIL import ImageFont
@@ -107,6 +110,128 @@ def norm(t: str) -> str:
     return re.sub(r"[^a-z0-9']", "", t.lower())
 
 
+def _display(w: dict) -> str:
+    """A word as captions show it before styling: trailing , ; : . are dropped unless typed in."""
+    return w["text"].strip() if w.get("typed") else w["text"].strip().rstrip(",;:.")
+
+
+def apply_text_edits(words: list[dict], edits: list[dict], source: str) -> list[dict]:
+    """Retyped caption lines, onto a source's timed words. Words the person didn't change keep their
+    exact timing; changed words share the time of the ones they replace, so highlighting stays in
+    step with the voice. Each changed word is marked "typed", so its punctuation shows as typed."""
+    for e in edits or []:
+        if e.get("source") != source:
+            continue
+        a, b = float(e["start"]), float(e["end"])
+        inside = [i for i, w in enumerate(words) if a <= (w["start"] + w["end"]) / 2 <= b]
+        if not inside:
+            continue
+        old = [words[i] for i in inside]
+        new_tokens = str(e.get("text") or "").split()
+        rebuilt: list[dict] = []
+        ops = SequenceMatcher(None, [_display(w) for w in old], new_tokens, autojunk=False).get_opcodes()
+        for tag, i0, i1, j0, j1 in ops:
+            if tag == "equal":
+                rebuilt += old[i0:i1]
+            elif j1 > j0:  # replaced or added
+                toks = new_tokens[j0:j1]
+                if i1 > i0:
+                    t0, t1 = old[i0]["start"], old[i1 - 1]["end"]
+                else:  # added: no time of its own, so it borrows from a neighbouring word below
+                    t0, t1 = None, None
+                total = sum(len(x) for x in toks) or 1
+                run = 0
+                for tok in toks:
+                    w = {"text": tok, "typed": True, "type": "word", "start": None, "end": None}
+                    if t0 is not None:
+                        w["start"] = t0 + (t1 - t0) * run / total
+                        run += len(tok)
+                        w["end"] = t0 + (t1 - t0) * run / total
+                    rebuilt.append(w)
+        for i, w in enumerate(rebuilt):  # give added words time from the word before (or after)
+            if w["start"] is not None:
+                continue
+            j = i
+            while j < len(rebuilt) and rebuilt[j]["start"] is None:
+                j += 1
+            n = j - i
+            if i > 0:
+                prev = rebuilt[i - 1] = dict(rebuilt[i - 1])
+                mid = (prev["start"] + prev["end"]) / 2
+                span = (mid, prev["end"])
+                prev["end"] = mid
+            elif j < len(rebuilt):
+                nxt = rebuilt[j] = dict(rebuilt[j])
+                mid = (nxt["start"] + nxt["end"]) / 2
+                span = (nxt["start"], mid)
+                nxt["start"] = mid
+            else:
+                span = (a, b)
+            for k in range(n):
+                rebuilt[i + k]["start"] = span[0] + (span[1] - span[0]) * k / n
+                rebuilt[i + k]["end"] = span[0] + (span[1] - span[0]) * (k + 1) / n
+        words = words[:inside[0]] + rebuilt + words[inside[-1] + 1:]
+    return words
+
+
+def _source_words(plan: dict, edit_dir: Path, source: str, edited: bool = True) -> list[dict]:
+    tp = edit_dir / "transcripts" / f"{source}.json"
+    words = [w for w in json.loads(tp.read_text(encoding="utf-8")).get("words", [])
+             if w.get("type") == "word"] if tp.exists() else []
+    return apply_text_edits(words, (plan.get("captions") or {}).get("text_edits"), source) if edited else words
+
+
+def _corrected(w: dict, source: str, corrections: list[dict]) -> str:
+    text = w["text"].strip()
+    for c in corrections:
+        if norm(text) != norm(c["from"]):
+            continue
+        if c.get("source") not in (None, source):
+            continue
+        if c.get("at") is not None and abs(float(c["at"]) - w["start"]) > 1.0:
+            continue
+        trail = re.search(r"[^\w']+$", text)
+        text = c["to"] + (trail.group(0) if trail else "")
+    return text
+
+
+def caption_lines(plan: dict, edit_dir: Path, max_words: int = 12) -> list[dict]:
+    """The captions as lines of text for the Studio to edit. Lines come from the original transcript,
+    so a line stays the same stretch of time whatever is typed into it."""
+    from plan import play_pos, range_len
+    corrections = (plan.get("captions") or {}).get("corrections") or []
+    edits = (plan.get("captions") or {}).get("text_edits") or []
+    raw_cache: dict[str, list[dict]] = {}
+    new_cache: dict[str, list[dict]] = {}
+    lines: list[dict] = []
+    offset = 0.0
+    for r in plan.get("ranges") or []:
+        src, s, e = r["source"], float(r["start"]), float(r["end"])
+        if not r.get("reverse"):
+            if src not in raw_cache:
+                raw_cache[src] = _source_words(plan, edit_dir, src, edited=False)
+                new_cache[src] = _source_words(plan, edit_dir, src)
+            kept = [w for w in raw_cache[src] if w["end"] > s and w["start"] < e]
+            cur: list[dict] = []
+            for i, w in enumerate(kept):
+                cur.append(w)
+                nxt = kept[i + 1] if i + 1 < len(kept) else None
+                end_mark = w["text"].strip()[-1:]
+                if (nxt is None or end_mark in ".?!" or nxt["start"] - w["end"] >= 0.6 or len(cur) >= max_words
+                        or (end_mark in ",;:" and len(cur) >= 4)):
+                    a, b = cur[0]["start"], cur[-1]["end"]
+                    shown = [dict(x, text=_corrected(x, src, corrections)) for x in new_cache[src]
+                             if a <= (x["start"] + x["end"]) / 2 <= b]
+                    lines.append({"source": src, "start": round(a, 3), "end": round(b, 3),
+                                  "at": round(play_pos(r, max(a, s)) + offset, 2),
+                                  "text": " ".join(_display(x) for x in shown),
+                                  "edited": any(x.get("source") == src and float(x["start"]) == round(a, 3)
+                                                and float(x["end"]) == round(b, 3) for x in edits)})
+                    cur = []
+        offset += range_len(r)
+    return lines
+
+
 def output_words(plan: dict, edit_dir: Path, corrections: list[dict]) -> list[dict]:
     """Every kept word, re-timed onto the output timeline, with corrections applied.
     Speed-changed sections scale word times; reversed sections get no captions."""
@@ -121,23 +246,12 @@ def output_words(plan: dict, edit_dir: Path, corrections: list[dict]) -> list[di
             offset += range_len(r)
             continue
         if src not in cache:
-            tp = edit_dir / "transcripts" / f"{src}.json"
-            cache[src] = [w for w in json.loads(tp.read_text(encoding="utf-8")).get("words", [])
-                          if w.get("type") == "word"] if tp.exists() else []
+            cache[src] = _source_words(plan, edit_dir, src)
         for w in cache[src]:
             if w["end"] <= s or w["start"] >= e:
                 continue
-            text = w["text"].strip()
-            for c in corrections:
-                if norm(text) != norm(c["from"]):
-                    continue
-                if c.get("source") not in (None, src):
-                    continue
-                if c.get("at") is not None and abs(float(c["at"]) - w["start"]) > 1.0:
-                    continue
-                trail = re.search(r"[^\w']+$", text)
-                text = c["to"] + (trail.group(0) if trail else "")
-            words.append({"text": text,
+            text = _corrected(w, src, corrections)
+            words.append({"text": text, "typed": w.get("typed"),
                           "start": play_pos(r, max(w["start"], s)) + offset,
                           "end": play_pos(r, min(w["end"], e)) + offset})
         offset += range_len(r)
@@ -201,8 +315,9 @@ def ts(t: float) -> str:
 
 
 def clean_text(w: dict, upper: bool, lower: bool = False) -> str:
-    t = w["text"].rstrip(",;:.")
+    t = w["text"] if w.get("typed") else w["text"].rstrip(",;:.")  # typed punctuation is deliberate
     t = t.upper() if upper else (t.lower() if lower else t)
+    t = t.replace("\\", "/")
     return t.replace("{", "(").replace("}", ")")
 
 

@@ -1,18 +1,17 @@
 {
   "label": "Viral",
-  "about": "Built to hold attention: your strongest line first, no dead air, slightly faster pace, bold word-by-word captions and something new on screen every few seconds.",
+  "about": "Built to hold attention: long pauses gone but your natural rhythm kept, bold word-by-word captions, and framing that changes on the cuts so they feel deliberate.",
   "target": {"aspect": "9:16", "max_duration_s": 45},
-  "cuts": {"max_gap": 0.12},
+  "cuts": {"max_gap": 0.35, "min_section": 1.2},
   "pace": 1.08,
   "hook": {"teaser": true, "auto_title": true},
   "captions": {"style": "viral", "position": "best", "auto_emphasis": true, "emoji": true},
-  "audio": {"voice": "clean", "sfx_on_emphasis": "pop", "sfx_on_zoom": "whoosh", "music_volume_db": -24, "music": "auto"},
-  "beat_sync": {"pulse": 1.03, "every": 4},
+  "audio": {"voice": "clean", "sfx_on_emphasis": "pop", "music_volume_db": -24, "music": "auto"},
   "grade": "look:vibrant_pop",
   "adjust": {"sharpen": 0.25},
-  "zooms": {"auto": true, "every_s": 3.5, "scale": [1.12, 1.24], "style": "punch", "fill": true, "open_push": true},
+  "zooms": {"auto": true, "on_cuts": true, "scale": 1.12},
   "graphics": {"progress": true, "cta": false},
   "title": {"behind_subject": true, "font": "sans", "duration": 2.0},
   "exports": ["9:16"],
-  "editor_notes": "Judgement pass, because the automatic version only sees words. (1) The first 1-3 seconds decide everything: open on a specific claim, number, result or question, with a 2-5 word hook title that adds to the line rather than repeating it. Replace the automatic teaser if a better line exists, or remove it if the opening is already strong. (2) One idea per video; cut anything that doesn't serve it, aiming for 20-45 s. (3) Something should change on screen every 2-4 s: a zoom, graphic, sticker or B-roll, but never on top of the payoff line. (4) End on the payoff with no fade or sign-off, so it can loop. (5) Don't promise views: this improves the odds of holding attention, and the idea matters more than the edit."
+  "editor_notes": "Judgement pass, because the automatic version only sees words. (1) The first 1-3 seconds decide everything: open on a specific claim, number, result or question, with a 2-5 word hook title that adds to the line rather than repeating it. Replace the automatic teaser if a better line exists, or remove it if the opening is already strong. (2) One idea per video; cut anything that doesn't serve it, aiming for 20-45 s. (3) Keep it easy to follow: never cut a pause just because it exists, keep sentences whole, and change the framing on cuts rather than in the middle of a thought. Add graphics or B-roll where the words call for them, not on a timer. (4) End on the payoff with no fade or sign-off, so it can loop. (5) Don't promise views: this improves the odds of holding attention, and the idea matters more than the edit."
 }

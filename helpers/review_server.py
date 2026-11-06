@@ -47,6 +47,7 @@ HELPERS = Path(__file__).resolve().parent
 STUDIO_HTML = HELPERS / "studio" / "index.html"
 HOME_HTML = HELPERS / "studio" / "home.html"
 THEME_CSS = HELPERS / "studio" / "theme.css"
+MIC_JS = HELPERS / "studio" / "mic.js"
 
 
 class Studio:
@@ -96,6 +97,7 @@ class Studio:
             "transitions": sorted(__import__("render").TRANSITIONS) + sorted(__import__("effects").CUT_EFFECTS),
             "caption_styles": __import__("captions").style_list(),
             "caption_groups": __import__("captions").STYLE_GROUPS,
+            "caption_lines": __import__("captions").caption_lines(plan, self.edit_dir),
             "speed_curves": {k: round(planlib.range_len({"start": 0, "end": 1, "speed_curve": k}), 4)
                              for k in planlib.SPEED_CURVES},
             "voice_fx": [{"id": k, "label": v[0]} for k, v in __import__("audio").VOICE_FX.items()],
@@ -157,7 +159,10 @@ class Studio:
                         return ", ".join(map(str, v)) or "(none)"
                     return "(default)" if v is None else str(v)
                 for k in sorted(set(old) | set(new)):
-                    if old.get(k) != new.get(k):
+                    if k == "text_edits":
+                        if old.get(k) != new.get(k):
+                            changed.append("the caption text")
+                    elif old.get(k) != new.get(k):
                         changed.append(f"{field} {k}: {show(old.get(k))} -> {show(new.get(k))}")
             if new_ranges is not None:
                 candidate = dict(plan, ranges=new_ranges)
@@ -399,6 +404,8 @@ def make_handler(app: App):
             lib, studio = app.library, app.studio
             if url.path in ("/", "/index.html"):
                 return self.send_file(HOME_HTML if lib else STUDIO_HTML)
+            if url.path == "/mic.js":
+                return self.send_file(MIC_JS)
             if url.path == "/theme.css":
                 return self.send_file(THEME_CSS)
             if url.path == "/studio":
@@ -469,6 +476,15 @@ def make_handler(app: App):
                 except ValueError as e:
                     return self.send_json({"ok": False, "error": str(e)}, 400)
                 return self.send_json({"ok": True, "file": name})
+            if url.path == "/api/dictate":  # a voice note from a mic button -> text
+                import dictate
+                size = int(self.headers.get("Content-Length", 0))
+                if size > dictate.MAX_BYTES:
+                    return self.send_json({"ok": False, "error": "that recording is too long"}, 400)
+                try:
+                    return self.send_json({"ok": True, "text": dictate.to_text(self.rfile.read(size))})
+                except (subprocess.SubprocessError, OSError, RuntimeError) as e:
+                    return self.send_json({"ok": False, "error": str(e)[:200]})
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
             if lib and url.path == "/api/new":
                 return self.send_json({"ok": True, "name": lib.create(body.get("name") or "My video")})

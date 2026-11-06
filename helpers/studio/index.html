@@ -158,6 +158,9 @@
   .capgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   .capopt { border: 2px solid var(--line); border-radius: 9px; padding: 3px; cursor: pointer; text-align: center; font-size: 11px; background: var(--panel-2); color: inherit; font: inherit; font-size: 11px; line-height: 1.3; }
   .capopt.sel { border-color: var(--accent); font-weight: 700; }
+  .capline { display: flex; gap: 5px; align-items: flex-start; margin-top: 5px; }
+  .capline textarea { resize: none; min-height: 0; line-height: 1.3; }
+  .capline button { flex: none; font-variant-numeric: tabular-nums; }
   .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
   .chip { padding: 3px 10px; border-radius: 99px; font-size: 12px; }
   .chip[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
@@ -282,6 +285,10 @@
       </div>
       <div class="scroll">
         <div class="tabpanel" role="tabpanel" data-panel="captions">
+          <details class="adjust" id="capLinesBox"><summary>✏️ Fix the caption words</summary>
+            <div class="meta">Type over anything: spelling, punctuation, capital letters. Punctuation you type shows on screen. Save, then make a new rough cut to see it.</div>
+            <div id="capLines"></div>
+          </details>
           <div class="chips" id="capGroups" role="group" aria-label="Caption style groups"></div>
           <div class="capgrid" id="capgrid"></div>
           <div class="meta" id="capDesc"></div>
@@ -350,7 +357,7 @@
           <h4 class="sub-h">Stickers</h4>
           <ul class="fxlist" id="stkList"></ul>
           <div class="grid2">
-            <label class="lbl">Emoji <input id="stkEmoji" class="field" value="🔥" maxlength="8"></label>
+            <label class="lbl">Emoji <input id="stkEmoji" class="field no-mic" value="🔥" maxlength="8"></label>
             <label class="lbl">Moves <select id="stkAnim" class="field"><option value="pop">Pop</option><option value="bounce">Bounce</option><option value="wiggle">Wiggle</option><option value="float">Float</option><option value="spin">Spin</option><option value="pulse">Pulse</option><option value="slide">Slide in</option><option value="none">Still</option></select></label>
           </div>
           <button id="stkAdd">+ Add sticker at the player's current time</button>
@@ -470,7 +477,7 @@
     <section id="ht-tabs">
       <h3>Style tabs (right side)</h3>
       <dl>
-        <dt>Captions</dt><dd>Dozens of caption styles previewed on your footage, grouped by feel. <b>✨ Best</b> picks a spot that stays off your face and clear of the apps' buttons. Or choose <b>Top / Middle / Bottom</b>, or <b>Custom</b> and click on the video. ALL CAPS, matching emoji, and “words to pop” (the words that get the highlight).</dd>
+        <dt>Captions</dt><dd>Dozens of caption styles previewed on your footage, grouped by feel. <b>✨ Best</b> picks a spot that stays off your face and clear of the apps' buttons. Or choose <b>Top / Middle / Bottom</b>, or <b>Custom</b> and click on the video. ALL CAPS, matching emoji, and “words to pop” (the words that get the highlight). <b>✏️ Fix the caption words</b> lets you retype any line to correct spelling or punctuation.</dd>
         <dt>Look</dt><dd>Colour grades grouped as Natural, Warm, Cinematic, Film, Trend and Black &amp; white, plus <b>Adjust by hand</b> sliders for brightness, warmth, sharpness and more. Add your own <code>.cube</code> LUTs to the <code>luts/</code> folder.</dd>
         <dt>Title</dt><dd>Big hook text over the first seconds. “Behind me” puts the words behind you.</dd>
         <dt>Effects</dt><dd>Shake, glitch, glow, kaleidoscope, comic book and many more. Play the video to the moment, pick an effect and a length, click <b>Add</b>. Captions and graphics stay clean on top. Add your own <b>words on screen</b> and <b>stickers</b> the same way.</dd>
@@ -493,6 +500,7 @@
     <section id="ht-tips">
       <h3>Tips</h3>
       <ul>
+        <li><b>Rather talk than type?</b> Click the 🎤 in any text box, say your note, and click it again. Your browser will ask to use the microphone the first time. What you say stays on this computer.</li>
         <li>Lead with your strongest line — a number, a result or a bold claim — even if you said it later.</li>
         <li>Less is more: one transition between topics, a zoom or graphic every 5–10 seconds, not every line.</li>
         <li>Watch the rough cut with the sound on, once, start to finish, before approving.</li>
@@ -502,6 +510,7 @@
   </div>
 </dialog>
 
+<script src="/mic.js" defer></script>
 <script>
 const $ = (id) => document.getElementById(id);
 let S = null;          // server state
@@ -617,6 +626,21 @@ async function load() {
   renderLook();
   renderTitle();
   renderEffects();
+  renderCapLines();
+}
+
+function renderCapLines() {
+  $("capLines").innerHTML = (S.caption_lines || []).map((L, i) => `<div class="capline">
+    <button type="button" class="sm" title="Play this line" onclick="seek(${L.at})">▶ ${Math.floor(L.at / 60)}:${String(Math.floor(L.at % 60)).padStart(2, "0")}</button>
+    <textarea class="field no-mic" rows="2" aria-label="Caption line ${i + 1}" oninput="setLine(${i}, this.value)">${esc(L.text)}</textarea></div>`).join("")
+    || `<div class="meta">No spoken words found in this video.</div>`;
+}
+function setLine(i, value) {
+  const L = S.caption_lines[i];
+  const edits = (caps.text_edits || []).filter((e) => !(e.source === L.source && e.start === L.start && e.end === L.end));
+  if (value.trim() !== L.text || L.edited) edits.push({ source: L.source, start: L.start, end: L.end, text: value.trim() });
+  if (edits.length) caps.text_edits = edits; else delete caps.text_edits;
+  setDirty(true);
 }
 
 let look = "none", ttl = {}, fxs = [], adj = {}, beat = {}, fade = {}, txts = [], stks = [], capGroup = "All";

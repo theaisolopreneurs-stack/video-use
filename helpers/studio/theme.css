@@ -50,3 +50,14 @@
 :root[data-theme="high-contrast"] { --bg: #000000; --panel: #000000; --panel-2: #141414; --ink: #ffffff; --muted: #e6e6e6; --line: #ffffff; --accent: #ffd400; --accent-ink: #000000; --warn: #ff6b6b; --ok: #4ade80; --stage: #000000; --cut: #bdbdbd; --beat-0: #0080ff; --beat-1: #c060ff; --beat-2: #ffb000; --beat-3: #00b050; --beat-4: #ff4040; --beat-5: #00c0c0; color-scheme: dark; }
 :root[data-theme]:not([data-theme^="warm"]) { --accent-soft: color-mix(in srgb, var(--accent) 18%, var(--panel)); --warn-soft: color-mix(in srgb, var(--warn) 16%, var(--panel)); --pill-draft-bg: color-mix(in srgb, var(--warn) 18%, var(--panel)); --pill-draft-ink: var(--warn); --pill-plan-bg: color-mix(in srgb, var(--accent) 20%, var(--panel)); --pill-plan-ink: var(--accent); --pill-done-bg: color-mix(in srgb, var(--ok) 22%, var(--panel)); --pill-done-ink: var(--ok); }
 :root[data-theme="warm-light"] { color-scheme: light; }
+
+/* Talk instead of type (mic.js) */
+.micwrap { position: relative; display: block; width: 100%; min-width: 0; }
+.micwrap.grow { flex: 1; }
+.micwrap > .field { width: 100%; padding-right: 34px; }
+.micbtn { position: absolute; top: 3px; right: 3px; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; font-size: 13px; line-height: 1; cursor: pointer; }
+.micbtn:hover { background: var(--line); }
+.micbtn[data-state="rec"] { background: #d92d20; color: #fff; animation: micpulse 1.1s ease-in-out infinite; }
+.micbtn[data-state="busy"] { cursor: progress; opacity: .7; }
+@keyframes micpulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .micbtn[data-state="rec"] { animation: none; } }

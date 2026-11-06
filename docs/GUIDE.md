@@ -61,7 +61,7 @@ takes, order, hook, graphics) when you ask it to.
 | **Top bar** | The four steps: Edit & save → Approve plan → Rough cut → Approve rough cut. The orange button is always the next step. |
 | **Player + timeline** | Watch the rough cut. Coloured blocks are sections; click one to jump. **+ Note at current time** pins a note to a moment. |
 | **Storyboard** | Every kept section with frames, the line, and why it's there. Crossed-out lines between cards are cuts — **Restore** brings one back. Each card's **Edit** drawer: nudge start/end, transition in, speed (slow-mo / fast), freeze at the end, stabilize, a note. Untick a card to drop it; arrows reorder. |
-| **Captions** | 76 styles, grouped by feel and previewed on your footage. **✨ Best** picks a spot that stays off your face and clear of the apps' buttons; or **Top / Middle / Bottom / Custom** — Custom lets you click exactly where captions go on the video. Matching emoji. Words to pop. |
+| **Captions** | 76 styles, grouped by feel and previewed on your footage. **✨ Best** picks a spot that stays off your face and clear of the apps' buttons; or **Top / Middle / Bottom / Custom** — Custom lets you click exactly where captions go on the video. Matching emoji. **✏️ Fix the caption words** lets you retype any line. Words to pop. |
 | **Look** | 40+ colour looks (natural, warm, cinematic, film, trend, black & white) previewed on your footage, plus any `.cube` LUTs you add. |
 | **Title** | Hook title text, font, length, and "behind me". |
 | **Effects** | Shake, glitch, VHS, flash, grain, blur, cinema bars… added at the player's current time for a set length, or across the whole video. |
@@ -94,6 +94,7 @@ Ask Claude for titles, a description and hashtags.
   only): colours, fonts, caption style, words to always pop, your call-to-action line.
 - **Music**: drop tracks in `music/` (see `music/README.md` for free sources).
 - **Looks**: drop `.cube` LUTs in `luts/`.
+- **Talk instead of type**: click the 🎤 in any text box in the editor, speak, and click it again. It uses the same free speech model as your captions, on your computer, in English. To talk to Claude in the chat, press Windows + H for Windows' own dictation, which may use Microsoft's online speech service.
 - **Presets**: copy a file in `presets/` and tweak it to make your own recipe.
 
 ---

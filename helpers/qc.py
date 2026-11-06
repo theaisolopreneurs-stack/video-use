@@ -87,6 +87,12 @@ def cut_times(plan: dict) -> list[float]:
 def check_length(plan, video, f):
     want, got = planlib.total_duration(plan), duration(video)
     # Each section rounds to whole frames (~1 frame of drift per cut), so allow a little per section.
+    # Cutting out a tiny gap gains nothing and makes the picture twitch.
+    rs = plan.get("ranges", [])
+    tiny = [a for a, b in zip(rs, rs[1:]) if a["source"] == b["source"]
+            and 0 <= float(b["start"]) - float(a["end"]) < 0.15 and not b.get("transition")]
+    if tiny:
+        f.append(("warn", None, f"{len(tiny)} cut(s) remove under 0.15s: these look like twitches, so consider joining them"))
     if abs(want - got) > max(0.25, 0.04 * len(plan.get("ranges", []))):
         f.append(("fail", None, f"length is {got:.2f}s but the plan adds up to {want:.2f}s"))
     return {"planned_s": want, "rendered_s": round(got, 2)}

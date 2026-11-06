@@ -63,6 +63,7 @@ of Claude editing raw footage (video-use, justyn.ai's viral reel). Forked from
 | 9 | 5 presets + one-command pipeline | `presets/*.json`, `helpers/make.py` |
 | 10 | 35 recipe looks; caption position (named or x/y); 21 transitions + 3 effect cuts; per-section speed/freeze/stabilize/reverse; 15 effects; multi-video + B-roll; warm UI; plugin | `helpers/looks.py`, `effects.py`, `.claude-plugin/`, `skills/` |
 | 11 | CapCut comparison (`docs/CAPCUT-FEATURES.md`) and everything feasible from it; 76 caption styles with groups; **Best** caption position; **Viral** preset; ask before adding a shortcut; exact section lengths so sync can't drift | `helpers/stickers.py`, `background.py`, `beats.py`, `tts.py`, `presets/viral.json`, `captions.best_spots`, `plan.curve_slices` |
+| 11b | Talk instead of type (🎤 on every text box, `/api/dictate`, local model); retype caption lines (`captions.text_edits`), kept in step with the voice | `helpers/dictate.py`, `helpers/studio/mic.js`, `captions.apply_text_edits` |
 | Later | 21 Studio colour themes; in-app How-to; **Home screen** (drag clips, pick style, Make my video), library, Export dialog, desktop icon | `helpers/studio/theme.css`, `home.html`, `helpers/library.py`, `shortcut.py` |
 
 **Pipeline:** ingest → `suggest_cuts` → preset/Claude refine `plan.json` → Gate 1 approve plan →

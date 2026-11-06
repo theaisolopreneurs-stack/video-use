@@ -120,6 +120,15 @@ def apply_hook(plan: dict, edit_dir: Path, hook: dict, title: str | None) -> lis
         return ["hook: no line stood out, so the opening stays as it is"]
     first = plan["ranges"][0]
     already_first = line["source"] == first["source"] and line["start"] - float(first["start"]) < 2.0
+    # A teaser only helps if it's a real payoff from well into the video. A so-so line, or one
+    # the viewer hears again seconds later, just makes the opening confusing.
+    earlier = 0.0
+    for r in plan["ranges"]:
+        if r["source"] == line["source"] and float(r["start"]) <= line["start"] < float(r["end"]):
+            break
+        earlier += planlib.range_len(r)
+    if line["score"] < 5 or earlier < 10:
+        return [] if already_first else [f"no teaser: nothing later in the video beats your opening (best line: \"{line['text']}\")"]
     if hook.get("teaser") and not already_first:
         plan["ranges"].insert(0, {"source": line["source"], "start": round(line["start"], 3), "end": round(line["end"], 3),
                                   "beat": "HOOK TEASER", "quote": line["text"],
@@ -137,7 +146,20 @@ def apply_hook(plan: dict, edit_dir: Path, hook: dict, title: str | None) -> lis
 def auto_zooms(plan: dict, edit_dir: Path, z: dict, skip_until: float) -> list[dict]:
     """Punch-ins on popped phrases (else on section starts), at most one per every_s seconds.
     With "fill", gaps are topped up at sentence starts, so there's a steady change on screen.
-    "scale" can be a list, alternated, so the framing keeps changing rather than just pulsing."""
+    "scale" can be a list, alternated, so the framing keeps changing rather than just pulsing.
+    With "on_cuts", every other section is framed tighter for its whole length, so the change
+    happens exactly on the cut (which hides the jump) and never in the middle of a thought."""
+    if z.get("on_cuts"):
+        scale = z.get("scale", 1.12)
+        out, t = [], 0.0
+        for i, r in enumerate(plan["ranges"]):
+            d = planlib.range_len(r)
+            if i % 2 == 1:
+                out.append({"start_in_output": round(t, 3), "duration": round(d, 3), "scale": scale, "style": "punch"})
+            elif d > 4:  # a long take gets a slow creep, so it doesn't sit still
+                out.append({"start_in_output": round(t, 3), "duration": round(d, 3), "scale": 1 + (scale - 1) * 0.6, "style": "drift"})
+            t += d
+        return out
     import captions
     s = captions.settings(plan, captions.load_brand(edit_dir))
     words = captions.output_words(plan, edit_dir, s.get("corrections") or [])
@@ -193,10 +215,16 @@ def apply_preset(plan: dict, preset: dict, edit_dir: Path, title: str | None, mu
     if preset.get("hook"):
         notes += apply_hook(plan, edit_dir, preset["hook"], title)
         title = title or plan.pop("_auto_title", None)
-    if preset.get("pace"):  # a touch faster than life; pitch stays natural
-        for r in plan["ranges"]:
-            r.setdefault("speed", preset["pace"])
-        notes.append(f"pace: {preset['pace']}× (voice pitch unchanged)")
+    if preset.get("pace"):  # only a slow talker gets sped up; fast speech sped up gets tiring
+        import captions
+        spoken = captions.output_words(plan, edit_dir, [])
+        rate = len(spoken) / max(1.0, planlib.total_duration(plan))
+        if rate < 3.2:
+            for r in plan["ranges"]:
+                r.setdefault("speed", preset["pace"])
+            notes.append(f"pace: {preset['pace']}× (voice pitch unchanged)")
+        else:
+            notes.append(f"pace: left natural, you already talk at {rate:.1f} words a second")
     plan["adjust"] = preset.get("adjust") or {}
     plan["beat_sync"] = preset.get("beat_sync") or {}
     plan["target"] = dict(plan.get("target") or {}, **(preset.get("target") or {}))
@@ -297,7 +325,8 @@ def main() -> None:
     if args.fresh or not plan_path.exists():
         print("2/5 draft cuts")
         cmd = [str(HELPERS / "suggest_cuts.py"), "--edit-dir", str(edit), "--force",
-               "--max-gap", str((preset.get("cuts") or {}).get("max_gap", 0.35))]
+               "--max-gap", str((preset.get("cuts") or {}).get("max_gap", 0.35)),
+               "--min-section", str((preset.get("cuts") or {}).get("min_section", 0))]
         cmd += ["--aspect", tgt["aspect"]] if tgt.get("aspect") else []
         cmd += ["--target", str(tgt["max_duration_s"])] if tgt.get("max_duration_s") else []
         if plan_path.exists():

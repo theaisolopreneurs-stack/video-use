@@ -100,7 +100,7 @@ def mark_removals(words: list[dict]) -> dict[int, tuple[str, str]]:
     return drop
 
 
-def build_source(name: str, words: list[dict], src_dur: float, max_gap: float):
+def build_source(name: str, words: list[dict], src_dur: float, max_gap: float, min_section: float = 0.0):
     drop = mark_removals(words)
     kept = [i for i in range(len(words)) if i not in drop]
 
@@ -110,7 +110,11 @@ def build_source(name: str, words: list[dict], src_dur: float, max_gap: float):
         if groups:
             prev = groups[-1][-1]
             gap = words[i]["start"] - words[prev]["end"]
-            if gap <= max_gap and not any(j in drop for j in range(prev + 1, i)):
+            clean = not any(j in drop for j in range(prev + 1, i))
+            # A tiny section between two cuts reads as a stutter, so it keeps going through a
+            # modest pause instead of being cut off on its own.
+            short = words[prev]["end"] - words[groups[-1][0]]["start"] < min_section and gap <= 0.7
+            if clean and (gap <= max_gap or short):
                 groups[-1].append(i)
                 continue
         groups.append([i])
@@ -156,6 +160,8 @@ def build_source(name: str, words: list[dict], src_dur: float, max_gap: float):
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build a draft plan.json from transcripts")
     ap.add_argument("--edit-dir", type=Path, required=True)
+    ap.add_argument("--min-section", type=float, default=0.0,
+                    help="keep going through a pause rather than leave a section shorter than this")
     ap.add_argument("--max-gap", type=float, default=0.35,
                     help="pauses longer than this (s) are cut. Default 0.35")
     ap.add_argument("--target", type=float, default=None, help="target max length in seconds")
@@ -192,7 +198,8 @@ def main() -> None:
         if not words:
             continue
         plan["sources"][name] = str(videos[name])
-        ranges, cuts, soft = build_source(name, words, durations.get(name, words[-1]["end"] + 1), args.max_gap)
+        ranges, cuts, soft = build_source(name, words, durations.get(name, words[-1]["end"] + 1), args.max_gap,
+                                          args.min_section)
         plan["ranges"] += ranges
         plan["cuts"] += cuts
         soft_all += soft
