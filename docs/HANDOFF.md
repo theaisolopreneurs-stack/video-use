@@ -65,6 +65,7 @@ of Claude editing raw footage (video-use, justyn.ai's viral reel). Forked from
 | 11 | CapCut comparison (`docs/CAPCUT-FEATURES.md`) and everything feasible from it; 76 caption styles with groups; **Best** caption position; **Viral** preset; ask before adding a shortcut; exact section lengths so sync can't drift | `helpers/stickers.py`, `background.py`, `beats.py`, `tts.py`, `presets/viral.json`, `captions.best_spots`, `plan.curve_slices` |
 | 11b | Talk instead of type (🎤 on every text box, `/api/dictate`, local model); retype caption lines (`captions.text_edits`), kept in step with the voice | `helpers/dictate.py`, `helpers/studio/mic.js`, `captions.apply_text_edits` |
 | 11c | Style samples: measure a sample video, apply as a recipe, files in `<video>/inspiration/`, Home box, links through yt-dlp | `helpers/inspire.py`, `make.apply_inspiration` |
+| 11d | Hand swipe reveal and hand swipe transition (MediaPipe hand model, follows the hand, look picked from the words); CLAUDE.md; plugin installed from GitHub and set up in its own folder (smoke test PASS, ~1 GB) | `helpers/handwipe.py`, `CLAUDE.md` |
 | Later | 21 Studio colour themes; in-app How-to; **Home screen** (drag clips, pick style, Make my video), library, Export dialog, desktop icon | `helpers/studio/theme.css`, `home.html`, `helpers/library.py`, `shortcut.py` |
 
 **Pipeline:** ingest → `suggest_cuts` → preset/Claude refine `plan.json` → Gate 1 approve plan →
@@ -82,7 +83,10 @@ Section on-screen length is always `plan.range_len(r)`; staleness is `plan.cut_s
 **Library (Home mode):** `~/Videos/AI Video Editor/<video>/` with clips, `edit/`, `exports/`.
 Override with `AI_VIDEO_LIBRARY` or `review_server.py --library`.
 
-**Plugin:** this repo is both plugin (`ai-video-editor`) and marketplace (`aisolopreneurs-video`).
+**Plugin:** this repo is both plugin (`ai-video-editor`) and marketplace (`aisolopreneurs-video`). Installed on this
+machine from GitHub (user scope) at `~/.claude/plugins/cache/aisolopreneurs-video/ai-video-editor/<version>/`,
+with its own `.venv`. It's a snapshot: after pushing, run `claude plugin marketplace update aisolopreneurs-video`
+then `claude plugin update ai-video-editor@aisolopreneurs-video`, and re-run setup if the folder changed.
 Skills: `start`, `edit-video`, `video-editor-setup`, plus upstream `manim-video`. Validate with
 `claude plugin validate .` (passes). **Never actually installed from GitHub yet.**
 
@@ -184,6 +188,7 @@ It is not in the Home library (that folder is empty).
 - Each section adds about one frame of length drift; QC tolerance scales with section count.
 - Exports overwrite `edit/base_*`, so QC must run right after each render to get a matching base.
 - A true-peak of -0.9 on drafts is normal (1-pass loudnorm); QC allows 0.15 dB.
+- FFmpeg's blend filter has a wrong `T` (time) on some phone footage; `handwipe.py` uses `N / fps` instead.
 - `framing.person_mask` must copy: MediaPipe's view dangles once its result is freed (crashed Python when a mask was kept between frames).
 - Windows lets two servers share port 8765 if address reuse is on; `review_server.py` turns it off there. Test servers should use `--port`, because the real icon may be running on 8765.
 - Commit on the right branch: Phase 4 once landed on the Phase 3 branch by mistake.

@@ -102,7 +102,7 @@ CUT_EFFECTS = {"glitch": ("glitch", 0.25), "shake": ("shake", 0.3), "flash_cut":
 
 
 def effect_list() -> list[dict]:
-    return [{"id": k, "label": v[0]} for k, v in EFFECTS.items()]
+    return [{"id": "hand_wipe", "label": "Hand swipe reveal"}] + [{"id": k, "label": v[0]} for k, v in EFFECTS.items()]
 
 
 def effects_chain(plan: dict, W: int, H: int) -> str:
@@ -119,6 +119,10 @@ def effects_chain(plan: dict, W: int, H: int) -> str:
         t += range_len(r)
     out = []
     for i, e in enumerate(items):
+        if e.get("type") == "hand_wipe":
+            from handwipe import wipe_effect
+            out.append(wipe_effect(e, plan, i, W, H))
+            continue
         if e.get("type") not in EFFECTS:
             continue
         a = float(e.get("start_in_output", 0.0))

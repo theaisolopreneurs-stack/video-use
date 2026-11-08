@@ -274,6 +274,7 @@ TRANSITIONS = {
     "wipe_right": ("wiperight", 0.4), "circle_open": ("circleopen", 0.5), "circle_close": ("circleclose", 0.5),
     "radial": ("radial", 0.5), "zoom_in": ("zoomin", 0.4), "pixelate": ("pixelize", 0.4),
     "blur": ("hblur", 0.4), "squeeze": ("squeezeh", 0.35), "diagonal": ("diagtl", 0.4),
+    "hand_swipe": ("custom", 0.6),  # follows your hand across the frame (handwipe.py)
 }
 
 
@@ -620,6 +621,12 @@ def join_with_transitions(segment_paths: list[Path], joins: list[tuple[str, floa
         if kind == "cut" or d <= 0:
             parts.append(f"{vcur}[v{i}]concat=n=2:v=1:a=0[vj{i}];{acur}[a{i}]concat=n=2:v=0:a=1[aj{i}]")
             length += nxt
+        elif kind == "custom":
+            from handwipe import xfade_expr
+            parts.append(f"{vcur}[v{i}]xfade=transition=custom:expr='{xfade_expr(segment_paths[i - 1], d)}':"
+                         f"duration={d:.3f}:offset={length - d:.3f}[vj{i}];"
+                         f"{acur}[a{i}]acrossfade=d={d:.3f}[aj{i}]")
+            length += nxt - d
         else:
             parts.append(f"{vcur}[v{i}]xfade=transition={kind}:duration={d:.3f}:offset={length - d:.3f}[vj{i}];"
                          f"{acur}[a{i}]acrossfade=d={d:.3f}[aj{i}]")
@@ -1095,6 +1102,7 @@ def main() -> None:
         # Effects (and glitch/shake/flash cuts) act on the picture after zooms, before any text.
         from effects import build_broll_overlays, effects_chain
         edl["_edit_dir"] = str(edit_dir)
+        edl["_base"] = str(base_path)
         fx = effects_chain(edl, bw, bh)
         if fx:
             zoom = f"{zoom or 'null'}{fx}"

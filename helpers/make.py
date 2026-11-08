@@ -291,6 +291,17 @@ def apply_preset(plan: dict, preset: dict, edit_dir: Path, title: str | None, mu
             kept.append(card)
             notes.append(f"end card: {card['text']}")
     plan["graphics"] = kept
+    if preset.get("hand_swipes", True):  # a swipe in the footage gets its reveal, matched to the words
+        try:
+            import handwipe
+            swipes = handwipe.find_in_plan(plan, edit_dir)
+        except Exception as e:  # noqa: BLE001 - a missing model must never stop a video being made
+            swipes = []
+            notes.append(f"hand swipes: couldn't check ({e})")
+        plan["effects"] = [x for x in plan.get("effects") or [] if x.get("type") != "hand_wipe" or x.get("_manual")]
+        for s in swipes:
+            plan["effects"].append({"type": "hand_wipe", "start_in_output": s["start_in_output"], "reveal": "auto"})
+            notes.append(f"hand swipe at {s['start_in_output']:.1f}s: the video changes behind your hand")
     plan["preset"] = preset.get("_name")
     return notes
 
