@@ -66,13 +66,25 @@
   .panel-h h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; }
   @media (min-width: 1100px) {
     body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-    main { flex: 1; min-height: 0; grid-template-columns: 320px minmax(0, 1fr) 360px; grid-template-rows: minmax(0, 1fr) 300px;
+    main { flex: 1; min-height: 0; grid-template-columns: var(--lw, 320px) minmax(0, 1fr) var(--rw, 360px); grid-template-rows: minmax(0, 1fr) var(--th, 300px);
       grid-template-areas: "left stage insp" "tl tl tl"; }
     .col { min-height: 0; display: flex; flex-direction: column; }
     .col > .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .scroll { flex: 1; min-height: 0; overflow-y: auto; }
     #stageCol { overflow: hidden; }
   }
+  /* panels you can fold away, for a bigger video */
+  body.hide-left main { --lw: 0px; } body.hide-right main { --rw: 0px; } body.hide-tl main { --th: 0px; }
+  body.hide-left #leftCol, body.hide-right #inspCol, body.hide-tl #tlCol { display: none !important; }
+  body.hide-left.hide-right.hide-tl main { gap: 0; }
+  body.hide-left.hide-right.hide-tl #stageCol .transport { display: none; }
+  .viewbar { display: flex; gap: 4px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .viewbar button { font-size: 12px; padding: 3px 9px; }
+  .viewbar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+  .viewbar .big { margin-left: auto; font-weight: 600; }
+  .connect { display: flex; gap: 10px; align-items: center; background: var(--panel-2); border: 2px dashed var(--accent); border-radius: 10px; padding: 8px 10px; flex-wrap: wrap; }
+  .connect .txt { flex: 1; min-width: 180px; font-size: 13px; }
+  .connect .txt b { display: block; }
   @media (max-width: 759px) {
     header.top { padding: 8px 16px; }
     main { padding: 8px 16px 84px; }
@@ -331,6 +343,12 @@
       Close the editor (or restart your computer), then open it again from the desktop icon.</div>
     <div class="banner warn" id="problemsBox" hidden><b>Problems to fix first</b><ul id="problems"></ul></div>
     <section class="panel">
+      <div class="viewbar" role="group" aria-label="Show or hide panels">
+        <button type="button" id="vLeft" title="Show or hide Claude's plan (left)">◧ Plan</button>
+        <button type="button" id="vTl" title="Show or hide the timeline (bottom)">▤ Timeline</button>
+        <button type="button" id="vRight" title="Show or hide the tools (right)">Tools ◨</button>
+        <button type="button" class="big" id="vBig" title="Hide everything and make the video as big as possible (F). Press F or Esc to come back.">⛶ Big video</button>
+      </div>
       <div class="screen" id="roughArea"></div>
       <div class="transport">
         <div class="row">
@@ -349,6 +367,11 @@
           </div>
         </form>
         <ul class="tnotes" id="tnotes"></ul>
+        <div class="connect" id="connectBox" hidden>
+          <span style="font-size:24px">🔑</span>
+          <span class="txt"><b>Let Claude edit from here</b>Connect your Claude account once. A Claude page opens in your browser: sign in if asked and click <b style="display:inline">Authorize</b>, then come back here.</span>
+          <button type="button" class="primary" id="connectBtn">Connect Claude</button>
+        </div>
         <form class="director" id="askForm">
           <textarea id="askText" class="field" rows="1" placeholder="🎬 Tell Claude what to change… e.g. “make the hook punchier”, “add a whip transition here”, “bigger captions”"></textarea>
           <button type="submit" class="primary send" id="askBtn">Send</button>
@@ -626,6 +649,7 @@
         <li><b>Drag</b> text, zooms, effects, stickers and the title to move them; <b>drag their edges</b> to make them longer or shorter. They snap to the playhead and scene edges.</li>
         <li><b>Drag a scene</b> to reorder it; drag a scene's edges to trim its start or end.</li>
         <li><b>✂ Split</b> (Ctrl+B) cuts the scene at the playhead in two. <b>⧉ Duplicate</b> (Ctrl+D), <b>🗑 Delete</b> (Delete key), <b>↶ Undo</b> (Ctrl+Z) and <b>↷ Redo</b> (Ctrl+Y) work like any editor. Ctrl+S saves.</li>
+        <li><b>Bigger video:</b> the buttons above the video hide the <b>Plan</b>, <b>Timeline</b> or <b>Tools</b>. <b>⛶ Big video</b> (or the F key) hides everything; F or Esc brings it all back.</li>
         <li>Click the time ruler (or any empty spot) to move the playhead. <b>+ / − / Fit</b> zoom the timeline. <b>Space</b> plays and pauses.</li>
         <li><b>💬 Note at this moment</b> pins a note to an exact time (red pins on the ruler).</li>
       </ul>
@@ -646,7 +670,7 @@
       <p><b>Right here:</b> type or say (🎤) what you want in the <b>Tell Claude</b> box under the video, e.g. <i>“make the hook punchier”</i>,
         <i>“add a whip transition here”</i>, <i>“bigger captions”</i>. Claude sees what you've selected and where the playhead is, makes the change,
         and answers in a sentence. The <b>💬 Chat</b> tab on the left keeps the conversation. Your changes are saved first, automatically.
-        This uses your own Claude Code; the first time, you may need to sign in to it once (open a terminal and type <code>claude</code>).</p>
+        This uses your own Claude account: the first time, click <b>🔑 Connect Claude</b> (here or on the Home screen), approve it in the browser page that opens, and come back.</p>
       <p><b>Or with notes:</b> leave 💬 feedback on any piece (timeline, Claude's plan, scenes), <b>Save</b>, then tell Claude <b>“check my notes”</b> in your Claude chat.</p>
     </section>
     <section id="ht-export">
@@ -1458,7 +1482,7 @@ function duplicateSelected() {
 }
 $("splitBtn").onclick = splitAtPlayhead; $("delBtn").onclick = deleteSelected; $("dupBtn").onclick = duplicateSelected;
 document.addEventListener("keydown", (e) => {
-  if (e.target.closest("input,textarea,select,[contenteditable]")) return;
+  if (e.target.closest?.("input,textarea,select,[contenteditable]")) return;
   const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
   if (mod && k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
   else if (mod && (k === "y" || (k === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
@@ -1647,7 +1671,7 @@ function renderRough() {
 function seek(t) { const v = $("player"); if (!v) { playT = t; movePH(); return toast("Make a preview to watch it", true); } v.currentTime = t; v.play(); }
 function seekRaw(t) { const v = $("player"); playT = t; if (v) { v.currentTime = t; v.pause(); } movePH(); }
 document.addEventListener("keydown", (e) => {
-  if (e.code !== "Space" || e.target.closest("input,textarea,select,button,[contenteditable]")) return;
+  if (e.code !== "Space" || e.target.closest?.("input,textarea,select,button,[contenteditable]")) return;
   const v = $("player"); if (!v) return;
   e.preventDefault(); v.paused ? v.play() : v.pause();
 });
@@ -1724,8 +1748,66 @@ function renderChat() {
   $("askBtn").textContent = c.state === "running" ? "Working…" : "Send";
   if (!S.server_version) $("askText").placeholder = "🎬 Reopen the editor to talk to Claude from here";
   else if (!c.available) $("askText").placeholder = "🎬 Claude Code isn't installed here, so ask in your Claude chat instead";
+  showConnect();
+  if (c.signed_in === false) $("askText").placeholder = "🎬 Connect Claude above, then tell it what to change…";
   $("askChips").innerHTML = ASK_CHIPS.map((t) => `<button type="button" onclick="$('askText').value=${esc(JSON.stringify(t))};$('askText').focus()">${esc(t)}</button>`).join("");
 }
+// ---- connecting Claude (one time): open the sign-in, wait until it's done ----------------------
+let connectPoll = null;
+function showConnect() {
+  const c = S.chat || {};
+  $("connectBox").hidden = !(S.server_version && c.available && c.signed_in === false);
+  // while it's showing, keep the video big: no suggestion chips or old replies
+  $("askChips").hidden = $("lastMsg").hidden = !$("connectBox").hidden;
+}
+$("connectBtn").onclick = async () => {
+  const r = await (await fetch("/api/claude-login", { method: "POST", body: "{}" })).json();
+  if (!r.ok) return toast(r.error, true);
+  $("connectBtn").textContent = "Waiting for you to approve…"; $("connectBtn").disabled = true;
+  toast("A Claude sign-in page is opening in your browser. Sign in if asked, click Authorize, then come back here.");
+  clearInterval(connectPoll);
+  const t0 = Date.now();
+  connectPoll = setInterval(async () => {
+    const st = await (await fetch("/api/claude-status")).json();
+    if (st.signed_in || Date.now() - t0 > 6 * 60000) {
+      clearInterval(connectPoll);
+      $("connectBtn").textContent = "Connect Claude"; $("connectBtn").disabled = false;
+      if (st.signed_in) { S.chat = { ...(S.chat || {}), signed_in: true }; showConnect(); renderChat(); toast("Claude is connected ✓ Tell it what to change."); $("askText").focus(); }
+      else toast("Still not connected. Click Connect Claude to try again.", true);
+    }
+  }, 3000);
+};
+
+// ---- fold panels away for a bigger video ---------------------------------------------------------
+const view = (() => { try { return JSON.parse(store.get("studio-view") || "{}"); } catch { return {}; } })();
+function applyView() {
+  document.body.classList.toggle("hide-left", !!view.left);
+  document.body.classList.toggle("hide-right", !!view.right);
+  document.body.classList.toggle("hide-tl", !!view.tl);
+  $("vLeft").setAttribute("aria-pressed", !view.left); $("vRight").setAttribute("aria-pressed", !view.right); $("vTl").setAttribute("aria-pressed", !view.tl);
+  const big = view.left && view.right && view.tl;
+  $("vBig").textContent = big ? "↙ Show panels" : "⛶ Big video";
+  store.set("studio-view", JSON.stringify(view));
+  setTimeout(() => { renderTL(); drawCapDot(); }, 30);
+}
+function toggleBig() {
+  const big = view.left && view.right && view.tl;
+  const before = view.before && !(view.before.left && view.before.right && view.before.tl) ? view.before : { left: false, right: false, tl: false };
+  if (big) { Object.assign(view, before); delete view.before; }
+  else { view.before = { left: !!view.left, right: !!view.right, tl: !!view.tl }; Object.assign(view, { left: true, right: true, tl: true }); }
+  applyView();
+}
+$("vLeft").onclick = () => { view.left = !view.left; applyView(); };
+$("vRight").onclick = () => { view.right = !view.right; applyView(); };
+$("vTl").onclick = () => { view.tl = !view.tl; applyView(); };
+$("vBig").onclick = toggleBig;
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest?.("input,textarea,select,[contenteditable]") || e.ctrlKey || e.metaKey) return;
+  if (e.key === "f" || e.key === "F") { e.preventDefault(); toggleBig(); }
+  else if (e.key === "Escape" && view.left && view.right && view.tl) toggleBig();
+});
+applyView();
+
 let askPoll = null;
 $("askForm").onsubmit = async (e) => {
   e.preventDefault();
@@ -1737,6 +1819,7 @@ $("askForm").onsubmit = async (e) => {
   const context = { playhead: Math.round(nowT() * 100) / 100,
     selected: it ? { what: (KIND[it.kind] || ["piece"])[0], label: it.label, at: Math.round(it.t * 100) / 100, key: it.key } : null };
   const res = await (await fetch("/api/ask", { method: "POST", body: JSON.stringify({ message, context }) })).json();
+  if (res.signin) { S.chat = { ...(S.chat || {}), signed_in: false }; showConnect(); $("connectBox").scrollIntoView({ block: "nearest" }); }
   if (!res.ok) return toast(res.error, true);
   $("askText").value = "";
   S.chat = { ...(S.chat || {}), state: "running", log: [...((S.chat || {}).log || []), { who: "you", text: message, at: "now" }] };

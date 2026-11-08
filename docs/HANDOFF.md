@@ -193,6 +193,7 @@ It is not in the Home library (that folder is empty).
 - A true-peak of -0.9 on drafts is normal (1-pass loudnorm); QC allows 0.15 dB.
 - FFmpeg's blend filter has a wrong `T` (time) on some phone footage; `handwipe.py` uses `N / fps` instead.
 - The desktop icon's editor keeps running until the computer restarts; older copies didn't serve new routes (`/theme.js`, `/mic.js`, `caption_fonts`), which showed up as an empty colour menu, no fonts and no mic. Now `replace_old_editor` stops an older `review_server.py` on the port (version from `/api/version`) and the pages show a "please reopen" banner if one is still answering.
+- Connect Claude: `claude auth status --json` (`loggedIn`) is checked by the server (cached 2 min); the button runs `claude auth login` in its own console window (CREATE_NEW_CONSOLE beats the no-window patch) and the page polls `/api/claude-status`.
 - The Studio's Tell Claude box needs the command-line Claude Code to be signed in; the desktop app's sign-in is separate (`claude -p` failed with "OAuth session expired" on this machine on 2026-11-08).
 - FFmpeg's `anlmdn` crashes (heap corruption) on joined base files with small timestamp jumps; voice isolate uses two `afftdn` passes instead.
 - Effect chains use `@` as a label placeholder, so never write `color=black@0.5` inside one (blackout uses lutyuv).

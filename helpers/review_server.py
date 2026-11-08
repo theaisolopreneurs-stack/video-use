@@ -110,7 +110,7 @@ class Studio:
             "caption_fonts": __import__("captions").font_list(),
             "server_version": SERVER_VERSION,
             "chat": {"state": self.chat["state"], "error": self.chat["error"], "log": self.chat_log()[-40:],
-                     "available": bool(find_claude())},
+                     "available": bool(find_claude()), "signed_in": claude_signed_in()},
         }
 
     def music_files(self) -> list[Path]:
@@ -240,6 +240,8 @@ class Studio:
         claude = find_claude()
         if not claude:
             return {"ok": False, "error": "Claude Code isn't installed on this computer, so ask in your Claude chat instead."}
+        if claude_signed_in() is False:
+            return {"ok": False, "signin": True, "error": "Connect your Claude account first: click 🔑 Connect Claude."}
         ctx = body.get("context") or {}
         self._log("you", msg)
         self.chat.update(state="running", error=None)
@@ -279,8 +281,9 @@ Finish with 1-3 short, friendly, plain-English sentences saying what you changed
             except Exception as e:  # noqa: BLE001
                 err = str(e)
                 if any(k in err.lower() for k in ("authenticate", "login", "log in", "oauth", "api key")):
-                    self._log("claude", "I need you to sign in to Claude Code once before I can edit from here: open a "
-                                        "terminal, type claude, and follow the sign-in. Then ask me again.")
+                    _AUTH["at"] = 0.0
+                    self._log("claude", "I need you to connect your Claude account once before I can edit from here. "
+                                        "Click “🔑 Connect Claude” under the video, approve it in your browser, then ask me again.")
                     self.chat.update(state="failed", error="signin")
                 else:
                     self._log("claude", "Sorry, that didn't work. Try saying it another way, or ask in your Claude chat.")
@@ -493,6 +496,8 @@ def make_handler(app: App):
                 return self.send_file(THEME_JS)
             if url.path == "/api/version":
                 return self.send_json({"version": SERVER_VERSION})
+            if url.path == "/api/claude-status":
+                return self.send_json({"installed": bool(find_claude()), "signed_in": claude_signed_in(refresh=True)})
             if url.path == "/studio":
                 if not studio:
                     return self.redirect("/")
@@ -613,6 +618,8 @@ def make_handler(app: App):
                 target = lib.root if what == "library" or not name else lib.folder(name)
                 open_in_file_manager(target / "exports" if what == "exports" else target)
                 return self.send_json({"ok": True})
+            if url.path == "/api/claude-login":
+                return self.send_json(claude_login())
             if not studio:
                 return self.send_error(404)
             if lib and url.path == "/api/export":
@@ -658,6 +665,43 @@ def find_claude() -> str | None:
         if c.exists():
             return str(c)
     return None
+
+
+_AUTH = {"at": 0.0, "signed_in": None, "login": None}
+
+
+def claude_signed_in(refresh: bool = False) -> bool | None:
+    """Is the command-line Claude Code signed in? (None = not installed.) Checked at most every 2 minutes,
+    or every few seconds while a sign-in window is open."""
+    claude = find_claude()
+    if not claude:
+        return None
+    waiting = _AUTH["login"] is not None and _AUTH["login"].poll() is None
+    if refresh or waiting or time.time() - _AUTH["at"] > 120 or _AUTH["signed_in"] is None:
+        try:
+            out = subprocess.run([claude, "auth", "status", "--json"], capture_output=True, text=True, timeout=20).stdout
+            _AUTH["signed_in"] = bool(json.loads(out or "{}").get("loggedIn"))
+        except Exception:
+            _AUTH["signed_in"] = False
+        _AUTH["at"] = time.time()
+    return _AUTH["signed_in"]
+
+
+def claude_login() -> dict:
+    """Open Claude Code's sign-in in its own window: it opens the browser, the person approves, done."""
+    claude = find_claude()
+    if not claude:
+        return {"ok": False, "error": "Claude Code isn't installed on this computer."}
+    if _AUTH["login"] is not None and _AUTH["login"].poll() is None:
+        return {"ok": True, "already": True}
+    kwargs = {}
+    if os.name == "nt":
+        # Its own visible window, in case it asks to paste a code (CREATE_NEW_CONSOLE wins over the
+        # no-window flag run_windowless adds to everything else).
+        kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+    _AUTH["login"] = subprocess.Popen([claude, "auth", "login"], **kwargs)
+    _AUTH["at"] = 0.0
+    return {"ok": True}
 
 
 def running_version(port: int) -> str | None:
