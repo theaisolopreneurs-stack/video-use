@@ -58,21 +58,20 @@ takes, order, hook, graphics) when you ask it to.
 
 | Area | What you do there |
 |---|---|
-| **Top bar** | The four steps: Edit & save → Approve plan → Rough cut → Approve rough cut. The orange button is always the next step. |
-| **Player + timeline** | Watch the rough cut. Coloured blocks are sections; click one to jump. **+ Note at current time** pins a note to a moment. |
-| **Storyboard** | Every kept section with frames, the line, and why it's there. Crossed-out lines between cards are cuts — **Restore** brings one back. Each card's **Edit** drawer: nudge start/end, transition in, speed (slow-mo / fast), freeze at the end, stabilize, a note. Untick a card to drop it; arrows reorder. |
-| **Captions** | 76 styles, grouped by feel and previewed on your footage. **✨ Best** picks a spot that stays off your face and clear of the apps' buttons; or **Top / Middle / Bottom / Custom** — Custom lets you click exactly where captions go on the video. Matching emoji. **✏️ Fix the caption words** lets you retype any line. Words to pop. |
-| **Look** | 40+ colour looks (natural, warm, cinematic, film, trend, black & white) previewed on your footage, plus any `.cube` LUTs you add. |
+| **Top bar** | Three steps: **Review & give notes → Watch the preview → Export**. The orange button is always the next step (Make preview → Looks good → Export). **How To Use** opens the guide; **🎨** changes the editor's colours (also on the Home screen). |
+| **Claude's plan** (left) | How Claude is directing the video: the big choices (captions, look, title, music, voice, effects) and every scene with the reason it's in. Click a choice to change it or a scene to jump to it. **Scenes** is the detailed list with what was cut (crossed out, with **Restore**), switches to drop scenes and arrows to reorder. |
+| **Player** (middle) | Watch the preview. **💬 Note at this moment** pins a note to an exact time. Space plays and pauses. |
+| **Timeline** (bottom) | CapCut-style tracks: video (with frames), captions, text, effects & zooms, overlays, audio. **Click any piece** to see why it's there, change it, delete it, or write feedback for Claude (💬 marks pieces with feedback). The ◆ diamonds between scenes are transitions: click one to pick a transition or comment on it. + / − / Fit zoom the timeline. |
+| **✎ Selected** (right) | Whatever you clicked: a scene (speed, freeze, curve, camera move, flip, volume, look, boomerang, transition in), a caption line (retype it), a zoom (style, how close, timing), text, effects, stickers, sounds, music, plus the feedback box. |
+| **Captions** | Font, colour, size and letter case on top of any of the 76 styles; **✨ Best / Top / Middle / Bottom / Custom** position; words to pop; emoji; **✏️ Fix the caption words**. |
+| **Look** | 40+ colour looks previewed on your footage, plus hand sliders and any `.cube` LUTs you add. |
 | **Title** | Hook title text, font, length, and "behind me". |
-| **Effects** | Shake, glitch, VHS, flash, grain, blur, cinema bars… added at the player's current time for a set length, or across the whole video. |
-| **Audio** | Voice clean-up, music (with ▶ Listen), volume, ducking, a sound on popped words. |
-| **Notes** | Anything you'd rather tell Claude than click. |
+| **Effects** | Effects, zooms and camera pushes, words on screen and stickers, added at the playhead. |
+| **Audio** | Clean up or isolate your voice, voice level, overall loudness, music (with ▶ Listen), ducking, sounds, fades. |
+| **Notes** | Anything you'd rather tell Claude than click, and a list of all your feedback. |
 
-New to the Studio? Click **? How to** in the top bar for a full walkthrough (it also opens by itself the first time). The **🎨** menu switches the Studio's colour theme — Warm (default, follows your system), Classic, GitHub, Solarized, Catppuccin, Rosé Pine, Gruvbox, Nord, Dracula, One Dark, Tokyo Night, Monokai, Everforest, High contrast — it only changes the page, never your video.
-
-Click **Save**, then tell Claude **"check my notes"**. Claude answers each note, and the
-**Latest changes** box says what changed. When the plan's right: **Approve plan → Make rough
-cut → watch → Approve rough cut**. Only then can the full-quality render happen.
+Click **Save**, then tell Claude **"check my notes"**. Claude answers each note (overall, per piece, per moment), and
+**Latest changes** in Claude's plan says what changed. Then **Make preview → watch → Looks good → Export**.
 
 ### Export
 

@@ -601,10 +601,26 @@ def style_list() -> list[dict]:
             for k, p in PRESETS.items()]
 
 
+FONT_LABELS = {"sans": "Clean sans (your brand)", "serif": "Elegant serif (your brand)", "heavy": "Arial Black",
+               "black": "Segoe Black", "impact": "Impact", "semibold": "Segoe Semibold", "franklin": "Franklin Gothic",
+               "bahn": "Bahnschrift", "narrow": "Tall narrow", "tahoma": "Tahoma", "georgia_i": "Georgia italic",
+               "times": "Times", "constantia": "Constantia", "palatino": "Palatino", "mono": "Consolas (code)",
+               "courier": "Typewriter", "script": "Script", "print": "Handwriting", "ink": "Ink marker",
+               "comic": "Comic"}
+
+
+def font_list() -> list[dict]:
+    """Fonts a person can pick for captions in the Studio (captions "font")."""
+    return [{"id": k, "label": v} for k, v in FONT_LABELS.items()]
+
+
 class Writer:
     def __init__(self, brand: dict, s: dict, W: int, H: int):
         self.b, self.s, self.W, self.H = brand, s, W, H
-        self.p = PRESETS.get(s["style"], PRESETS["clean"])
+        # A copy, so a person's own font / colour (captions "font", "color") can override the style.
+        self.p = dict(PRESETS.get(s["style"], PRESETS["clean"]))
+        if s.get("color"):
+            self.p["fill"] = s["color"]
         c = brand.get("colors", {})
         self.col = {k: c.get(k, d) for k, d in
                     {"primary": "#1F5C4A", "accent": "#F2C14E", "text": "#FFFFFF",
@@ -616,10 +632,14 @@ class Writer:
                                         "file": f"{FONTS_DIR}/georgiaz.ttf"},
             **SYSTEM_FONTS,
         }
+        if s.get("font") in self.fonts:
+            self.p["font"] = s["font"]
         self.font = self.fonts[self.p["font"]]
         unit = W / 1080 if H > W else H / 1080
         self.size = int(s["size"] * self.p.get("size", 1.0) * unit)
         self.upper = self.p["upper"] if "upper" in self.p else bool(s["uppercase"])
+        if s.get("case") in ("upper", "normal"):  # the person's choice beats the style's
+            self.upper = s["case"] == "upper"
         self.lower = bool(self.p.get("lower"))
         fx, fy = caption_xy(s["position"], W, H)
         self.x, self.y = int(W * fx), int(H * fy)

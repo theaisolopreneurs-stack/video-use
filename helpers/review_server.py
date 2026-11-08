@@ -48,6 +48,7 @@ STUDIO_HTML = HELPERS / "studio" / "index.html"
 HOME_HTML = HELPERS / "studio" / "home.html"
 THEME_CSS = HELPERS / "studio" / "theme.css"
 MIC_JS = HELPERS / "studio" / "mic.js"
+THEME_JS = HELPERS / "studio" / "theme.js"
 
 
 class Studio:
@@ -101,6 +102,7 @@ class Studio:
             "speed_curves": {k: round(planlib.range_len({"start": 0, "end": 1, "speed_curve": k}), 4)
                              for k in planlib.SPEED_CURVES},
             "voice_fx": [{"id": k, "label": v[0]} for k, v in __import__("audio").VOICE_FX.items()],
+            "caption_fonts": __import__("captions").font_list(),
         }
 
     def music_files(self) -> list[Path]:
@@ -141,7 +143,7 @@ class Studio:
                 new_n = {e.get("type") for e in new_fx}
                 changed.append("effects: " + (", ".join(sorted(new_n)) or "none") +
                                (f" (removed {', '.join(sorted(old_n - new_n))})" if old_n - new_n else ""))
-            for field in ("texts", "stickers"):
+            for field in ("texts", "stickers", "zooms"):
                 new_list = body.get(field)
                 if new_list is not None and new_list != (plan.get(field) or []):
                     settings_changed[field] = new_list
@@ -200,7 +202,8 @@ class Studio:
                 plan["total_duration_s"] = planlib.total_duration(plan)
                 planlib.save(self.plan_path, plan)
             notes = body.get("notes") or {}
-            has_notes = bool((notes.get("overall") or "").strip() or notes.get("cards") or notes.get("timestamped"))
+            has_notes = bool((notes.get("overall") or "").strip() or notes.get("cards") or notes.get("timestamped")
+                             or notes.get("items"))
             if has_notes or changed:
                 notes.update({"version_reviewed": plan["version"], "saved_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                               "direct_edits": changed, "status": "open"})
@@ -408,6 +411,8 @@ def make_handler(app: App):
                 return self.send_file(MIC_JS)
             if url.path == "/theme.css":
                 return self.send_file(THEME_CSS)
+            if url.path == "/theme.js":
+                return self.send_file(THEME_JS)
             if url.path == "/studio":
                 if not studio:
                     return self.redirect("/")

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Video Editor</title>
 <link rel="stylesheet" href="/theme.css">
+<script src="/theme.js"></script>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -72,12 +73,17 @@
   .tip { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 14px; }
   .tip code { background: var(--panel); padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); }
   .err { color: var(--warn); font-weight: 600; }
+  .themepick { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
+  .themepick select { font: inherit; font-size: 14px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); max-width: 200px; }
+  @media (max-width: 600px) { .themepick .tp-l { display: none; } }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; max-width: calc(100% - 32px); }
 </style>
 </head>
 <body>
 <header>
   <h1>🎬 AI Video Editor</h1>
+  <label class="themepick" title="Colours of the editor (not your video)"><span aria-hidden="true">🎨</span> <span class="tp-l">Editor colours</span>
+    <select id="themeSel" aria-label="Editor colours"></select></label>
   <button id="openLib" title="See all your videos in a normal folder window">📁 Open my videos folder</button>
 </header>
 <main>
@@ -160,8 +166,6 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-try { const t = localStorage.getItem("studio-theme"); const m = { light: "warm-light", dark: "warm-dark" };
-  if (t && t !== "auto") document.documentElement.dataset.theme = m[t] || t; } catch {}
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 5000); }
 const post = async (url, body) => (await fetch(url, { method: "POST", body: JSON.stringify(body || {}) })).json();
 
