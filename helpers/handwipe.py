@@ -86,6 +86,60 @@ def hand_track(video: Path, start: float, end: float, fps: float = 15.0) -> list
     return out
 
 
+def motion_track(video: Path, start: float, end: float, fps: float = 30.0) -> list[tuple[float, float]]:
+    """(time, x) of a big fast-moving thing (a blurred hand) for every frame it's in.
+
+    A real swipe is often just a blur for 2-4 frames, which the hand model can't see. Each frame is
+    compared with the median of the frames around it (the scene without the hand); the middle of
+    what's different is where the hand is."""
+    w, h = framing.probe_size(video)
+    width = 160
+    height = int(round(h * width / w / 2) * 2)
+    start = max(0.0, start)
+    proc = subprocess.Popen(["ffmpeg", "-v", "quiet", "-ss", f"{start:.3f}", "-t", f"{max(0.05, end - start):.3f}", "-i", str(video),
+                             "-vf", f"fps={fps},scale={width}:{height}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                            stdout=subprocess.PIPE)
+    out, half = [], int(fps * 0.4)
+    buf, first, done = [], 0, False  # buf holds frames first .. first+len(buf)-1
+    i = 0  # the frame being measured
+    while True:
+        if not done:
+            raw = proc.stdout.read(width * height * 3)
+            if len(raw) < width * height * 3:
+                done = True
+            else:
+                buf.append(np.frombuffer(raw, np.uint8).reshape(height, width, 3))
+        if not done and first + len(buf) - 1 < i + half:
+            continue  # still reading ahead
+        if i >= first + len(buf):
+            break
+        around = buf[max(0, i - half - first):i + half + 1 - first]
+        if len(around) >= 5:
+            f = buf[i - first].astype(np.int16)
+            diff = np.abs(f - np.median(np.stack(around), axis=0)).max(axis=2) > 45
+            share = diff.mean()
+            # A hand covers a good chunk of the frame; a whole-frame change is the camera moving.
+            if 0.06 <= share <= 0.7:
+                cols = diff.sum(axis=0).astype(float)
+                out.append((round(start + i / fps, 3), float((cols * np.arange(width)).sum() / cols.sum() / width)))
+        i += 1
+        while first < i - half:
+            buf.pop(0)
+            first += 1
+    proc.stdout.close()
+    proc.wait()
+    return out
+
+
+def track_swipe(video: Path, start: float, end: float, fps: float = 15.0):
+    """find_swipe on the hand model's track, or on the motion track when the hand is a blur."""
+    swipe = find_swipe(hand_track(video, start, end, fps))
+    if swipe:
+        return swipe, "following your hand"
+    swipe = find_swipe(motion_track(video, start, end), max_time=0.8)
+    return swipe, "following your hand (fast swipe)" if swipe else "no hand found, straight wipe"
+
+
 def find_swipe(points: list[tuple[float, float]], min_travel: float = 0.35, max_time: float = 1.4):
     """The first quick sweep across the frame: (start, end, direction, path). direction +1 = to the right."""
     best = None
@@ -148,9 +202,13 @@ def wipe_effect(e: dict, plan: dict, idx: int, W: int, H: int) -> str:
     t = float(e.get("start_in_output", 0.0))
     path, how = e.get("path"), "your path"
     if not path and base:
-        swipe = find_swipe(hand_track(Path(base), t - 0.8, t + 1.6))
-        path, how = (swipe[3], "following your hand") if swipe else (None, "no hand found, straight wipe")
+        swipe, how = track_swipe(Path(base), t - 0.8, t + 1.6)
+        path = swipe[3] if swipe else None
     path = [tuple(p) for p in path] if path else straight_path(t, int(e.get("direction", 1)))
+    if how.startswith("following"):
+        # Trail the hand by a frame, so the hand drags the line rather than chasing it.
+        lag = 1 / (_fps(Path(base)) if base else 30.0)
+        path = [(pt + lag, x) for pt, x in path]
     t0, t1 = path[0][0], path[-1][0]
     direction = 1 if path[-1][1] > path[0][1] else -1
     end = t0 + float(e["duration"]) if e.get("duration") else 1e9
@@ -179,7 +237,7 @@ def xfade_expr(seg: Path, d: float) -> str:
     """xfade custom expression for a hand swipe into the next section, following the hand in the
     last moments of the outgoing clip (straight wipe if there's no hand)."""
     dur = _duration(seg)
-    swipe = find_swipe(hand_track(seg, max(0.0, dur - d - 0.8), dur))
+    swipe, _ = track_swipe(seg, max(0.0, dur - d - 0.8), dur)
     if swipe:
         # Time within the transition = P * d, starting at dur - d in the outgoing clip.
         path = [(max(0.0, min(1.0, (t - (dur - d)) / d)), x) for t, x in swipe[3]]
@@ -215,8 +273,7 @@ def find_in_plan(plan: dict, edit_dir: Path) -> list[dict]:
         if src.suffix.lower() in framing.IMAGE_EXTS or r.get("reverse"):
             offset += range_len(r)
             continue
-        pts = hand_track(src, float(r["start"]), float(r["end"]), fps=8)
-        swipe = find_swipe(pts)
+        swipe, _ = track_swipe(src, float(r["start"]), float(r["end"]), fps=8)
         if swipe:
             found.append({"start_in_output": round(offset + play_pos(r, swipe[0] + 0.4), 2), "source": r["source"]})
         offset += range_len(r)

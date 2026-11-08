@@ -189,6 +189,7 @@ It is not in the Home library (that folder is empty).
 - Exports overwrite `edit/base_*`, so QC must run right after each render to get a matching base.
 - A true-peak of -0.9 on drafts is normal (1-pass loudnorm); QC allows 0.15 dB.
 - FFmpeg's blend filter has a wrong `T` (time) on some phone footage; `handwipe.py` uses `N / fps` instead.
+- A real hand swipe is often only a blur for 2-4 frames, which MediaPipe's hand model misses. `handwipe.motion_track` (each frame compared with the median of the frames around it) is the fallback; tested on a real 0.1 s swipe (IMG_3565). The line trails the tracked hand by one frame so the hand drags it. QC skips face and safe-zone checks while a full-frame effect is on.
 - `framing.person_mask` must copy: MediaPipe's view dangles once its result is freed (crashed Python when a mask was kept between frames).
 - Windows lets two servers share port 8765 if address reuse is on; `review_server.py` turns it off there. Test servers should use `--port`, because the real icon may be running on 8765.
 - Commit on the right branch: Phase 4 once landed on the Phase 3 branch by mistake.

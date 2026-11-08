@@ -164,10 +164,16 @@ def check_overlays(plan, edit_dir, video, f):
     title = plan.get("title") or {}
     behind = (float(title.get("start_in_output", 0)), float(title.get("start_in_output", 0)) + float(title.get("duration", 0))) \
         if title.get("text") and title.get("behind_subject", True) else None
+    # A hand swipe's path starts up to about a second before its marked time.
+    whole = [(float(e.get("start_in_output", 0)) - (1.0 if e.get("type") == "hand_wipe" else 0.0),
+              float(e.get("start_in_output", 0)) + float(e["duration"]) if e.get("duration") else 1e9)
+             for e in plan.get("effects") or [] if not e.get("region")]
     for k, (a, b) in enumerate(zip(rendered, plain)):
         t = k * step / fps
         if behind and behind[0] <= t <= behind[1]:
             continue  # a title set behind the speaker wraps around the head on purpose
+        if any(a0 <= t <= a1 for a0, a1 in whole):
+            continue  # a full-frame effect (darken, black and white...) changes everything on purpose
         mask = np.abs(a.astype(int) - b.astype(int)).sum(axis=2) > 60
         h, w = mask.shape
         fc = _face_box(b)
