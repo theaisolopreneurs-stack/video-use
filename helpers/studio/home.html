@@ -87,6 +87,11 @@
   <button id="openLib" title="See all your videos in a normal folder window">📁 Open my videos folder</button>
 </header>
 <main>
+  <section class="card" id="oldHome" hidden style="border-color:var(--warn)">
+    <h2>Please reopen the editor</h2>
+    <p class="sub" style="margin:0">It's still running an older version, so some buttons (like the colour menu) won't work.
+      Close this window, then restart your computer or click the desktop icon again.</p>
+  </section>
   <!-- 1: make a new video -->
   <section class="card" id="newCard">
     <h2>Make a new video</h2>
@@ -175,6 +180,7 @@ const FRIENDLY = { viral: "Viral", reel: "Reel / TikTok / Short", justyn: "Viral
 const STATUS = { new: "Not edited yet", draft: "Ready to review", plan_approved: "Plan approved", rough_approved: "Ready to export", final: "Finished" };
 
 async function load() {
+  fetch("/api/version").then((r) => { if (!r.ok) $("oldHome").hidden = false; }).catch(() => ($("oldHome").hidden = false));
   H = await (await fetch("/api/home")).json();
   $("libPath").textContent = `Saved in ${H.library}`;
   $("styles").innerHTML = H.presets.map((p) => `<button type="button" class="style ${p.id === preset ? "sel" : ""}" onclick="pickStyle('${p.id}')" aria-pressed="${p.id === preset}">

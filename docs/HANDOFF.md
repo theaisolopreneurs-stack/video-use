@@ -68,6 +68,7 @@ of Claude editing raw footage (video-use, justyn.ai's viral reel). Forked from
 | 11d | Hand swipe reveal and hand swipe transition (MediaPipe hand model, follows the hand, look picked from the words); CLAUDE.md; plugin installed from GitHub and set up in its own folder (smoke test PASS, ~1 GB) | `helpers/handwipe.py`, `CLAUDE.md` |
 | 11e | Trending edits: crash / eased push zooms, freeze-frame meme (freezeframes filter + record scratch), boomerang, bounce, blackout, split screen centred on the face, person cutout (clone), day-to-night look, SFX scratch/boom/shutter; captions in 9:16 always clear of the side buttons | `framing.py`, `effects.py`, `background.py`, `render.py`, `audio.py` |
 | 11f | Studio rebuilt CapCut-style: Claude's plan panel, multi-track clickable timeline with per-piece feedback (`review_notes.json` `items[]`), ✎ Selected inspector, 3 steps (Make preview approves the plan + renders), caption font/size/colour/case, zoom editing (`zooms` saved), theme picker on Home via shared `theme.js` | `helpers/studio/index.html`, `theme.js`, `home.html`, `review_server.py`, `captions.py` |
+| 11g | Studio: Tell Claude box + Chat tab (headless `claude -p` on plan.json), looping previews for transitions/effects/zooms (`previews.py`), drag/resize/reorder/trim on the timeline, split/duplicate/delete/undo/redo, inline feedback in Claude's plan, caption words always visible, outdated-server auto-replace | `helpers/studio/index.html`, `review_server.py`, `previews.py` |
 | Later | 21 Studio colour themes; in-app How-to; **Home screen** (drag clips, pick style, Make my video), library, Export dialog, desktop icon | `helpers/studio/theme.css`, `home.html`, `helpers/library.py`, `shortcut.py` |
 
 **Pipeline:** ingest → `suggest_cuts` → preset/Claude refine `plan.json` → Gate 1 approve plan →
@@ -191,6 +192,8 @@ It is not in the Home library (that folder is empty).
 - Exports overwrite `edit/base_*`, so QC must run right after each render to get a matching base.
 - A true-peak of -0.9 on drafts is normal (1-pass loudnorm); QC allows 0.15 dB.
 - FFmpeg's blend filter has a wrong `T` (time) on some phone footage; `handwipe.py` uses `N / fps` instead.
+- The desktop icon's editor keeps running until the computer restarts; older copies didn't serve new routes (`/theme.js`, `/mic.js`, `caption_fonts`), which showed up as an empty colour menu, no fonts and no mic. Now `replace_old_editor` stops an older `review_server.py` on the port (version from `/api/version`) and the pages show a "please reopen" banner if one is still answering.
+- The Studio's Tell Claude box needs the command-line Claude Code to be signed in; the desktop app's sign-in is separate (`claude -p` failed with "OAuth session expired" on this machine on 2026-11-08).
 - FFmpeg's `anlmdn` crashes (heap corruption) on joined base files with small timestamp jumps; voice isolate uses two `afftdn` passes instead.
 - Effect chains use `@` as a label placeholder, so never write `color=black@0.5` inside one (blackout uses lutyuv).
 - `freeze_frame` uses FFmpeg's `freezeframes` (two inputs from one split, in step): no buffering. A trim/loop/overlay version buffers every frame up to the freeze.

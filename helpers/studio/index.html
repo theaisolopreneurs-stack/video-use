@@ -137,6 +137,13 @@
   .trm.noted { box-shadow: 0 0 0 3px var(--warn); }
   .tl-ph { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--warn); z-index: 5; pointer-events: none; }
   .tl-ph::before { content: ""; position: absolute; top: 0; left: -5px; border: 6px solid transparent; border-top-color: var(--warn); }
+  .ti .rz { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 2; }
+  .ti .rz.l { left: 0; } .ti .rz.r { right: 0; }
+  .ti:hover .rz { background: rgba(255,255,255,.4); }
+  .ti.dragging { opacity: .85; z-index: 6; box-shadow: 0 4px 14px rgba(0,0,0,.35); cursor: grabbing; }
+  .ti.k-txt, .ti.k-fx, .ti.k-zm, .ti.k-stk, .ti.k-title, .ti.k-sfx, .ti.k-sec { cursor: grab; }
+  .tl-snap { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent); z-index: 5; pointer-events: none; }
+  .tl-tools .sep { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
   .tl-pin { position: absolute; top: 2px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--warn); border: 0; padding: 0; z-index: 4; cursor: pointer; }
 
   /* ---- left: Claude's plan + scenes ------------------------------------- */
@@ -225,6 +232,39 @@
   .fxlist li { display: flex; gap: 6px; align-items: center; background: var(--panel-2); border-radius: 7px; padding: 4px 6px; font-size: 13px; }
   .fxlist li span { flex: 1; cursor: pointer; }
 
+  /* ---- preview pickers (see it before you pick it) ----------------------- */
+  .pvgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; max-height: 340px; overflow-y: auto; padding: 2px; }
+  .pvtile { border: 2px solid var(--line); border-radius: 9px; padding: 3px; background: var(--panel-2); color: inherit; font: inherit; font-size: 11px; line-height: 1.25; cursor: pointer; text-align: center; }
+  .pvtile.sel { border-color: var(--accent); font-weight: 700; }
+  .pvtile .vid { position: relative; aspect-ratio: 9 / 16; border-radius: 6px; overflow: hidden; background: var(--line); margin-bottom: 2px; }
+  .pvtile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pvtile .vid span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 10px; }
+  .pvtile.cut .vid { display: flex; align-items: center; justify-content: center; font-size: 22px; }
+
+  /* ---- tell Claude (the director's box) ---------------------------------- */
+  .director { display: flex; gap: 6px; align-items: flex-end; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 10px; padding: 6px; }
+  .director textarea { flex: 1; min-height: 38px; max-height: 120px; resize: none; background: var(--panel); }
+  .director .send { flex: none; }
+  .director .micwrap { flex: 1; min-width: 0; }
+  .director .micwrap textarea { width: 100%; }
+  .lastmsg { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: baseline; }
+  .lastmsg b { color: var(--ink); }
+  .chips2 { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chips2 button { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--panel-2); }
+  .chatlog { list-style: none; margin: 0; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .chatlog li { max-width: 92%; padding: 7px 10px; border-radius: 12px; font-size: 13px; white-space: pre-wrap; }
+  .chatlog li.you { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
+  .chatlog li.claude { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .chatlog li small { display: block; opacity: .7; font-size: 10px; margin-top: 2px; }
+  .chatlog li.typing { font-style: italic; color: var(--muted); }
+  .pnote { margin-top: 6px; }
+  .pnote textarea { width: 100%; }
+  .pv .nb { flex: none; padding: 0 6px; font-size: 12px; border-radius: 6px; }
+  .pv .choicewrap { display: flex; gap: 4px; align-items: stretch; }
+  .pv .choicewrap .choice { flex: 1; }
+  .capwords { max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: 2px 6px 6px; background: var(--panel-2); }
+  .banner.old { background: var(--warn); color: #fff; border: 0; font-weight: 600; }
+
   /* ---- dialogs, toast --------------------------------------------------- */
   label.exp { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; margin: 6px 0; background: var(--panel-2); }
   label.exp input { width: 20px; height: 20px; accent-color: var(--accent); }
@@ -274,10 +314,12 @@
     <section class="panel">
       <div class="tabs" role="tablist" id="ltabs">
         <button role="tab" data-ltab="plan">🎬 Claude's plan</button>
+        <button role="tab" data-ltab="chat">💬 Chat</button>
         <button role="tab" data-ltab="board">🎞️ Scenes <span class="meta" id="boardMeta"></span></button>
       </div>
       <div class="scroll">
         <div data-lpanel="plan"><div class="pv" id="planView"></div></div>
+        <div data-lpanel="chat" hidden><ul class="chatlog" id="chatLog"></ul></div>
         <div data-lpanel="board" hidden><div id="board"></div></div>
       </div>
     </section>
@@ -285,6 +327,8 @@
 
   <!-- centre: the player -->
   <div class="col" id="stageCol">
+    <div class="banner old" id="oldBox" hidden>This editor is still running an older version, so some buttons won't work.
+      Close the editor (or restart your computer), then open it again from the desktop icon.</div>
     <div class="banner warn" id="problemsBox" hidden><b>Problems to fix first</b><ul id="problems"></ul></div>
     <section class="panel">
       <div class="screen" id="roughArea"></div>
@@ -305,6 +349,12 @@
           </div>
         </form>
         <ul class="tnotes" id="tnotes"></ul>
+        <form class="director" id="askForm">
+          <textarea id="askText" class="field" rows="1" placeholder="🎬 Tell Claude what to change… e.g. “make the hook punchier”, “add a whip transition here”, “bigger captions”"></textarea>
+          <button type="submit" class="primary send" id="askBtn">Send</button>
+        </form>
+        <div class="lastmsg" id="lastMsg"></div>
+        <div class="chips2" id="askChips"></div>
       </div>
     </section>
   </div>
@@ -324,6 +374,11 @@
       <div class="scroll">
         <div class="tabpanel" role="tabpanel" data-panel="selected" id="selPanel"></div>
         <div class="tabpanel" role="tabpanel" data-panel="captions" hidden>
+          <div class="box">
+            <b>✏️ The caption words</b>
+            <div class="meta">Every line on screen, in order. ▶ plays it; type over any line to fix spelling or punctuation.</div>
+            <div class="capwords" id="capLines"></div>
+          </div>
           <div class="box">
             <b>Text</b>
             <div class="grid2">
@@ -356,10 +411,6 @@
           <label class="lbl">Words to pop (comma-separated)
             <input id="capEmph" class="field" placeholder="e.g. 0 and 4, Super Bowl">
           </label>
-          <details class="adjust" id="capLinesBox"><summary>✏️ Fix the caption words</summary>
-            <div class="meta">Type over anything: spelling, punctuation, capital letters. Punctuation you type shows on screen.</div>
-            <div id="capLines"></div>
-          </details>
           <b style="font-size:13px">Style</b>
           <div class="chips" id="capGroups" role="group" aria-label="Caption style groups"></div>
           <div class="capgrid" id="capgrid"></div>
@@ -389,14 +440,17 @@
           <div class="help">Play to a moment, pick something, click <b>Add</b>. It appears on the timeline, where you can click it to change it or give feedback.</div>
           <b style="font-size:13px">Effects</b>
           <ul class="fxlist" id="fxlist"></ul>
+          <div class="meta">Hover to see each one on your video. Click to choose, then Add.</div>
+          <div class="pvgrid" id="fxGrid"></div>
           <div class="grid2">
-            <label class="lbl">Effect <select id="fxType" class="field"></select></label>
+            <label class="lbl">Chosen <select id="fxType" class="field"></select></label>
             <label class="lbl">For <select id="fxDur" class="field">
               <option value="0.3">0.3s</option><option value="0.6">0.6s</option><option value="1">1s</option><option value="2" selected>2s</option><option value="4">4s</option><option value="0">Whole video</option>
             </select></label>
           </div>
           <button id="fxAdd">+ Add effect here</button>
           <b class="sub-h">Zoom / camera push</b>
+          <div class="pvgrid" id="zmGrid"></div>
           <div class="grid2">
             <label class="lbl">Move <select id="zmStyle" class="field"></select></label>
             <label class="lbl">For <select id="zmDur" class="field"><option value="0.8">0.8s</option><option value="1.5" selected>1.5s</option><option value="2.5">2.5s</option><option value="4">4s</option></select></label>
@@ -491,7 +545,13 @@
     <section class="panel">
       <div class="tl-tools">
         <h2>Timeline</h2>
-        <span class="meta grow" id="tlHint">Click any piece to see why it's there, change it, or give Claude feedback.</span>
+        <button class="sm" id="undoBtn" title="Undo (Ctrl+Z)">↶ Undo</button>
+        <button class="sm" id="redoBtn" title="Redo (Ctrl+Y)">↷ Redo</button>
+        <span class="sep"></span>
+        <button class="sm" id="splitBtn" title="Split the scene at the playhead (Ctrl+B)">✂ Split</button>
+        <button class="sm" id="dupBtn" title="Duplicate the selected piece (Ctrl+D)">⧉ Duplicate</button>
+        <button class="sm" id="delBtn" title="Delete the selected piece (Delete)">🗑 Delete</button>
+        <span class="meta grow" id="tlHint">Drag pieces to move them, drag their edges to make them longer or shorter, drag scenes to reorder. Click anything to change it or give feedback.</span>
         <button class="sm" id="tlOut" title="Zoom out">−</button>
         <button class="sm" id="tlFit" title="Fit the whole video">Fit</button>
         <button class="sm" id="tlIn" title="Zoom in">+</button>
@@ -563,6 +623,9 @@
         <li>Like CapCut: rows for <b>video</b>, <b>captions</b>, <b>text</b>, <b>effects &amp; zooms</b>, <b>overlays</b> and <b>audio</b>, each piece where it plays.</li>
         <li><b>Click any piece</b> to open it in <b>✎ Selected</b> (right): see why it's there, change it, delete it, or write feedback for Claude. Pieces with feedback show 💬.</li>
         <li>The ◆ diamonds between scenes are <b>transitions</b>; orange ones have an effect, hollow ones are plain cuts. Click one to pick a transition or comment on it.</li>
+        <li><b>Drag</b> text, zooms, effects, stickers and the title to move them; <b>drag their edges</b> to make them longer or shorter. They snap to the playhead and scene edges.</li>
+        <li><b>Drag a scene</b> to reorder it; drag a scene's edges to trim its start or end.</li>
+        <li><b>✂ Split</b> (Ctrl+B) cuts the scene at the playhead in two. <b>⧉ Duplicate</b> (Ctrl+D), <b>🗑 Delete</b> (Delete key), <b>↶ Undo</b> (Ctrl+Z) and <b>↷ Redo</b> (Ctrl+Y) work like any editor. Ctrl+S saves.</li>
         <li>Click the time ruler (or any empty spot) to move the playhead. <b>+ / − / Fit</b> zoom the timeline. <b>Space</b> plays and pauses.</li>
         <li><b>💬 Note at this moment</b> pins a note to an exact time (red pins on the ruler).</li>
       </ul>
@@ -580,8 +643,11 @@
     </section>
     <section id="ht-notes">
       <h3>Talking to Claude</h3>
-      <p>After <b>Save</b>, go back to your Claude chat and say <b>“check my notes”</b>. Claude reads every note (overall, per piece, per moment),
-        makes the changes, and <b>Latest changes</b> in Claude's plan says what it did. You can also just ask in the chat.</p>
+      <p><b>Right here:</b> type or say (🎤) what you want in the <b>Tell Claude</b> box under the video, e.g. <i>“make the hook punchier”</i>,
+        <i>“add a whip transition here”</i>, <i>“bigger captions”</i>. Claude sees what you've selected and where the playhead is, makes the change,
+        and answers in a sentence. The <b>💬 Chat</b> tab on the left keeps the conversation. Your changes are saved first, automatically.
+        This uses your own Claude Code; the first time, you may need to sign in to it once (open a terminal and type <code>claude</code>).</p>
+      <p><b>Or with notes:</b> leave 💬 feedback on any piece (timeline, Claude's plan, scenes), <b>Save</b>, then tell Claude <b>“check my notes”</b> in your Claude chat.</p>
     </section>
     <section id="ht-export">
       <h3>Export</h3>
@@ -591,6 +657,8 @@
       <h3>Tips</h3>
       <ul>
         <li><b>Rather talk than type?</b> Click the 🎤 in any text box, say it, click again. It stays on this computer.</li>
+        <li><b>See it before you pick it:</b> transitions, effects and zooms show as small looping previews on your own video. Hover, then click the one you like.</li>
+        <li>In <b>Claude's plan</b>, the 💬 next to each choice and scene opens a feedback box right there; ✕ drops a scene.</li>
         <li>Watch the preview with the sound on, once, start to finish, before saying it looks good.</li>
         <li>The 🎨 menu changes the editor's colours (not your video). It's on the Home screen too.</li>
       </ul>
@@ -619,6 +687,23 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const beatColor = (() => { const map = {}; let n = 0; return (b) => { const k = (b || "").toUpperCase(); if (!(k in map)) map[k] = `var(--beat-${n++ % 6})`; return map[k]; }; })();
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 const nice = (s) => String(s || "").replace(/^look:/, "").replace(/_/g, " ");
+// Preview tiles: a short looping clip of each choice on this video's own footage, playing while visible.
+const pvObs = "IntersectionObserver" in window ? new IntersectionObserver((es) => es.forEach((e) => {
+  const v = e.target;
+  if (e.isIntersecting) { if (!v.src) { v.src = v.dataset.src; v.onerror = () => (v.previousElementSibling.textContent = "no preview"); } v.play().catch(() => {}); }
+  else v.pause();
+}), { threshold: 0.15 }) : null;
+function pvGrid(kind, list, cur, pick) {
+  return list.map(([id, label]) => id === "" ?
+    `<button type="button" class="pvtile cut ${cur === "" ? "sel" : ""}" onclick="${pick}('')"><div class="vid">✂️</div>${esc(label)}</button>` :
+    `<button type="button" class="pvtile ${cur === id ? "sel" : ""}" onclick="${pick}('${id}')" title="${esc(label)}"><div class="vid"><span>loading…</span>
+      <video muted loop playsinline preload="none" data-src="/fx-preview?kind=${kind}&name=${encodeURIComponent(id)}"></video></div>${esc(label)}</button>`).join("");
+}
+function armPreviews(root) { if (pvObs) root.querySelectorAll("video[data-src]").forEach((v) => pvObs.observe(v)); }
+const FONTS_FALLBACK = [["sans", "Clean sans"], ["serif", "Elegant serif"], ["heavy", "Arial Black"], ["black", "Segoe Black"], ["impact", "Impact"],
+  ["semibold", "Segoe Semibold"], ["franklin", "Franklin Gothic"], ["bahn", "Bahnschrift"], ["narrow", "Tall narrow"], ["georgia_i", "Georgia italic"],
+  ["times", "Times"], ["palatino", "Palatino"], ["courier", "Typewriter"], ["script", "Script"], ["print", "Handwriting"], ["ink", "Ink marker"], ["comic", "Comic"]]
+  .map(([id, label]) => ({ id, label }));
 const ZOOM_STYLES = [["punch", "Punch in (snap and hold)"], ["push_in", "Push in (smooth)"], ["push_out", "Push out (smooth)"],
   ["crash", "Crash zoom in (fast)"], ["crash_out", "Crash zoom out (fast)"], ["drift", "Slow drift"]];
 
@@ -702,7 +787,10 @@ async function load() {
   ttl = clone(S.plan.title, {}); fxs = clone(S.plan.effects, []); adj = clone(S.plan.adjust, {});
   beat = clone(S.plan.beat_sync, {}); fade = clone(S.plan.fade, {}); txts = clone(S.plan.texts, []);
   stks = clone(S.plan.stickers, []); zms = clone(S.plan.zooms, []);
+  $("oldBox").hidden = !!S.server_version;
+  hist = [getState()]; hi = 0; savedState = hist[0];
   setDirty(false);
+  renderChat();
   render();
   renderCaptions(); renderAudio(); renderLook(); renderTitle(); renderEffects(); renderCapLines();
 }
@@ -734,7 +822,7 @@ function setCap(k, v) {
 }
 function renderCaptions() {
   const style = capEff("style"), v = S.plan.version;
-  $("capFont").innerHTML = `<option value="">The style's own font</option>` + (S.caption_fonts || []).map((f) => `<option value="${f.id}" ${caps.font === f.id ? "selected" : ""}>${esc(f.label)}</option>`).join("");
+  $("capFont").innerHTML = `<option value="">The style's own font</option>` + (S.caption_fonts || FONTS_FALLBACK).map((f) => `<option value="${f.id}" ${caps.font === f.id ? "selected" : ""}>${esc(f.label)}</option>`).join("");
   const base = S.brand_captions.size || 72, size = caps.size || base;
   $("capSize").value = Math.round(size / base * 100); $("capSizeV").textContent = `${Math.round(size / base * 100)}%`;
   $("capColor").value = caps.color || "#ffffff"; $("capColorReset").disabled = !caps.color;
@@ -890,9 +978,26 @@ $("sfxPlay").onclick = () => playAudio(`/sfx?name=${encodeURIComponent(aud.sfx_o
 
 // ---- effects, zooms, words, stickers ---------------------------------------------------
 const fxName = (id) => (S.effects_kit.find((e) => e.id === id) || { label: nice(id) }).label;
+let fxPick = null, zmPick = "punch";
+function pickFx(id) { fxPick = id; $("fxType").value = id; renderPickGrids(); }
+function pickZm(id) { zmPick = id; $("zmStyle").value = id; renderPickGrids(); }
+function renderPickGrids() {
+  const fxGrid = $("fxGrid"), zmGrid = $("zmGrid");
+  if (!fxGrid.dataset.built) {  // build once, so the playing previews don't restart
+    fxGrid.innerHTML = pvGrid("effect", S.effects_kit.map((e) => [e.id, e.label]), fxPick, "pickFx");
+    zmGrid.innerHTML = pvGrid("zoom", ZOOM_STYLES.map(([v, l]) => [v, l.replace(/ \(.*\)/, "")]), zmPick, "pickZm");
+    fxGrid.dataset.built = "1"; armPreviews(fxGrid); armPreviews(zmGrid);
+  }
+  fxGrid.querySelectorAll(".pvtile").forEach((b, k) => b.classList.toggle("sel", S.effects_kit[k].id === fxPick));
+  zmGrid.querySelectorAll(".pvtile").forEach((b, k) => b.classList.toggle("sel", ZOOM_STYLES[k][0] === zmPick));
+}
 function renderEffects() {
-  $("fxType").innerHTML = S.effects_kit.map((e) => `<option value="${e.id}">${esc(e.label)}</option>`).join("");
-  $("zmStyle").innerHTML = ZOOM_STYLES.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+  if (!$("fxType").options.length) {
+    $("fxType").innerHTML = S.effects_kit.map((e) => `<option value="${e.id}">${esc(e.label)}</option>`).join("");
+    $("zmStyle").innerHTML = ZOOM_STYLES.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+    fxPick = fxPick || S.effects_kit[0].id; $("fxType").onchange = (e) => pickFx(e.target.value); $("zmStyle").onchange = (e) => pickZm(e.target.value);
+  }
+  renderPickGrids();
   const row = (label, t, key) => `<li><span onclick="selectKey('${key}')">${esc(label)} · ${t.duration ? `${fmt1(t.start_in_output || 0)} for ${t.duration}s` : "whole video"}</span>
     <button class="sm" onclick="removeKey('${key}')" aria-label="Remove">✕</button></li>`;
   $("fxlist").innerHTML = fxs.map((e, k) => row(fxName(e.type), e, `fx:${k}`)).join("") + zms.map((z, k) => row(`Zoom: ${nice(z.style || "punch")}`, z, `zm:${k}`)).join("")
@@ -1001,10 +1106,84 @@ function tiHtml(x, p) {
   if (x.kind === "sec") {
     const r = ranges[x.i], wpx = x.d * p, n = Math.max(1, Math.min(12, Math.round(wpx / 44)));
     const imgs = Array.from({ length: n }, (_, j) => `<img loading="lazy" alt="" src="/thumb?source=${encodeURIComponent(r.source)}&t=${(r.start + (j + 0.5) / n * (r.end - r.start)).toFixed(1)}">`).join("");
-    return `<div class="${cls}" style="${style}" data-key="${x.key}" title="${esc(r.quote || "")}" onclick="event.stopPropagation();selectKey('${x.key}')">
-      <div class="strip">${imgs}</div><div class="bar" style="background:${beatColor(r.beat)}"></div><span class="lab">${x.n}. ${esc(x.label)}</span></div>`;
+    return `<div class="${cls}" style="${style}" data-key="${x.key}" title="${esc(r.quote || "")}" onpointerdown="tiDown(event,'${x.key}')">
+      <div class="strip">${imgs}</div><div class="bar" style="background:${beatColor(r.beat)}"></div><span class="lab">${x.n}. ${esc(x.label)}</span>
+      <i class="rz l" data-edge="l" title="Drag to trim the start"></i><i class="rz r" data-edge="r" title="Drag to trim the end"></i></div>`;
   }
-  return `<div class="${cls}" style="${style}" data-key="${x.key}" title="${esc(x.label)}" onclick="event.stopPropagation();selectKey('${x.key}')"><span>${esc(x.label)}</span></div>`;
+  const handles = movable(x) ? `<i class="rz l" data-edge="l"></i><i class="rz r" data-edge="r"></i>` : "";
+  return `<div class="${cls}" style="${style}" data-key="${x.key}" title="${esc(x.label)}" onpointerdown="tiDown(event,'${x.key}')"><span>${esc(x.label)}</span>${handles}</div>`;
+}
+// ---- dragging on the timeline: move pieces, stretch them, reorder and trim scenes ----------------
+const movable = (x) => ["txt", "zm", "stk", "title", "sfx"].includes(x.kind) || (x.kind === "fx" && fxs[x.k] && fxs[x.k].duration);
+function pieceRef(x) {   // the object behind a piece, and the names of its time fields
+  const o = { txt: txts, zm: zms, stk: stks, fx: fxs, sfx: aud.sfx || [] }[x.kind];
+  if (x.kind === "title") return { obj: ttl, s: "start_in_output", d: "duration", dd: 2.5 };
+  if (x.kind === "sfx") return { obj: o[x.k], s: "at", d: null, dd: 0.4 };
+  return o ? { obj: o[x.k], s: "start_in_output", d: "duration", dd: 1.5 } : null;
+}
+function snapT(t, p) {   // stick to the playhead and scene edges when within 7 pixels
+  const v = $("player"), marks = [v ? v.currentTime : playT, ...Object.values(sceneStarts()), totals()];
+  for (const m of marks) if (Math.abs(m - t) * p < 7) return { t: m, snapped: true };
+  return { t, snapped: false };
+}
+function tiDown(e, key) {
+  if (e.button !== 0) return;
+  e.stopPropagation();
+  const x = itemByKey(key); if (!x) return;
+  const el = e.currentTarget, edge = e.target.dataset.edge, x0 = e.clientX, p = pps();
+  const canMove = x.kind === "sec" || movable(x);
+  let moved = false, snapLine = null;
+  const ref = movable(x) ? pieceRef(x) : null;
+  const orig = ref ? { s: +ref.obj[ref.s] || 0, d: ref.d ? +ref.obj[ref.d] || ref.dd : ref.dd } : null;
+  const r = x.kind === "sec" ? ranges[x.i] : null, r0 = r ? { start: r.start, end: r.end } : null;
+  const sp = r ? (r.speed || 1) : 1;
+  el.setPointerCapture(e.pointerId);
+  const showSnap = (t) => { snapLine?.remove(); snapLine = document.createElement("div"); snapLine.className = "tl-snap"; snapLine.style.left = `${LABEL_W + t * p}px`; $("tlInner").appendChild(snapLine); };
+  const onMove = (ev) => {
+    const dx = ev.clientX - x0;
+    if (!moved && Math.abs(dx) < 4) return;
+    if (!canMove) return;
+    moved = true; el.classList.add("dragging");
+    const dt = dx / p;
+    if (ref) {
+      if (edge === "r" && ref.d) { ref.obj[ref.d] = Math.max(0.2, Math.round((orig.d + dt) * 100) / 100); }
+      else if (edge === "l" && ref.d) {
+        const s = Math.min(orig.s + orig.d - 0.2, Math.max(0, orig.s + dt));
+        ref.obj[ref.s] = Math.round(s * 100) / 100; ref.obj[ref.d] = Math.round((orig.d - (s - orig.s)) * 100) / 100;
+      } else {
+        const sn = snapT(Math.max(0, orig.s + dt), p);
+        ref.obj[ref.s] = Math.round(sn.t * 100) / 100;
+        snapLine?.remove(); snapLine = null; if (sn.snapped) showSnap(sn.t);
+      }
+      const s = +ref.obj[ref.s], d = ref.d ? +ref.obj[ref.d] : ref.dd;
+      el.style.left = `${s * p}px`; el.style.width = `${Math.max(6, d * p - 2)}px`;
+    } else if (r) {
+      if (edge === "l") { r.start = Math.round(Math.min(r0.end - 0.2, Math.max(0, r0.start + dt * sp)) * 1000) / 1000;
+        el.style.left = `${(x.t + (r.start - r0.start) / sp) * p}px`; el.style.width = `${((r0.end - r.start) / sp) * p - 2}px`; }
+      else if (edge === "r") { r.end = Math.round(Math.max(r0.start + 0.2, r0.end + dt * sp) * 1000) / 1000;
+        el.style.width = `${((r.end - r0.start) / sp) * p - 2}px`; }
+      else el.style.transform = `translateX(${dx}px)`;
+    }
+  };
+  const onUp = (ev) => {
+    el.removeEventListener("pointermove", onMove); el.removeEventListener("pointerup", onUp);
+    snapLine?.remove();
+    if (!moved) return selectKey(key);
+    if (r && !edge) {   // scene dropped: move it to where its middle landed
+      const mid = x.t + x.d / 2 + (ev.clientX - x0) / p, starts = sceneStarts();
+      const on = ranges.map((rr, i) => i).filter((i) => ranges[i]._on && i !== x.i);
+      let to = on.find((i) => mid < starts[i] + rlen(ranges[i]) / 2);
+      const item = ranges.splice(x.i, 1)[0];
+      const note = cardNotes[x.i]; delete cardNotes[x.i];
+      let at = to === undefined ? ranges.length : to - (to > x.i ? 1 : 0);
+      ranges.splice(at, 0, item);
+      const renum = {}; Object.entries(cardNotes).forEach(([k, v]) => { let i = +k; if (i > x.i) i--; if (i >= at) i++; renum[i] = v; });
+      if (note) renum[at] = note; cardNotes = renum;
+      selKey = `sec:${at}`; sel = at;
+    }
+    setDirty(true); changedAll(); renderSel();
+  };
+  el.addEventListener("pointermove", onMove); el.addEventListener("pointerup", onUp);
 }
 const noteFor = (key) => (key.startsWith("sec:") ? cardNotes[+key.slice(4)] : itemNotes[key]) || "";
 function laneDown(e) {
@@ -1080,8 +1259,8 @@ function renderSel() {
   } else if (it.kind === "tr") {
     const r = ranges[it.i], cur = trName(r), dur = r.transition && r.transition.duration;
     body = `<div class="why"><b>Between</b>scene ${sceneNo(it.i) - 1} and scene ${sceneNo(it.i)}: ${cur ? `a <b>${esc(nice(cur))}</b> transition` : "a straight cut"}.</div>
-      <label class="lbl">Transition <select class="field" onchange="setTrans(${it.i}, this.value, null)"><option value="">Cut (none)</option>
-        ${S.transitions.map((x) => `<option value="${x}" ${cur === x ? "selected" : ""}>${nice(x)}</option>`).join("")}</select></label>
+      <div class="meta">Each tile shows that transition on your video. Click one to use it.</div>
+      <div class="pvgrid">${pvGrid("transition", [["", "Cut (none)"], ...S.transitions.map((x) => [x, nice(x)])], cur, "pickTr")}</div>
       ${cur ? `<label class="lbl">Length <select class="field" onchange="setTrans(${it.i}, '${cur}', +this.value)">
         ${[0, 0.2, 0.3, 0.5, 0.8, 1.2].map((v) => `<option value="${v}" ${(dur || 0) === v ? "selected" : ""}>${v ? v + "s" : "Default"}</option>`).join("")}</select></label>` : ""}`;
   } else if (it.kind === "cap") {
@@ -1100,12 +1279,13 @@ function renderSel() {
       <button onclick="removeKey('${it.key}')">Delete</button>`;
   } else if (it.kind === "fx") {
     const x = fxs[it.k];
-    body = `<label class="lbl">Effect<select class="field" onchange="fxs[${it.k}].type=this.value;edited()">${S.effects_kit.map((e) => `<option value="${e.id}" ${x.type === e.id ? "selected" : ""}>${esc(e.label)}</option>`).join("")}</select></label>
+    body = `<div class="meta">Hover to preview; click to switch this effect.</div>
+      <div class="pvgrid">${pvGrid("effect", S.effects_kit.map((e) => [e.id, e.label]), x.type, "pickSelFx")}</div>
       ${x.duration ? `<div class="grid2">${t("Starts at (s)", x.start_in_output || 0, `fxs[${it.k}].start_in_output=num(this.value,0);edited()`)}${t("Lasts (s)", x.duration, `fxs[${it.k}].duration=num(this.value,1);edited()`)}</div>` : `<div class="meta">Runs for the whole video.</div>`}
       <button onclick="removeKey('${it.key}')">Delete</button>`;
   } else if (it.kind === "zm") {
     const x = zms[it.k];
-    body = `<label class="lbl">Move<select class="field" onchange="zms[${it.k}].style=this.value;edited()">${ZOOM_STYLES.map(([v, l]) => `<option value="${v}" ${(x.style || "punch") === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    body = `<div class="pvgrid">${pvGrid("zoom", ZOOM_STYLES.map(([v, l]) => [v, l.replace(/ \(.*\)/, "")]), x.style || "punch", "pickSelZm")}</div>
       <label class="lbl">How close<select class="field" onchange="zms[${it.k}].scale=+this.value;edited()">${[1.06, 1.1, 1.15, 1.2, 1.3, 1.45].map((v) => `<option value="${v}" ${Math.abs((x.scale || 1.15) - v) < 0.011 ? "selected" : ""}>${Math.round((v - 1) * 100)}% closer</option>`).join("")}</select></label>
       <div class="grid2">${t("Starts at (s)", x.start_in_output || 0, `zms[${it.k}].start_in_output=num(this.value,0);edited()`)}${t("Lasts (s)", x.duration || 1, `zms[${it.k}].duration=num(this.value,1);edited()`)}</div>
       <button onclick="removeKey('${it.key}')">Delete</button>`;
@@ -1133,8 +1313,12 @@ function renderSel() {
   P.innerHTML = head + body + `<div class="feedback"><b>💬 Feedback for Claude about this ${kname.toLowerCase()}</b>
     <textarea class="field" rows="3" placeholder="e.g. ${it.kind === "tr" ? "make this a whip pan" : it.kind === "cap" ? "make this line pop" : it.kind === "sec" ? "cut this shorter, start on the laugh" : "make this stronger / remove it / move it later"}"
       oninput="setNote('${it.key}', this.value)" onchange="renderTL();renderNotesList()">${esc(note)}</textarea>
-    <span class="meta">Save, then tell Claude “check my notes”.</span></div>`;
+    <span class="meta">Save, then tell Claude “check my notes”. Or ask Claude right now in the box under the video.</span></div>`;
+  armPreviews(P);
 }
+function pickTr(id) { const it = itemByKey(selKey); if (it && it.kind === "tr") setTrans(it.i, id || null, null); }
+function pickSelFx(id) { const it = itemByKey(selKey); if (it && it.kind === "fx") { fxs[it.k].type = id; edited(); } }
+function pickSelZm(id) { const it = itemByKey(selKey); if (it && it.kind === "zm") { zms[it.k].style = id; edited(); } }
 function edited() { setDirty(true); changedAll(); renderSel(); }
 function setNote(key, v) {
   if (key.startsWith("sec:")) cardNotes[+key.slice(4)] = v; else if (v.trim()) itemNotes[key] = v; else delete itemNotes[key];
@@ -1162,7 +1346,9 @@ function renderPlan() {
   const style = capEff("style"), capLabel = style === "none" ? "Off" : ((S.caption_styles.find((c) => c.id === style) || {}).label || style);
   const pos = capEff("position"), posLabel = typeof pos === "object" ? "custom spot" : ({ best: "best spot", lower: "bottom", upper: "top" }[pos] || pos);
   const lookLabel = look === "none" ? "Natural" : ((S.looks.find((l) => l.id === look) || {}).label || nice(look));
-  const choice = (icon, label, value, tab) => `<li><button class="choice" onclick="showTab('${tab}')"><b>${icon} ${label}</b><span>${value}</span></button></li>`;
+  const choice = (icon, label, value, tab) => { const key = `choice:${label.toLowerCase()}`;
+    return `<li><div class="choicewrap"><button class="choice" onclick="showTab('${tab}')" title="Change it"><b>${icon} ${label}</b><span>${value}</span></button>
+      <button class="nb" onclick="togglePN('${key}')" title="Feedback for Claude">${itemNotes[key] ? "💬✓" : "💬"}</button></div>${pnBox(key, `e.g. ${label === "Captions" ? "bigger and yellow, one word at a time" : label === "Music" ? "something chill and moody" : "what you'd like instead"}`)}</li>`; };
   const nTr = ranges.filter((r, i) => r._on && i && trName(r)).length;
   const cutsBy = {}; (p.cuts || []).forEach((c) => (cutsBy[c.kind || "other"] = (cutsBy[c.kind || "other"] || 0) + 1));
   const starts = sceneStarts();
@@ -1177,9 +1363,12 @@ function renderPlan() {
     txts.forEach((x) => inWin(x.start_in_output) && xs.push(`🔤 ${x.text}`));
     if (r.speed && r.speed !== 1) xs.push(`${r.speed}×`); if (r.speed_curve) xs.push(nice(r.speed_curve)); if (r.boomerang) xs.push("boomerang");
     return `<li class="scene ${sel === i ? "sel" : ""}" id="pvs${i}" style="border-left-color:${beatColor(r.beat)}" onclick="selectKey('sec:${i}')">
-      <div class="hd">${sceneNo(i)} · ${esc(r.beat || "scene")} <span class="grow"></span>${fmt1(s)} · ${rlen(r).toFixed(1)}s${cardNotes[i] ? " 💬" : ""}</div>
+      <div class="hd">${sceneNo(i)} · ${esc(r.beat || "scene")} <span class="grow"></span>${fmt1(s)} · ${rlen(r).toFixed(1)}s
+        <button class="nb" onclick="event.stopPropagation();togglePN('sec:${i}')" title="Feedback for Claude on this scene">${cardNotes[i] ? "💬✓" : "💬"}</button>
+        <button class="nb" onclick="event.stopPropagation();toggle(${i}, false)" title="Drop this scene">✕</button></div>
       <q>${esc(r.quote || "")}</q>${r.reason ? `<div class="why">${esc(r.reason)}</div>` : ""}
-      ${xs.length ? `<div class="xtra">${xs.map((x) => `<span class="badge">${esc(x)}</span>`).join("")}</div>` : ""}</li>`;
+      ${xs.length ? `<div class="xtra">${xs.map((x) => `<span class="badge">${esc(x)}</span>`).join("")}</div>` : ""}
+      ${pnBox(`sec:${i}`, "e.g. start on the laugh, cut the last sentence, add a zoom here")}</li>`;
   }).join("");
   const tidy = (c) => c.replace(/^v\d+(\s*\([^)]*\))?:\s*/i, "").replace(/^You:\s*/, "You changed ");
   $("planView").innerHTML = `
@@ -1198,13 +1387,86 @@ function renderPlan() {
       <button class="link" onclick="showLeft('board')">See them and restore any →</button></div>
     ${(p.changes || []).length ? `<h4>Latest changes</h4><ul class="changes">${p.changes.map((c) => `<li>${esc(tidy(c))}</li>`).join("")}</ul>` : ""}`;
 }
+const openPN = new Set();   // plan items whose feedback box is open
+function pnBox(key, ph) {
+  if (!openPN.has(key)) return "";
+  return `<div class="pnote" onclick="event.stopPropagation()"><textarea class="field" rows="2" placeholder="${esc(ph)}"
+    oninput="setNote('${key}', this.value)" onchange="renderTL();renderNotesList()">${esc(noteFor(key))}</textarea></div>`;
+}
+function togglePN(key) {
+  openPN.has(key) ? openPN.delete(key) : openPN.add(key);
+  renderPlan();
+  if (openPN.has(key)) setTimeout(() => { const ta = [...document.querySelectorAll(".pnote textarea")].find((t) => t.getAttribute("oninput").includes(`'${key}'`)); ta?.focus(); }, 0);
+}
 function renderPlanSel() { document.querySelectorAll(".pv .scene").forEach((e) => e.classList.toggle("sel", selKey === `sec:${e.id.slice(3)}`)); }
 
 // ---- scenes list (storyboard) ------------------------------------------------------------
 function setDirty(v) {
+  if (v && !restoring) pushHistory();
   dirty = v; $("saveBtn").classList.toggle("primary", v);
   markTabs(); updateApprove();
+  if ($("undoBtn")) { $("undoBtn").disabled = hi <= 0; $("redoBtn").disabled = hi >= hist.length - 1; }
 }
+
+// ---- undo / redo: every change you make (not your typed notes) can be stepped back ----------
+let hist = [], hi = 0, savedState = "", restoring = false;
+const getState = () => JSON.stringify({ ranges, caps, aud, look, ttl, fxs, adj, beat, fade, txts, stks, zms });
+function pushHistory() {
+  const s = getState(); if (s === hist[hi]) return;
+  hist = hist.slice(0, hi + 1); hist.push(s); if (hist.length > 150) hist.shift(); hi = hist.length - 1;
+}
+function applyState(s) {
+  const o = JSON.parse(s);
+  ({ ranges, caps, aud, look, ttl, fxs, adj, beat, fade, txts, stks, zms } = o);
+  restoring = true; setDirty(s !== savedState); restoring = false;
+  if (selKey && !itemByKey(selKey)) selKey = null;
+  render(); renderCaptions(); renderAudio(); renderLook(); renderTitle(); renderEffects(); renderCapLines(); renderSel();
+}
+function undo() { if (hi > 0) { hi--; applyState(hist[hi]); } }
+function redo() { if (hi < hist.length - 1) { hi++; applyState(hist[hi]); } }
+$("undoBtn").onclick = undo; $("redoBtn").onclick = redo;
+
+function splitAtPlayhead() {
+  const v = $("player"), t = v ? v.currentTime : playT, starts = sceneStarts();
+  const i = +(Object.keys(starts).find((k) => t > starts[k] + 0.1 && t < starts[k] + rlen(ranges[k]) - 0.1) ?? -1);
+  if (i < 0) return toast("Move the playhead into the middle of a scene to split it.", true);
+  const r = ranges[i];
+  if (r.speed_curve || r.boomerang || r.hold) return toast("This scene has a speed curve, boomerang or freeze; take that off to split it.", true);
+  const at = Math.round((r.start + (t - starts[i]) * (r.speed || 1)) * 1000) / 1000;
+  const a = { ...r, end: at }, b = { ...r, start: at, beat: r.beat ? `${r.beat} 2` : "", reason: r.reason ? `${r.reason} (second part)` : "split in the Studio" };
+  delete b.transition;
+  ranges.splice(i, 1, a, b);
+  const renum = {}; Object.entries(cardNotes).forEach(([k, n]) => (renum[+k > i ? +k + 1 : +k] = n)); cardNotes = renum;
+  setDirty(true); changedAll(); selectKey(`sec:${i + 1}`); toast("Split. Each part can now be moved, trimmed or deleted on its own.");
+}
+function deleteSelected() {
+  if (!selKey) return toast("Click something on the timeline first.", true);
+  const it = itemByKey(selKey); if (!it) return;
+  if (it.kind === "sec") return toggle(it.i, false);
+  if (it.kind === "tr") return setTrans(it.i, null);
+  if (movable(it) || it.kind === "fx") return removeKey(selKey);
+  toast(it.kind === "cap" ? "To remove captions, choose Off in the Captions tab, or fix the words." : "Tell Claude about this one in the feedback box.", true);
+}
+function duplicateSelected() {
+  const it = selKey && itemByKey(selKey);
+  const lists = { txt: txts, zm: zms, stk: stks, fx: fxs };
+  if (!it || !lists[it.kind]) return toast("Select a text, zoom, sticker or effect to duplicate it.", true);
+  const src = lists[it.kind][it.k], copy = clone(src, {});
+  if (copy.duration) copy.start_in_output = Math.round(((src.start_in_output || 0) + src.duration) * 100) / 100;
+  lists[it.kind].push(copy);
+  setDirty(true); changedAll(); selectKey(`${it.kind}:${lists[it.kind].length - 1}`);
+}
+$("splitBtn").onclick = splitAtPlayhead; $("delBtn").onclick = deleteSelected; $("dupBtn").onclick = duplicateSelected;
+document.addEventListener("keydown", (e) => {
+  if (e.target.closest("input,textarea,select,[contenteditable]")) return;
+  const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+  if (mod && k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if (mod && (k === "y" || (k === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+  else if (mod && k === "b") { e.preventDefault(); splitAtPlayhead(); }
+  else if (mod && k === "d") { e.preventDefault(); duplicateSelected(); }
+  else if (k === "delete" || k === "backspace") { if (selKey) { e.preventDefault(); deleteSelected(); } }
+  else if (mod && k === "s") { e.preventDefault(); $("saveBtn").click(); }
+});
 let toastTimer = null;
 function toast(msg, err) {
   const t = $("toast"); t.textContent = msg; t.className = err ? "err" : ""; t.hidden = false;
@@ -1443,19 +1705,73 @@ $("tnoteForm").onsubmit = (e) => {
   $("tnoteForm").hidden = true; renderRough(); renderTL(); renderNotesList();
 };
 $("saveBtn").onclick = async () => {
+  const res = await doSave();
+  toast(res.notes_saved ? 'Saved. Tell Claude “check my notes” (or ask in the box under the video).' : res.direct_edits.length ? "Saved." : "Nothing to save.");
+};
+
+// ---- Tell Claude: the director's box (typed or spoken) ------------------------------------------
+const ASK_CHIPS = ["Make the hook punchier", "Make the captions bigger", "Add a transition between scenes", "Zoom in on the key words",
+  "Tighten the pauses", "Make it more cinematic", "What would you change?"];
+function renderChat() {
+  const c = S.chat || { log: [], state: "idle", available: false };
+  const log = c.log || [];
+  $("chatLog").innerHTML = (log.length ? log.map((m) => `<li class="${m.who}">${esc(m.text)}<small>${m.who === "you" ? "You" : "Claude"} · ${esc(m.at || "")}</small></li>`).join("")
+    : `<li class="claude">Hi! I'm editing this with you. Tell me what to change in the box under the video, by typing or with the 🎤. I can see what you've selected on the timeline and where the playhead is.</li>`)
+    + (c.state === "running" ? `<li class="claude typing">Working on it… (usually under a minute)</li>` : "");
+  const last = [...log].reverse().find((m) => m.who === "claude");
+  $("lastMsg").innerHTML = c.state === "running" ? `<b>Claude:</b> working on it…` : last ? `<b>Claude:</b> <span>${esc(last.text)}</span> <button class="link" onclick="showLeft('chat')">chat</button>` : "";
+  $("askBtn").disabled = c.state === "running";
+  $("askBtn").textContent = c.state === "running" ? "Working…" : "Send";
+  if (!S.server_version) $("askText").placeholder = "🎬 Reopen the editor to talk to Claude from here";
+  else if (!c.available) $("askText").placeholder = "🎬 Claude Code isn't installed here, so ask in your Claude chat instead";
+  $("askChips").innerHTML = ASK_CHIPS.map((t) => `<button type="button" onclick="$('askText').value=${esc(JSON.stringify(t))};$('askText').focus()">${esc(t)}</button>`).join("");
+}
+let askPoll = null;
+$("askForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const message = $("askText").value.trim();
+  if (!message) return $("askText").focus();
+  if (!S.server_version) return toast("Close the editor and open it again from the desktop icon to talk to Claude here.", true);
+  if (dirty) await doSave();   // Claude works on what you see, so your changes are saved first
+  const it = selKey && itemByKey(selKey);
+  const context = { playhead: Math.round(nowT() * 100) / 100,
+    selected: it ? { what: (KIND[it.kind] || ["piece"])[0], label: it.label, at: Math.round(it.t * 100) / 100, key: it.key } : null };
+  const res = await (await fetch("/api/ask", { method: "POST", body: JSON.stringify({ message, context }) })).json();
+  if (!res.ok) return toast(res.error, true);
+  $("askText").value = "";
+  S.chat = { ...(S.chat || {}), state: "running", log: [...((S.chat || {}).log || []), { who: "you", text: message, at: "now" }] };
+  renderChat(); watchChat();
+};
+$("askText").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("askForm").requestSubmit(); } });
+function watchChat() {
+  clearInterval(askPoll);
+  askPoll = setInterval(async () => {
+    const st = await (await fetch("/api/state")).json();
+    if (st.chat.state === "running") return;
+    clearInterval(askPoll);
+    const versionBefore = S.plan.version;
+    await load(); renderSel();
+    const last = [...(S.chat.log || [])].reverse().find((m) => m.who === "claude");
+    toast(S.plan.version !== versionBefore ? "Claude made the change. Make a new preview to see it." : (last ? last.text.slice(0, 140) : "Done."), S.chat.state === "failed");
+  }, 2500);
+}
+
+async function doSave() {
   const kept = ranges.filter((r) => r._on).map(({ _on, ...r }) => r);
   const cards = Object.entries(cardNotes).filter(([, n]) => n && n.trim()).map(([i, n]) => {
     const r = ranges[i]; return { index: +i, source: r.source, start: r.start, end: r.end, quote: r.quote, note: n.trim() };
   });
   const items = Object.entries(itemNotes).filter(([, n]) => n && n.trim()).map(([key, note]) => {
     const it = itemByKey(key) || {};
-    return { key, kind: (KIND[it.kind] || [key.split(":")[0]])[0], label: it.label || key, at: it.t !== undefined ? Math.round(it.t * 100) / 100 : null, note: note.trim() };
+    const choice = key.startsWith("choice:") ? key.slice(7) : null;
+    return { key, kind: choice ? "Overall choice" : (KIND[it.kind] || [key.split(":")[0]])[0], label: choice ? `the ${choice}` : it.label || key,
+      at: it.t !== undefined ? Math.round(it.t * 100) / 100 : null, note: note.trim() };
   });
   const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, title: ttl, effects: fxs, zooms: zms, adjust: adj, beat_sync: beat, fade, texts: txts, stickers: stks, grade: look === "none" ? null : look, notes: { overall: $("overall").value.trim(), cards, items, timestamped: tnotes } }) })).json();
   sel = -1;
   await load(); renderSel();
-  toast(res.notes_saved ? 'Saved. Now tell Claude “check my notes”.' : res.direct_edits.length ? "Saved." : "Nothing to save.");
-};
+  return res;
+}
 let armTimer = null;
 $("approveBtn").onclick = async () => {
   const b = $("approveBtn"), gate = b.dataset.gate;
@@ -1485,7 +1801,7 @@ async function makeRough() {
 }
 $("roughBtn").onclick = primaryPreview;
 window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
-load().then(renderSel);
+load().then(() => { renderSel(); if (S.chat && S.chat.state === "running") watchChat(); });
 </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 {
   "name": "ai-video-editor",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Free, local AI video editor for Claude Code: drop in raw footage, get a cut, captioned, branded short or YouTube video. Review and approve in a local Studio before anything renders. Built on browser-use/video-use (MIT).",
   "author": { "name": "theaisolopreneurs-stack", "url": "https://github.com/theaisolopreneurs-stack" },
   "homepage": "https://github.com/theaisolopreneurs-stack/video-use",

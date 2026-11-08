@@ -69,6 +69,8 @@ takes, order, hook, graphics) when you ask it to.
 | **Effects** | Effects, zooms and camera pushes, words on screen and stickers, added at the playhead. |
 | **Audio** | Clean up or isolate your voice, voice level, overall loudness, music (with ▶ Listen), ducking, sounds, fades. |
 | **Notes** | Anything you'd rather tell Claude than click, and a list of all your feedback. |
+| **Tell Claude** (under the video) | Type or say (🎤) what to change, e.g. "make the hook punchier" or "add a whip transition here". Claude makes the edit and answers; the **💬 Chat** tab keeps the conversation. Uses your own Claude Code (sign in once by typing `claude` in a terminal). |
+| **Timeline editing** | Drag pieces to move them, drag edges to stretch or trim, drag scenes to reorder; ✂ Split (Ctrl+B), ⧉ Duplicate (Ctrl+D), 🗑 Delete, ↶ Undo (Ctrl+Z), ↷ Redo (Ctrl+Y). Transitions, effects and zooms show looping previews on your own video before you pick them. |
 
 Click **Save**, then tell Claude **"check my notes"**. Claude answers each note (overall, per piece, per moment), and
 **Latest changes** in Claude's plan says what changed. Then **Make preview → watch → Looks good → Export**.

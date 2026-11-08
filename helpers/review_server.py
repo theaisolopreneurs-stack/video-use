@@ -49,6 +49,9 @@ HOME_HTML = HELPERS / "studio" / "home.html"
 THEME_CSS = HELPERS / "studio" / "theme.css"
 MIC_JS = HELPERS / "studio" / "mic.js"
 THEME_JS = HELPERS / "studio" / "theme.js"
+# Changes whenever this file changes, so an editor left running from an older version can be spotted
+# (the pages show a "please reopen" banner) and replaced when the desktop icon is clicked again.
+SERVER_VERSION = __import__("hashlib").sha1(Path(__file__).read_bytes()).hexdigest()[:10]
 
 
 class Studio:
@@ -59,6 +62,8 @@ class Studio:
         self.thumbs = edit_dir / "storyboard" / "thumbs"
         self.lock = threading.Lock()
         self.render = {"state": "idle", "started": None, "finished": None, "error": None}
+        self.chat = {"state": "idle", "session": None, "error": None}
+        self.chat_path = edit_dir / "chat.json"
 
     # ---- state -----------------------------------------------------------
     def versions(self) -> list[int]:
@@ -103,6 +108,9 @@ class Studio:
                              for k in planlib.SPEED_CURVES},
             "voice_fx": [{"id": k, "label": v[0]} for k, v in __import__("audio").VOICE_FX.items()],
             "caption_fonts": __import__("captions").font_list(),
+            "server_version": SERVER_VERSION,
+            "chat": {"state": self.chat["state"], "error": self.chat["error"], "log": self.chat_log()[-40:],
+                     "available": bool(find_claude())},
         }
 
     def music_files(self) -> list[Path]:
@@ -209,6 +217,76 @@ class Studio:
                               "direct_edits": changed, "status": "open"})
                 self.notes_path.write_text(json.dumps(notes, indent=2, ensure_ascii=False), encoding="utf-8")
             return {"ok": True, "direct_edits": changed, "version": plan["version"], "notes_saved": has_notes}
+
+    # ---- talking to Claude from the Studio --------------------------------
+    def chat_log(self) -> list[dict]:
+        try:
+            return json.loads(self.chat_path.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+
+    def _log(self, who: str, text: str) -> None:
+        log = self.chat_log() + [{"who": who, "text": text, "at": time.strftime("%H:%M")}]
+        self.chat_path.write_text(json.dumps(log[-200:], indent=1, ensure_ascii=False), encoding="utf-8")
+
+    def ask(self, body: dict) -> dict:
+        """The director types or says what to change; Claude Code (the person's own, run in the
+        background) edits plan.json and answers in a sentence or two."""
+        msg = (body.get("message") or "").strip()
+        if not msg:
+            return {"ok": False, "error": "Type or say what you'd like changed."}
+        if self.chat["state"] == "running":
+            return {"ok": False, "error": "Claude is still working on your last request."}
+        claude = find_claude()
+        if not claude:
+            return {"ok": False, "error": "Claude Code isn't installed on this computer, so ask in your Claude chat instead."}
+        ctx = body.get("context") or {}
+        self._log("you", msg)
+        self.chat.update(state="running", error=None)
+        py = ".venv/Scripts/python.exe" if os.name == "nt" else ".venv/bin/python"
+        plan_rel = self.plan_path.as_posix()
+        prompt = f"""You are the video editor inside the AI Video Editor's Review Studio, editing one video together with its director (the person typing). They are not technical.
+
+Project: {self.edit_dir.parent.name}. The edit plan is {plan_rel} (notes: {self.notes_path.as_posix()}). SKILL.md in the current folder documents every plan.json field (ranges, transitions, captions, zooms, effects, texts, stickers, broll, audio, grade, adjust, title) and the helpers.
+What they are looking at: {json.dumps(ctx, ensure_ascii=False)}  (playhead = seconds into the video; selected = the timeline piece they clicked, if any).
+
+The director says: {msg}
+
+Do it now by editing the plan:
+1. `{py} helpers/plan.py snapshot "{plan_rel}" --change "<a few words>"`
+2. Edit plan.json (times in the plan are seconds in the finished video unless the field is a source time, as SKILL.md says). Keep their earlier changes.
+3. `{py} helpers/plan.py validate "{plan_rel}"` and fix anything it reports.
+Do not render, export, install anything, or touch files outside this project's folder. If they asked a question, just answer it. If the request is unclear, make your best sensible choice and say what you did.
+Finish with 1-3 short, friendly, plain-English sentences saying what you changed (no file names, no jargon)."""
+        cmd = [claude, "-p", "--output-format", "json", "--permission-mode", "acceptEdits",
+               "--add-dir", str(self.edit_dir.parent),
+               "--allowedTools", "Read", "Edit", "Write", "Glob", "Grep", f"Bash({py} helpers/plan.py:*)"]
+        if self.chat["session"]:
+            cmd += ["--resume", self.chat["session"]]
+
+        def work():
+            try:
+                proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8",
+                                      errors="replace", cwd=str(HELPERS.parent), timeout=900,
+                                      env={**os.environ, "PYTHONUTF8": "1"})
+                out = json.loads(proc.stdout or "{}")
+                reply = (out.get("result") or "").strip()
+                self.chat["session"] = out.get("session_id") or self.chat["session"]
+                if proc.returncode or out.get("is_error") or not reply:
+                    raise RuntimeError(reply or proc.stderr[-400:] or "no answer")
+                self._log("claude", reply)
+                self.chat.update(state="done")
+            except Exception as e:  # noqa: BLE001
+                err = str(e)
+                if any(k in err.lower() for k in ("authenticate", "login", "log in", "oauth", "api key")):
+                    self._log("claude", "I need you to sign in to Claude Code once before I can edit from here: open a "
+                                        "terminal, type claude, and follow the sign-in. Then ask me again.")
+                    self.chat.update(state="failed", error="signin")
+                else:
+                    self._log("claude", "Sorry, that didn't work. Try saying it another way, or ask in your Claude chat.")
+                    self.chat.update(state="failed", error=err[-400:])
+        threading.Thread(target=work, daemon=True).start()
+        return {"ok": True}
 
     def approve(self, gate: str) -> dict:
         with self.lock:
@@ -413,6 +491,8 @@ def make_handler(app: App):
                 return self.send_file(THEME_CSS)
             if url.path == "/theme.js":
                 return self.send_file(THEME_JS)
+            if url.path == "/api/version":
+                return self.send_json({"version": SERVER_VERSION})
             if url.path == "/studio":
                 if not studio:
                     return self.redirect("/")
@@ -454,6 +534,15 @@ def make_handler(app: App):
                 return self.send_file(p) if p else self.send_error(404)
             if url.path == "/title-sample":
                 p = studio.title_sample()
+                return self.send_file(p) if p else self.send_error(404)
+            if url.path == "/fx-preview":
+                import previews
+                q1 = parse_qs(url.query)
+                try:
+                    p = previews.preview(planlib.load(studio.plan_path), studio.edit_dir,
+                                         q1.get("kind", [""])[0], q1.get("name", [""])[0])
+                except Exception:
+                    p = None
                 return self.send_file(p) if p else self.send_error(404)
             if url.path == "/caption-sample":
                 p = studio.caption_sample(parse_qs(url.query).get("style", [""])[0])
@@ -533,6 +622,8 @@ def make_handler(app: App):
                 return self.send_json({"ok": True, "job": lib.start_export(studio.edit_dir.parent.name, aspects)})
             if self.path == "/api/save":
                 return self.send_json(studio.save(body))
+            if self.path == "/api/ask":
+                return self.send_json(studio.ask(body))
             if self.path == "/api/approve":
                 return self.send_json(studio.approve(body.get("gate", "")))
             if self.path == "/api/rough":
@@ -555,6 +646,50 @@ def run_windowless() -> None:
             kwargs["creationflags"] = kwargs.get("creationflags", 0) | subprocess.CREATE_NO_WINDOW
             original(self, *args, **kwargs)
         subprocess.Popen.__init__ = hidden
+
+
+def find_claude() -> str | None:
+    """The person's Claude Code command, if it's installed (used by the Studio's "Tell Claude" box)."""
+    found = shutil.which("claude")
+    if found:
+        return found
+    for c in (Path.home() / ".local" / "bin" / "claude.exe", Path.home() / ".local" / "bin" / "claude",
+              Path.home() / "AppData" / "Roaming" / "npm" / "claude.cmd"):
+        if c.exists():
+            return str(c)
+    return None
+
+
+def running_version(port: int) -> str | None:
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/version", timeout=3) as r:
+            return json.loads(r.read()).get("version")
+    except Exception:
+        return None
+
+
+def replace_old_editor(port: int, handler):
+    """If the editor on `port` is an older version of this one, stop it and start fresh here.
+    Returns the new server, or None to leave the running one alone (same version, or not ours)."""
+    if running_version(port) == SERVER_VERSION or os.name != "nt":
+        return None
+    out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True).stdout
+    pids = {line.split()[-1] for line in out.splitlines()
+            if f"127.0.0.1:{port} " in line and "LISTEN" in line.upper()}
+    for pid in pids:
+        cmd = subprocess.run(["powershell", "-NoProfile", "-Command",
+                              f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"],
+                             capture_output=True, text=True).stdout
+        if "review_server.py" not in cmd:
+            return None  # something else owns the port: don't touch it
+        subprocess.run(["taskkill", "/PID", pid, "/T", "/F"], capture_output=True)
+    for _ in range(20):
+        try:
+            return ThreadingHTTPServer(("127.0.0.1", port), handler)
+        except OSError:
+            time.sleep(0.25)
+    return None
 
 
 def main() -> None:
@@ -583,11 +718,15 @@ def main() -> None:
         ThreadingHTTPServer.allow_reuse_address = os.name != "nt"
         server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(app))
     except OSError:
-        # Already running (e.g. the desktop icon was clicked twice): just open it.
-        print(f"already running: {url}")
-        if not args.no_open:
-            webbrowser.open(url)
-        return
+        # Already running (e.g. the desktop icon was clicked twice): just open it. But an editor left
+        # running from an older version would show new pages without the code behind them, so that
+        # one is closed and replaced.
+        server = replace_old_editor(args.port, make_handler(app))
+        if server is None:
+            print(f"already running: {url}")
+            if not args.no_open:
+                webbrowser.open(url)
+            return
     print(f"{label}: {url}  (Ctrl+C to stop)", flush=True)
     if not args.no_open:
         webbrowser.open(url)
