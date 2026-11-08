@@ -4,7 +4,9 @@ Runs on the concatenated base (one continuous voice track), before captions
 and loudness normalisation. Settings live in plan.json "audio":
 
     "audio": {
-      "voice": "clean",                  # clean | off
+      "voice": "clean",                  # clean | isolate (only the voice, background removed) | off
+      "voice_gain_db": 0,                # voice louder (+) or quieter (-) against music and sound effects
+      "loudness": "normal",              # whole video: quieter | quiet | normal | loud | louder, or LUFS
       "music": {"file": "music/lofi.mp3", "volume_db": -20, "duck": true,
                 "fade_in": 1.0, "fade_out": 2.0},
       "sfx": [{"name": "whoosh", "at": 3.2, "volume_db": -8}],   # at = output seconds
@@ -38,6 +40,36 @@ AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
 
 VOICE_CLEAN = ("highpass=f=80,afftdn=nr=10:nf=-40:tn=1,deesser=i=0.4,"
                "acompressor=threshold=-21dB:ratio=2.5:attack=8:release=120:makeup=1.5")
+# "isolate": keep only the speaking voice. Background noise, hum, room tone, music and chatter
+# between words are pushed right down. Uses an RNNoise speech model (models/*.rnnn) when one is
+# there, else strong spectral denoising; both are gated between words.
+VOICE_ISOLATE_TAIL = ("agate=threshold=0.02:ratio=6:range=0.03:attack=4:release=180,deesser=i=0.4,"
+                      "acompressor=threshold=-21dB:ratio=3:attack=6:release=120:makeup=2")
+
+
+def voice_chain(mode: str | None) -> str:
+    """The voice filter for audio "voice": clean (default) | isolate | off."""
+    mode = mode or "clean"
+    if mode == "off":
+        return "anull"
+    if mode != "isolate":
+        return VOICE_CLEAN
+    model = next(iter(sorted((REPO / "models").glob("*.rnnn"))), None)
+    if model:
+        m = str(model).replace("\\", "/").replace(":", "\\:")
+        denoise = f"arnndn=m='{m}':mix=1,afftdn=nr=8:nf=-45:tn=1"
+    else:
+        denoise = "afftdn=nr=30:nf=-30:tn=1:ad=0.6,afftdn=nr=12:nf=-40:tn=1"  # (anlmdn crashes on joined clips)
+    return f"highpass=f=90,lowpass=f=9000,{denoise},{VOICE_ISOLATE_TAIL}"
+
+
+# Overall loudness of the finished video (the last step evens it to this level).
+LOUDNESS = {"quieter": -18.0, "quiet": -16.0, "normal": -14.0, "loud": -12.0, "louder": -10.0}
+
+
+def loudness_target(plan: dict) -> float:
+    v = (plan.get("audio") or {}).get("loudness", "normal")
+    return float(v) if isinstance(v, (int, float)) else LOUDNESS.get(str(v), -14.0)
 
 # Voice changer, as in CapCut's Voice effects. Pitch moves use asetrate + atempo so length is kept.
 def _pitch(k: float) -> str:
@@ -72,6 +104,11 @@ SFX_KIT = {
     "whoosh": "anoisesrc=d=0.5:c=pink:a=0.6:r=48000,highpass=f=400,lowpass=f=4000,"
               "afade=t=in:d=0.28:curve=exp,afade=t=out:st=0.28:d=0.22",
     "riser": "aevalsrc='0.25*sin(2*PI*(200+900*t*t)*t)':s=48000:d=1.2,afade=t=in:d=1.0,afade=t=out:st=1.1:d=0.1",
+    # Record scratch (the freeze-frame meme), a deep cinematic boom (push-ins, reveals), a camera shutter.
+    "scratch": "aevalsrc='(0.45*sin(2*PI*(180+1400*exp(-t*9))*t)+0.25*(random(0)*2-1))*exp(-t*4)':s=48000:d=0.45,"
+               "highpass=f=200,lowpass=f=5000",
+    "boom": "aevalsrc='0.9*sin(2*PI*(55+40*exp(-t*8))*t)*exp(-t*3.2)':s=48000:d=1.4",
+    "shutter": "aevalsrc='0.6*(random(0)*2-1)*(exp(-t*90)+0.7*exp(-abs(t-0.07)*120))':s=48000:d=0.16,highpass=f=1500",
 }
 
 
@@ -132,7 +169,16 @@ def has_work(plan: dict) -> bool:
     a = plan.get("audio") or {}
     return (a.get("voice", "clean") != "off" or bool((a.get("music") or {}).get("file"))
             or bool(a.get("sfx")) or bool(a.get("sfx_on_emphasis")) or bool(a.get("sfx_on_zoom"))
-            or bool(a.get("voiceover")) or bool(plan.get("fade")))
+            or bool(a.get("voiceover")) or bool(plan.get("fade")) or bool(freeze_sounds(plan)))
+
+
+def freeze_sounds(plan: dict) -> list[dict]:
+    """A record scratch on every meme-style freeze frame (unless its "sound" is false or another name)."""
+    out = []
+    for e in plan.get("effects") or []:
+        if e.get("type") == "freeze_frame" and e.get("style", "meme") == "meme" and e.get("sound", "scratch"):
+            out.append({"name": e.get("sound", "scratch"), "at": float(e.get("start_in_output", 0)), "volume_db": -2})
+    return out
 
 
 def mix(base: Path, plan: dict, edit_dir: Path, out: Path) -> Path:
@@ -142,8 +188,11 @@ def mix(base: Path, plan: dict, edit_dir: Path, out: Path) -> Path:
     inputs = ["-i", str(base)]
     parts: list[str] = []
 
-    voice_chain = VOICE_CLEAN if a.get("voice", "clean") != "off" else "anull"
-    parts.append(f"[0:a]aformat=sample_rates=48000:channel_layouts=stereo,{voice_chain}[voice]")
+    chain = voice_chain(a.get("voice"))
+    # Voice louder or quieter against music and sound effects, in dB (+6 = about twice as loud).
+    if a.get("voice_gain_db"):
+        chain += f",volume={float(a['voice_gain_db']):.1f}dB"
+    parts.append(f"[0:a]aformat=sample_rates=48000:channel_layouts=stereo,{chain}[voice]")
     voice_label = "[voice]"
     mix_inputs: list[str] = []
     n_inputs = 1
@@ -168,8 +217,9 @@ def mix(base: Path, plan: dict, edit_dir: Path, out: Path) -> Path:
         else:
             mix_inputs.append("[mus]")
 
-    kit = make_sfx() if (a.get("sfx") or a.get("sfx_on_emphasis") or a.get("sfx_on_zoom")) else {}
-    sfx = list(a.get("sfx") or [])
+    freezes = freeze_sounds(plan)
+    kit = make_sfx() if (a.get("sfx") or a.get("sfx_on_emphasis") or a.get("sfx_on_zoom") or freezes) else {}
+    sfx = list(a.get("sfx") or []) + freezes
     if a.get("sfx_on_emphasis"):
         sfx += [{"name": a["sfx_on_emphasis"], "at": t, "volume_db": -10} for t in emphasis_times(plan, edit_dir)]
     if a.get("sfx_on_zoom"):

@@ -174,11 +174,15 @@ def zoom_filter(plan: dict, edit_dir: Path, W: int, H: int, fps: str) -> str | N
             s_expr = pw_expr(rel, [(float(k["t"]), float(k.get("scale", 1))) for k in kf])
             cx = pw_expr(rel, [(float(k["t"]), float(k.get("x", cx))) for k in kf])
             cy = pw_expr(rel, [(float(k["t"]), float(k.get("y", cy))) for k in kf])
-        elif style == "push":
-            ramp = max(0.2, (b - a) * 0.6)
-            s_expr = f"(1+({s - 1:.4f})*min(1,(it-{a:.3f})/{ramp:.3f}))"
-        elif style == "pull":  # starts close, eases back out
-            s_expr = f"({s:.4f}-({s - 1:.4f})*min(1,(it-{a:.3f})/{max(0.2, (b - a) * 0.6):.3f}))"
+        elif style in ("push", "push_in", "pull", "push_out", "crash", "crash_out"):
+            # push in / push out ease in and out (a smooth camera move); crash ones snap in 0.25 s.
+            ramp = 0.25 if style.startswith("crash") else max(0.2, (b - a) * float(z.get("ramp", 0.6)))
+            u = f"min(1,max(0,(it-{a:.3f})/{ramp:.3f}))"
+            e = f"({u}*{u}*(3-2*{u}))"
+            if style in ("push", "push_in", "crash"):
+                s_expr = f"(1+({s - 1:.4f})*{e})"
+            else:  # starts close, eases back out
+                s_expr = f"({s:.4f}-({s - 1:.4f})*{e})"
         elif style == "drift":  # a slow creep across the whole window
             s_expr = f"(1+({s - 1:.4f})*(it-{a:.3f})/{b - a:.3f})"
         else:

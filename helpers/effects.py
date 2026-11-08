@@ -97,12 +97,52 @@ EFFECTS.update({
     "dim": ("Dim background", lambda W, H, k: f"eq=brightness={-0.2 * k:.2f}:saturation=0.75"),
     "cool_tint": ("Cool tint", lambda W, H, k: f"colortemperature=temperature={int(9500 + 1500 * k)}"),
     "warm_tint": ("Warm tint", lambda W, H, k: f"colortemperature=temperature={max(2500, int(4000 - 500 * k))}"),
+    # Instagram Edits-style: the picture bounces like it's on a spring; the screen cuts to black.
+    "bounce": ("Bounce", lambda W, H, k:
+               f"scale=w='trunc(iw*(1+{0.07 * k:.3f}*abs(sin(2*PI*2.2*t)))/2)*2':h=-2:eval=frame,"
+               f"crop={W}:{H},setsar=1"),
+    "blackout": ("Blackout", lambda W, H, k:  # ("@" is taken by the label numbering, so no color=black@a)
+                 f"lutyuv=y='16+(val-16)*{max(0.0, 1 - k):.2f}':u='128+(val-128)*{max(0.0, 1 - k):.2f}':"
+                 f"v='128+(val-128)*{max(0.0, 1 - k):.2f}'"),
 })
+# Not simple filters (see effects_chain): "hand_wipe" (handwipe.py) and "freeze_frame".
+SPECIAL = [{"id": "freeze_frame", "label": "Freeze frame"}]
+# B-roll split-screen modes: (stack direction, overlay x, overlay y). Before/after, reactions, side by side.
+SPLITS = {"split_top": ("v", "0", "0"), "split_bottom": ("v", "0", "H-h"),
+          "split_left": ("h", "0", "0"), "split_right": ("h", "W-w", "0")}
 CUT_EFFECTS = {"glitch": ("glitch", 0.25), "shake": ("shake", 0.3), "flash_cut": ("flash", 0.12)}
 
 
 def effect_list() -> list[dict]:
-    return [{"id": "hand_wipe", "label": "Hand swipe reveal"}] + [{"id": k, "label": v[0]} for k, v in EFFECTS.items()]
+    return ([{"id": "hand_wipe", "label": "Hand swipe reveal"}] + SPECIAL
+            + [{"id": k, "label": v[0]} for k, v in EFFECTS.items()])
+
+
+def freeze_effect(e: dict, plan: dict, i: int, W: int, H: int) -> str:
+    """Hold one frame for the effect's window while the sound carries on.
+
+    style "meme" (default): black and white, a punch-in on the face and a record scratch (audio.py),
+    the classic "yep, that's me" freeze. style "clean": just the freeze."""
+    a = float(e.get("start_in_output", 0.0))
+    d = float(e.get("duration") or 1.5)
+    base = plan.get("_base")
+    from handwipe import _fps
+    fps = _fps(Path(base)) if base else 30.0
+    first = int(round(a * fps))
+    last = first + max(1, int(round(d * fps))) - 1
+    chain = f",split[fz{i}m][fz{i}s];[fz{i}m][fz{i}s]freezeframes=first={first}:last={last}:replace={first}"
+    if e.get("style", "meme") == "meme":
+        z = float(e.get("zoom", 1.2))
+        cx, cy = 0.5, 0.4
+        if _edit_dir(plan):
+            from framing import zoom_center
+            cx, cy = zoom_center(plan, Path(_edit_dir(plan)), a + 0.01)
+        zw, zh = int(W * z) // 2 * 2, int(H * z) // 2 * 2
+        x = int(min(max(0, cx * zw - W / 2), zw - W))
+        y = int(min(max(0, cy * zh - H / 2), zh - H))
+        chain += (f",split[fz{i}o][fz{i}g];[fz{i}g]hue=s=0,eq=contrast=1.12,scale={zw}:{zh},crop={W}:{H}:{x}:{y}[fz{i}z];"
+                  f"[fz{i}o][fz{i}z]overlay=enable='between(t,{a:.3f},{a + d:.3f})'")
+    return chain
 
 
 def effects_chain(plan: dict, W: int, H: int) -> str:
@@ -122,6 +162,9 @@ def effects_chain(plan: dict, W: int, H: int) -> str:
         if e.get("type") == "hand_wipe":
             from handwipe import wipe_effect
             out.append(wipe_effect(e, plan, i, W, H))
+            continue
+        if e.get("type") == "freeze_frame":
+            out.append(freeze_effect(e, plan, i, W, H))
             continue
         if e.get("type") not in EFFECTS:
             continue
@@ -169,15 +212,20 @@ def build_broll_overlays(plan: dict, edit_dir: Path, W: int, H: int, fps: str, d
             continue
         dur = float(b.get("duration", 2.0))
         # Anything see-through needs an alpha channel, so it can't be H.264.
-        alpha = bool(b.get("mask") or b.get("chroma") or (b.get("opacity") is not None and not b.get("blend")))
+        alpha = bool(b.get("mask") or b.get("chroma") or b.get("cutout")
+                     or (b.get("opacity") is not None and not b.get("blend")))
         key = hashlib.sha1(json.dumps([str(p), b, W, H, fps, draft], sort_keys=True).encode()).hexdigest()[:10]
         clip = out_dir / f"broll_{key}.{'mov' if alpha else 'mp4'}"
         pip = b.get("mode") == "pip" or b.get("keyframes") or b.get("mask")
-        if pip:
+        split = SPLITS.get(b.get("mode"))
+        if split:  # split screen: this clip fills one half, the main video shows in the other
+            sw, sh = (W, H // 2 // 2 * 2) if split[0] == "v" else (W // 2 // 2 * 2, H)
+            vf = f"scale={sw}:{sh}:force_original_aspect_ratio=increase,crop={sw}:{sh},setsar=1"
+        elif pip:
             pw = int(W * float(b.get("size", 0.46))) // 2 * 2
             pad = max(4, W // 120)
             vf = f"scale={pw}:-2"
-            if not b.get("mask") and not b.get("chroma") and not b.get("no_border"):
+            if not b.get("mask") and not b.get("chroma") and not b.get("cutout") and not b.get("no_border"):
                 vf += f",pad=iw+{pad * 2}:ih+{pad * 2}:{pad}:{pad}:white"
         else:
             vf = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1"
@@ -186,6 +234,37 @@ def build_broll_overlays(plan: dict, edit_dir: Path, W: int, H: int, fps: str, d
         if b.get("chroma"):  # green screen: {"chroma": "#00FF00", "similarity": 0.14}
             vf += (f",format=yuva420p,chromakey={str(b['chroma']).replace('#', '0x')}:"
                    f"{float(b.get('similarity', 0.14)):.2f}:{float(b.get('smooth', 0.08)):.2f}")
+        base = Path(plan["_base"]) if plan.get("_base") else None
+        if split and base and base.exists():
+            # The other half is the main video, centred on the face (not just its top or left half).
+            t0 = float(b["start_in_output"])
+            key2 = hashlib.sha1(f"{key}{base.stat().st_mtime}".encode()).hexdigest()[:10]
+            clip = out_dir / f"split_{key2}.mp4"
+            if not clip.exists():
+                from framing import zoom_center
+                cx, cy = zoom_center(plan, edit_dir, t0 + 0.01)
+                if split[0] == "v":
+                    y = int(min(max(0, cy * H - sh / 2), H - sh))
+                    main = f"scale={W}:{H},crop={sw}:{sh}:0:{y}"
+                else:
+                    x = int(min(max(0, cx * W - sw / 2), W - sw))
+                    main = f"scale={W}:{H},crop={sw}:{sh}:{x}:0"
+                first = "[m][o]" if b["mode"] in ("split_bottom", "split_right") else "[o][m]"
+                stack = "vstack" if split[0] == "v" else "hstack"
+                is_img = p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+                other_in = ["-loop", "1", "-framerate", fps] if is_img else ["-ss", f"{float(b.get('src_start', 0)):.3f}"]
+                subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t0:.3f}", "-t", f"{dur:.3f}", "-i", str(base),
+                                *other_in, "-t", f"{dur:.3f}", "-i", str(p), "-filter_complex",
+                                f"[0:v]{main},fps={fps},setsar=1[m];[1:v]{vf}{',hflip' if b.get('flip') else ''},fps={fps}[o];"
+                                f"{first}{stack},scale={W}:{H},setsar=1[v]", "-map", "[v]", "-an",
+                                "-c:v", "libx264", "-preset", "ultrafast" if draft else "fast", "-crf", "20",
+                                "-pix_fmt", "yuv420p", str(clip)], check=True)
+            overlays.append({"file": str(clip), "start_in_output": t0, "duration": dur, "x": "0", "y": "0"})
+            continue
+        if b.get("cutout") and not clip.exists():  # just the person, on a see-through background
+            from background import cutout_clip
+            print(f"  broll: cutting out the person from {p.name} (a few seconds per second of video)")
+            cutout_clip(p, float(b.get("src_start", 0)), dur, vf, fps, clip)
         if not clip.exists():
             is_img = p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
             source_in = ["-loop", "1", "-framerate", fps] if is_img else ["-ss", f"{float(b.get('src_start', 0)):.3f}"]
@@ -219,6 +298,8 @@ def build_broll_overlays(plan: dict, edit_dir: Path, W: int, H: int, fps: str, d
             if any("scale" in k for k in kf):
                 sc = pw_expr(rel, [(float(k["t"]), float(k.get("scale", 1))) for k in kf])
                 ov["vf"] = f"scale=w='iw*({sc})':h='ih*({sc})':eval=frame"
+        elif split:
+            ov["x"], ov["y"] = split[1], split[2]
         elif pip:
             ov["x"], ov["y"] = b.get("x", "W-w-W*0.05"), b.get("y", "H*0.08")
             if isinstance(ov["x"], (int, float)):

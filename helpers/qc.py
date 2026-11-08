@@ -98,7 +98,9 @@ def check_length(plan, video, f):
     return {"planned_s": want, "rendered_s": round(got, 2)}
 
 
-def check_loudness(video, f):
+def check_loudness(video, f, plan=None):
+    from audio import loudness_target
+    target = loudness_target(plan or {})
     err = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(video), "-af", "ebur128=peak=true",
                           "-f", "null", "-"], capture_output=True, text=True, encoding="utf-8", errors="replace").stderr
     summary = err[err.rfind("Summary:"):]
@@ -106,8 +108,8 @@ def check_loudness(video, f):
     tp = re.search(r"Peak:\s+(-?[\d.]+) dBFS", summary)
     lufs = float(i.group(1)) if i else None
     peak = float(tp.group(1)) if tp else None
-    if lufs is not None and abs(lufs - LUFS_TARGET) > LUFS_TOL:
-        f.append(("warn", None, f"loudness {lufs:.1f} LUFS (target {LUFS_TARGET:.0f}; draft renders skip the precise pass)"))
+    if lufs is not None and abs(lufs - target) > LUFS_TOL:
+        f.append(("warn", None, f"loudness {lufs:.1f} LUFS (target {target:.0f}; draft renders skip the precise pass)"))
     if peak is not None and peak > TP_MAX + 0.15:  # 0.15 dB of meter rounding / draft's 1-pass loudnorm
         f.append(("warn", None, f"true peak {peak:.1f} dBTP (keep ≤ {TP_MAX:.0f} to avoid distortion on phones)"))
     return {"lufs": lufs, "true_peak_dbtp": peak}
@@ -132,13 +134,17 @@ def check_clicks(plan, video, f):
     return {"cuts": len(cut_times(plan)), "clicks": found}
 
 
-def check_black(video, f):
+def check_black(video, f, plan=None):
     err = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(video), "-vf", "blackdetect=d=0.1:pix_th=0.06",
                           "-an", "-f", "null", "-"], capture_output=True, text=True, encoding="utf-8",
                          errors="replace").stderr
     spans = [(float(s), float(e)) for s, e in re.findall(r"black_start:([\d.]+) black_end:([\d.]+)", err)]
+    # A blackout effect is black on purpose.
+    meant = [(float(x.get("start_in_output", 0)) - 0.1, float(x.get("start_in_output", 0)) + float(x.get("duration") or 1e9) + 0.1)
+             for x in (plan or {}).get("effects") or [] if x.get("type") == "blackout"]
     for s, e in spans:
-        f.append(("fail", s, f"black frames for {e - s:.2f}s"))
+        if not any(a <= s and e <= b for a, b in meant):
+            f.append(("fail", s, f"black frames for {e - s:.2f}s"))
     return {"black_spans": spans}
 
 
@@ -168,6 +174,9 @@ def check_overlays(plan, edit_dir, video, f):
     whole = [(float(e.get("start_in_output", 0)) - (1.0 if e.get("type") == "hand_wipe" else 0.0),
               float(e.get("start_in_output", 0)) + float(e["duration"]) if e.get("duration") else 1e9)
              for e in plan.get("effects") or [] if not e.get("region")]
+    # A split screen replaces the whole frame on purpose.
+    whole += [(float(b["start_in_output"]), float(b["start_in_output"]) + float(b.get("duration", 2.0)))
+              for b in plan.get("broll") or [] if str(b.get("mode", "")).startswith("split_")]
     for k, (a, b) in enumerate(zip(rendered, plain)):
         t = k * step / fps
         if behind and behind[0] <= t <= behind[1]:
@@ -280,9 +289,9 @@ def run(plan_path: Path, video: Path) -> dict:
     findings: list[tuple[str, float | None, str]] = []
     report = {"video": str(video), "plan_version": plan.get("version")}
     report["length"] = check_length(plan, video, findings)
-    report["loudness"] = check_loudness(video, findings)
+    report["loudness"] = check_loudness(video, findings, plan)
     report["clicks"] = check_clicks(plan, video, findings)
-    report["black"] = check_black(video, findings)
+    report["black"] = check_black(video, findings, plan)
     report["overlays"] = check_overlays(plan, edit_dir, video, findings)
     report["captions"] = check_captions(plan, edit_dir, findings)
     report["clutter"] = check_clutter(plan, edit_dir, findings)

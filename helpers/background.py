@@ -42,6 +42,44 @@ def _resolve(file: str, edit_dir: Path) -> Path:
     return next((c for c in (edit_dir.parent / file, edit_dir / file) if c.exists()), edit_dir.parent / file)
 
 
+def cutout_clip(src: Path, start: float, dur: float, vf: str, fps: str, out: Path) -> None:
+    """Just the person from a clip, on a see-through background (ProRes 4444 with alpha).
+
+    Used for B-roll "cutout": the clone effect (you twice in one shot, filmed on a tripod) or
+    dropping yourself into another scene."""
+    W, H = _vf_size(src, start, vf) or framing.probe_size(src)  # the size after vf
+    reader = subprocess.Popen(["ffmpeg", "-v", "error", "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", str(src),
+                               "-vf", f"{vf},fps={fps}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+    writer = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{W}x{H}",
+                               "-r", fps, "-i", "-", "-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuva444p10le",
+                               str(out)], stdin=subprocess.PIPE)
+    small = (max(64, W // 2), max(64, H // 2))
+    last = None
+    while True:
+        raw = reader.stdout.read(W * H * 3)
+        if len(raw) < W * H * 3:
+            break
+        frame = np.frombuffer(raw, np.uint8).reshape(H, W, 3)
+        m = framing.person_mask(np.asarray(Image.fromarray(frame).resize(small)))
+        last = m if last is None else last * 0.45 + m * 0.55
+        alpha = np.asarray(Image.fromarray((np.clip((last - 0.35) / 0.4, 0, 1) * 255).astype(np.uint8))
+                           .resize((W, H), Image.BILINEAR).filter(ImageFilter.GaussianBlur(2)), dtype=np.uint8)
+        writer.stdin.write(np.dstack([frame, alpha]).tobytes())
+    reader.stdout.close()
+    reader.wait()
+    writer.stdin.close()
+    writer.wait()
+
+
+def _vf_size(src: Path, start: float, vf: str) -> tuple[int, int] | None:
+    out = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{start:.3f}", "-i", str(src), "-frames:v", "1", "-vf", vf,
+                          "-f", "image2pipe", "-c:v", "png", "-"], capture_output=True).stdout
+    if not out:
+        return None
+    from io import BytesIO
+    return Image.open(BytesIO(out)).size
+
+
 def replace_background(seg: Path, spec, edit_dir: Path, draft: bool = False) -> None:
     """Rewrite the section's clip in place with the new background; sound stays as it was."""
     spec = {"mode": spec} if isinstance(spec, str) else dict(spec)

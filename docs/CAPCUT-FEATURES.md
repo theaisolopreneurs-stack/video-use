@@ -27,7 +27,11 @@ the list comes from CapCut's menus and review sites, so treat the order as a rou
 | Speed change | ✅ | Per section |
 | Speed curves (Montage, Hero, Bullet, Jump cut, Flash in/out) | ✅ New | Section drawer |
 | Smooth slow motion | ✅ New | `smooth` on a section; ask Claude |
-| Reverse, freeze frame | ✅ | Reverse: ask Claude. Freeze: section drawer |
+| Reverse, freeze frame | ✅ | Reverse: ask Claude. Freeze at the end: section drawer. Freeze mid-shot (with the record-scratch meme): Effects tab |
+| Boomerang | ✅ New | Section drawer |
+| Crash zoom, smooth push in/out | ✅ New | Ask Claude (zoom styles crash, crash_out, push_in, push_out) |
+| Split screen, clone effect | ✅ New | Ask Claude (B-roll split_* modes, cutout) |
+| Edits app effects: bounce, fisheye, blackout | ✅ New | Effects tab |
 | Stabilize | ✅ | Section drawer |
 | Long video to short clips | ⚠️ | Ask Claude; there's no button |
 

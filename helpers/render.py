@@ -305,6 +305,26 @@ def extract_segment(
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    if fx and fx.get("boomerang"):
+        # Plays forward, then the same moment backwards: render it once, then add the reverse.
+        total, hold = fx.get("frames"), float(fx.get("hold") or 0.0)
+        one = {**fx, "boomerang": False, "hold": 0, "frames": max(1, int(total) // 2) if total else None}
+        fwd = out_path.with_name(out_path.stem + "_fwd.mp4")
+        extract_segment(source, seg_start, duration, grade_filter, fwd, preview, draft, rate, crop, out_size, one)
+        out_rate = rate if rate is not None else (probe_source_fps(fwd) or "30")
+        v_tail = (f",tpad=stop_mode=clone:stop_duration={hold + 0.5:.3f}") if (hold or total) else ""
+        a_tail = f",apad,atrim=0:{total / Fraction(out_rate):.5f}" if total else (f",apad=pad_dur={hold:.3f}" if hold else "")
+        graph = (f"[0:v]split[f][b];[b]reverse[r];[f][r]concat=n=2:v=1:a=0{v_tail}[v];"
+                 f"[0:a]asplit[x][y];[y]areverse[ry];[x][ry]concat=n=2:v=0:a=1{a_tail}[a]")
+        preset, crf = ("ultrafast", "28") if draft else (("medium", "22") if preview else ("fast", "20"))
+        subprocess.run(["ffmpeg", "-y", "-i", str(fwd), "-filter_complex", graph, "-map", "[v]", "-map", "[a]",
+                        "-c:v", "libx264", "-preset", preset, "-crf", crf, "-pix_fmt", "yuv420p", "-r", out_rate,
+                        *(["-frames:v", str(total)] if total else []),
+                        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", "-movflags", "+faststart",
+                        str(out_path)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        fwd.unlink(missing_ok=True)
+        return
+
     # A reframe crop (landscape -> vertical, framing.py) makes the output portrait.
     portrait = is_portrait_source(source) or crop is not None
     if out_size:
@@ -515,9 +535,10 @@ def extract_all_segments(
         a, b = ranges[i - 1], ranges[i]
         sa, sb = float(a.get("speed") or 1), float(b.get("speed") or 1)
         a_src = resolve_path(sources[a["source"]], edit_dir)
-        avail_post = 0.0 if (a.get("hold") or a.get("reverse") or a.get("speed_curve")) else \
+        avail_post = 0.0 if (a.get("hold") or a.get("reverse") or a.get("speed_curve") or a.get("boomerang")) else \
             max(0.0, (_duration(a_src) - float(a["end"])) / sa)
-        avail_pre = 0.0 if (b.get("reverse") or b.get("speed_curve")) else max(0.0, float(b["start"]) / sb)
+        avail_pre = 0.0 if (b.get("reverse") or b.get("speed_curve") or b.get("boomerang")) else \
+            max(0.0, float(b["start"]) / sb)
         p_ = min(avail_pre, want / 2)
         q_ = min(avail_post, want / 2)
         p_ = min(avail_pre, want - q_)
@@ -570,7 +591,7 @@ def extract_all_segments(
         if is_auto:
             print(f"        grade: {seg_filter or '(none)'}")
         fx = {k: r.get(k) for k in ("speed", "hold", "stabilize", "reverse", "speed_curve", "smooth", "flip",
-                                    "rotate", "volume", "motion")}
+                                    "rotate", "volume", "motion", "boomerang")}
         fx["voice_fx"] = r.get("voice_fx") or (edl.get("audio") or {}).get("voice_fx")
         fx["adjust"] = {**(edl.get("adjust") or {}), **(r.get("adjust") or {})}
         fx["frames"] = max(1, n_frames)
@@ -1145,7 +1166,10 @@ def main() -> None:
         # Composite to a temp file, then run loudnorm → final output
         tmp_composite = out_path.with_suffix(".prenorm.mp4")
         build_final_composite(base_path, overlays, subs_path, tmp_composite, edit_dir, zoom)
-        print("loudness normalization → social-ready (-14 LUFS / -1 dBTP / LRA 11)")
+        from audio import loudness_target
+        globals()["LOUDNORM_I"] = loudness_target(edl)  # audio "loudness": quieter ... louder (normal = -14)
+        print(f"loudness normalization → {LOUDNORM_I:g} LUFS / -1 dBTP / LRA 11"
+              + (" (social-ready)" if LOUDNORM_I == -14 else ""))
         apply_loudnorm_two_pass(tmp_composite, out_path, preview=args.draft)
         tmp_composite.unlink(missing_ok=True)
 

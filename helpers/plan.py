@@ -155,7 +155,7 @@ def range_len(r: dict) -> float:
     slices = curve_slices(r)
     body = (sum((b - a) / sp for a, b, sp in slices) if slices
             else (float(r["end"]) - float(r["start"])) / float(r.get("speed") or 1.0))
-    return body + float(r.get("hold") or 0.0)
+    return body * (2 if r.get("boomerang") else 1) + float(r.get("hold") or 0.0)
 
 
 def total_duration(plan: dict) -> float:
@@ -192,7 +192,7 @@ def cut_signature(plan: dict) -> list:
 # Per-section edit options (render.py): speed, freeze at the end, stabilise, reverse,
 # and the transition *into* this section from the previous one.
 RANGE_FX = ("speed", "hold", "stabilize", "reverse", "transition", "speed_curve", "smooth", "flip", "rotate",
-            "volume", "voice_fx", "motion", "adjust", "grade", "fit", "background", "fill_color")
+            "volume", "voice_fx", "motion", "adjust", "grade", "fit", "background", "fill_color", "boomerang")
 
 
 def range_key(r: dict) -> tuple:

@@ -88,6 +88,8 @@ LOOKS: dict[str, dict] = {
                        shadows=[-0.06, 0.03, 0.06], mids=[-0.02, 0.01, 0.02]),
     "moody_dark": dict(label="Moody dark", group="Cinematic", exposure=0.88, contrast=0.22, sat=0.72,
                        shadows=[0.0, 0.0, 0.03], rolloff=0.05),
+    "day_to_night": dict(label="Day to night", group="Cinematic", exposure=0.62, contrast=0.18, sat=0.6, temp=-0.12,
+                         shadows=[-0.04, 0.0, 0.08], highlights=[-0.04, -0.01, 0.04], vignette=0.45),
     "bleach_bypass": dict(label="Bleach bypass", group="Cinematic", contrast=0.32, sat=0.45, rolloff=0.04),
     "nordic": dict(label="Nordic", group="Cinematic", temp=-0.06, contrast=0.1, sat=0.75, lift=0.03,
                    highlights=[-0.01, 0.01, 0.03]),

@@ -66,6 +66,7 @@ of Claude editing raw footage (video-use, justyn.ai's viral reel). Forked from
 | 11b | Talk instead of type (🎤 on every text box, `/api/dictate`, local model); retype caption lines (`captions.text_edits`), kept in step with the voice | `helpers/dictate.py`, `helpers/studio/mic.js`, `captions.apply_text_edits` |
 | 11c | Style samples: measure a sample video, apply as a recipe, files in `<video>/inspiration/`, Home box, links through yt-dlp | `helpers/inspire.py`, `make.apply_inspiration` |
 | 11d | Hand swipe reveal and hand swipe transition (MediaPipe hand model, follows the hand, look picked from the words); CLAUDE.md; plugin installed from GitHub and set up in its own folder (smoke test PASS, ~1 GB) | `helpers/handwipe.py`, `CLAUDE.md` |
+| 11e | Trending edits: crash / eased push zooms, freeze-frame meme (freezeframes filter + record scratch), boomerang, bounce, blackout, split screen centred on the face, person cutout (clone), day-to-night look, SFX scratch/boom/shutter; captions in 9:16 always clear of the side buttons | `framing.py`, `effects.py`, `background.py`, `render.py`, `audio.py` |
 | Later | 21 Studio colour themes; in-app How-to; **Home screen** (drag clips, pick style, Make my video), library, Export dialog, desktop icon | `helpers/studio/theme.css`, `home.html`, `helpers/library.py`, `shortcut.py` |
 
 **Pipeline:** ingest → `suggest_cuts` → preset/Claude refine `plan.json` → Gate 1 approve plan →
@@ -189,6 +190,9 @@ It is not in the Home library (that folder is empty).
 - Exports overwrite `edit/base_*`, so QC must run right after each render to get a matching base.
 - A true-peak of -0.9 on drafts is normal (1-pass loudnorm); QC allows 0.15 dB.
 - FFmpeg's blend filter has a wrong `T` (time) on some phone footage; `handwipe.py` uses `N / fps` instead.
+- FFmpeg's `anlmdn` crashes (heap corruption) on joined base files with small timestamp jumps; voice isolate uses two `afftdn` passes instead.
+- Effect chains use `@` as a label placeholder, so never write `color=black@0.5` inside one (blackout uses lutyuv).
+- `freeze_frame` uses FFmpeg's `freezeframes` (two inputs from one split, in step): no buffering. A trim/loop/overlay version buffers every frame up to the freeze.
 - A real hand swipe is often only a blur for 2-4 frames, which MediaPipe's hand model misses. `handwipe.motion_track` (each frame compared with the median of the frames around it) is the fallback; tested on a real 0.1 s swipe (IMG_3565). The line trails the tracked hand by one frame so the hand drags it. QC skips face and safe-zone checks while a full-frame effect is on.
 - `framing.person_mask` must copy: MediaPipe's view dangles once its result is freed (crashed Python when a mask was kept between frames).
 - Windows lets two servers share port 8765 if address reuse is on; `review_server.py` turns it off there. Test servers should use `--port`, because the real icon may be running on 8765.
