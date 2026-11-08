@@ -772,12 +772,13 @@ class Writer:
 
     def cue(self, cue: list[dict], end: float) -> None:
         self.n_cue += 1
-        # A long line shrinks to fit: inside the frame always, clear of the apps' side buttons in "best".
+        # A long line shrinks to fit: inside the frame always, and in 9:16 clear of the apps' side
+        # buttons (they start at 86% across: centred text can be 72% wide, "best" sits left at 47%).
         full, self.fs_tag = self.size, ""
         ws, sp = self.widths(cue)
         lines = 2 if self.p.get("lines", 1) == 2 and len(cue) > 3 else 1
         width = (sum(ws) + sp * (len(ws) - 1)) / lines + self.size * 0.9
-        limit = self.W * (0.76 if self.spots and self.H / self.W > 1.5 else 0.94)
+        limit = self.W * ((0.76 if self.spots else 0.72) if self.H / self.W > 1.5 else 0.94)
         if width > limit:
             self.size = max(12, int(self.size * limit / width))
             self.fs_tag = f"\\fs{self.size}"
