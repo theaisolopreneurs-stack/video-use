@@ -170,12 +170,17 @@ def _clean_plate(img, a, st):
     """The room without you (filled in from around you), from the first frame of the window."""
     if "plate" not in st:
         H, W = img.shape[:2]
-        sw, sh = W // 4, H // 4
+        # Filled in at a very small size and softened: where there's little room showing (a close-up),
+        # a smooth out-of-focus fill looks far better than streaks.
+        sw, sh = max(16, W // 10), max(16, H // 10)
         small = cv2.resize(img.astype(np.uint8), (sw, sh), interpolation=cv2.INTER_AREA)
-        hole = (cv2.resize(a, (sw, sh)) > 0.15).astype(np.uint8) * 255
-        hole = cv2.dilate(hole, np.ones((9, 9), np.uint8))
-        filled = cv2.inpaint(small, hole, 7, cv2.INPAINT_TELEA)
-        st["plate"] = cv2.GaussianBlur(cv2.resize(filled, (W, H), interpolation=cv2.INTER_CUBIC).astype(np.float32), (0, 0), 2)
+        hole = (cv2.resize(a, (sw, sh)) > 0.12).astype(np.uint8) * 255
+        hole = cv2.dilate(hole, np.ones((3, 3), np.uint8))
+        filled = cv2.inpaint(small, hole, 5, cv2.INPAINT_NS)
+        plate = cv2.resize(filled, (W, H), interpolation=cv2.INTER_CUBIC).astype(np.float32)
+        soft = cv2.GaussianBlur(plate, (0, 0), W * 0.03)
+        near = cv2.GaussianBlur(cv2.resize(a, (W, H)), (0, 0), W * 0.02)[..., None]
+        st["plate"] = plate * (1 - near) + soft * near
     return st["plate"]
 
 
@@ -493,6 +498,13 @@ def fx_live_cursor(img, a, face, t, dur, g, st):
 EFFECTS = {"rack_focus": fx_rack_focus, "dolly_zoom": fx_dolly_zoom, "backdrop": fx_backdrop, "day_dial": fx_day_dial,
            "post_wall": fx_post_wall, "sketch_words": fx_sketch_words, "orbit_ring": fx_orbit_ring,
            "clone_row": fx_clone_row, "head_stack": fx_head_stack, "live_cursor": fx_live_cursor}
+
+# Phase 3, the picture effects (code body, blow away, impact frame...), live in their own file.
+import layers_picture as _picture  # noqa: E402
+
+EFFECTS.update(_picture.EFFECTS)
+KIT.update(_picture.KIT)
+FX.update(_picture.KIT)
 
 
 # ---- rendering a window -----------------------------------------------------------------------------
