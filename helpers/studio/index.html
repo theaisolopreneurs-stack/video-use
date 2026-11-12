@@ -503,7 +503,12 @@
         </div>
         <div class="tabpanel" role="tabpanel" data-panel="effects" hidden>
           <div class="help">Play to a moment, pick something, click <b>Add</b>. It appears on the timeline, where you can click it to change it or give feedback.</div>
-          <b style="font-size:13px">Effects</b>
+          <b style="font-size:13px">Graphics</b>
+          <ul class="fxlist" id="gfxList"></ul>
+          <div class="meta">Animated graphics: comment boxes, phone keyboards, calls, title cards, a running checklist… Click one, then Add. Change the words after by clicking it on the timeline.</div>
+          <div class="pvgrid" id="gfxGrid"></div>
+          <button id="gfxAdd">+ Add graphic here</button>
+          <b class="sub-h">Effects</b>
           <ul class="fxlist" id="fxlist"></ul>
           <div class="meta">Hover to see each one on your video. Click to choose, then Add.</div>
           <div class="pvgrid" id="fxGrid"></div>
@@ -1048,11 +1053,18 @@ $("sfxPlay").onclick = () => playAudio(`/sfx?name=${encodeURIComponent(aud.sfx_o
 
 // ---- effects, zooms, words, stickers ---------------------------------------------------
 const fxName = (id) => (S.effects_kit.find((e) => e.id === id) || { label: nice(id) }).label;
-let fxPick = null, zmPick = "punch";
+let fxPick = null, zmPick = "punch", gfxPick = "pills";
+function pickGfx(id) { gfxPick = id; renderPickGrids(); }
 function pickFx(id) { fxPick = id; $("fxType").value = id; renderPickGrids(); }
 function pickZm(id) { zmPick = id; $("zmStyle").value = id; renderPickGrids(); }
 function renderPickGrids() {
   const fxGrid = $("fxGrid"), zmGrid = $("zmGrid");
+  const gGrid = $("gfxGrid"), kit = S.graphics_kit || [];
+  if (!gGrid.dataset.built && kit.length) {
+    gGrid.innerHTML = pvGrid("graphic", kit.map((g) => [g.id, g.label]), gfxPick, "pickGfx");
+    gGrid.dataset.built = "1"; armPreviews(gGrid);
+  }
+  gGrid.querySelectorAll(".pvtile").forEach((b, k) => b.classList.toggle("sel", kit[k]?.id === gfxPick));
   if (!fxGrid.dataset.built) {  // build once, so the playing previews don't restart
     fxGrid.innerHTML = pvGrid("effect", S.effects_kit.map((e) => [e.id, e.label]), fxPick, "pickFx");
     zmGrid.innerHTML = pvGrid("zoom", ZOOM_STYLES.map(([v, l]) => [v, l.replace(/ \(.*\)/, "")]), zmPick, "pickZm");
@@ -1073,6 +1085,7 @@ function renderEffects() {
   $("fxlist").innerHTML = fxs.map((e, k) => row(fxName(e.type), e, `fx:${k}`)).join("") + zms.map((z, k) => row(`Zoom: ${nice(z.style || "punch")}`, z, `zm:${k}`)).join("")
     || `<li><span class="meta">No effects yet.</span></li>`;
   $("txtList").innerHTML = txts.map((t, k) => row(t.text, t, `txt:${k}`)).join("");
+  $("gfxList").innerHTML = grs.map((g, k) => g.type === "progress" ? "" : row(gfxLabel(g), g, `gr:${k}`)).join("");
   $("stkList").innerHTML = stks.map((t, k) => row(t.emoji || t.file, t, `stk:${k}`)).join("");
   markTabs();
 }
@@ -1087,6 +1100,33 @@ $("stkAdd").onclick = () => {
   stks.push({ emoji, start_in_output: nowT(), duration: 1.5, x: 0.78, y: 0.2, size: 0.2, anim: $("stkAnim").value });
   setDirty(true); changedAll(); selectKey(`stk:${stks.length - 1}`);
 };
+const gfxKit = (id) => (S.graphics_kit || []).find((g) => g.id === id);
+const gfxLabel = (g) => (gfxKit(g.type)?.label || nice(g.type || "graphic")) + (g.text ? `: ${g.text}` : g.title ? `: ${g.title}` : "");
+$("gfxAdd").onclick = () => {
+  const k = gfxKit(gfxPick); if (!k) return;
+  const g = { type: k.id, ...clone(k.defaults, {}), start_in_output: nowT(), duration: k.duration || 2.5 };
+  if (k.id === "running_list") {  // the whole video, one item per labelled scene (rename them after)
+    const starts = sceneStarts(), seen = new Set();
+    g.items = ranges.map((r, i) => [r, i]).filter(([r, i]) => r._on && r.beat && !seen.has(r.beat) && seen.add(r.beat))
+      .map(([r, i]) => ({ text: nice(r.beat.toLowerCase()), at: Math.round(starts[i] * 100) / 100 }));
+    if (!g.items.length) g.items = ["First point", "Second point", "Third point"].map((text, j) => ({ text, at: Math.round(totals() * j / 3 * 100) / 100 }));
+    g.start_in_output = 0; g.duration = Math.round(totals() * 100) / 100;
+  }
+  grs.push(g); setDirty(true); changedAll(); selectKey(`gr:${grs.length - 1}`);
+};
+// Change a graphic's words from the Selected panel.
+function setGfxField(k, field, kind, value) {
+  const g = grs[k]; if (!g) return;
+  if (kind === "number") g[field] = +value || 0;
+  else if (kind === "lines") {
+    const lines = value.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (field === "items" && g.type === "running_list") {
+      const old = g.items || [];
+      g.items = lines.map((text, j) => ({ text, at: old[j]?.at ?? Math.round(((g.start_in_output || 0) + (g.duration || totals()) * j / lines.length) * 100) / 100 }));
+    } else g[field] = lines;
+  } else g[field] = value;
+  setDirty(true); renderTL(); renderEffects();
+}
 $("fxAdd").onclick = () => {
   const d = +$("fxDur").value, e = { type: $("fxType").value };
   if (d) { e.start_in_output = nowT(); e.duration = d; }
@@ -1129,7 +1169,7 @@ function buildItems() {
   stks.forEach((x, k) => items.push({ key: `stk:${k}`, track: "over", t: x.start_in_output || 0, d: x.duration || 1.5, kind: "stk", k, label: x.emoji || "sticker" }));
   brs.forEach((x, k) => items.push({ key: `br:${k}`, track: "over", t: x.start_in_output || 0, d: x.duration || 2, kind: "br", k,
     label: x.cutout ? "clone / cut-out" : x.mode && x.mode.startsWith("split") ? "split screen" : `B-roll${x.mode === "pip" ? " (small)" : ""}` }));
-  grs.forEach((x, k) => items.push({ key: `gr:${k}`, track: "over", t: x.start_in_output ?? 0, d: x.duration || (x.type === "progress" ? total : 2), kind: "gr", k, label: x.type === "progress" ? "progress bar" : nice(x.type || "graphic"), under: x.type === "progress" }));
+  grs.forEach((x, k) => items.push({ key: `gr:${k}`, track: "over", t: x.start_in_output ?? 0, d: x.duration || (x.type === "progress" ? total : 2), kind: "gr", k, label: x.type === "progress" ? "progress bar" : gfxLabel(x), under: x.type === "progress" }));
   if ((aud.music || {}).file) items.push({ key: "music", track: "audio", t: Math.min(total, aud.music.start_in_output || 0), d: Math.max(0.5, Math.min(aud.music.duration || total, total - (aud.music.start_in_output || 0))), kind: "music", label: `♪ ${aud.music.file.split(/[\\/]/).pop()}`, under: true });
   (aud.sfx || []).forEach((x, k) => items.push({ key: `sfx:${k}`, track: "audio", t: x.at || 0, d: 0.4, kind: "sfx", k, label: x.name || "sound" }));
   return items;
@@ -1383,7 +1423,15 @@ function renderSel() {
     body = `<div class="why"><b>Sound effect</b>${esc(it.label)} at ${fmt(it.t)}</div><button onclick="removeKey('${it.key}')">Delete</button>`;
   } else {
     const x = (it.kind === "br" ? brs : grs)[it.k] || {};
-    body = `<div class="why"><b>What it is</b>${esc(it.label)}${x.source || x.file ? ` from ${esc(x.source || x.file)}` : ""}${x.text ? `: “${esc(x.text)}”` : ""}.
+    const kitg = it.kind === "gr" && gfxKit(x.type);
+    if (kitg && Object.keys(kitg.fields).length) {
+      const val = (f, kind) => kind === "lines" ? (x[f] || []).map((v) => (typeof v === "string" ? v : v.text || "")).join("\n") : (x[f] ?? "");
+      body = `<div class="why"><b>${esc(kitg.label)}</b>Change the words here; drag it on the timeline to move it or change how long it stays.</div>` +
+        Object.entries(kitg.fields).map(([f, kind]) => `<label class="lbl">${esc(nice(f))}${kind === "lines" ? " (one per line)" : ""}
+          ${kind === "lines" ? `<textarea class="field" rows="4" onchange="setGfxField(${it.k}, '${f}', 'lines', this.value)">${esc(val(f, kind))}</textarea>`
+            : `<input class="field" ${kind === "number" ? 'type="number"' : ""} value="${esc(val(f, kind))}" onchange="setGfxField(${it.k}, '${f}', '${kind}', this.value)">`}</label>`).join("") +
+        `<div class="meta">Use *stars* around a word to colour it.</div><button onclick="removeKey('${it.key}')">Delete</button>`;
+    } else body = `<div class="why"><b>What it is</b>${esc(it.label)}${x.source || x.file ? ` from ${esc(x.source || x.file)}` : ""}${x.text ? `: “${esc(x.text)}”` : ""}.
       ${it.kind === "br" ? "Claude placed this. Drag it on the timeline to move it, or drag its edges to make it longer or shorter." : ""}</div>`;
   }
   const note = noteFor(it.key);

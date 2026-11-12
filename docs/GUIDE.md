@@ -66,6 +66,7 @@ takes, order, hook, graphics) when you ask it to.
 | **Captions** | Font, colour, size and letter case on top of any of the 76 styles; **✨ Best / Top / Middle / Bottom / Custom** position; words to pop; emoji; **✏️ Fix the caption words**. |
 | **Look** | 40+ colour looks previewed on your footage, plus hand sliders and any `.cube` LUTs you add. |
 | **Title** | Hook title text, font, length, and "behind me". |
+| **Effects → Graphics** | Animated graphics with looping previews on your own video: corner tags, stacked label pills, word stamp, comment drop, voice note, incoming call, phone keyboard, file drop, screenplay page, intertitle card, a running checklist down the side, plus text cards, numbers, checklists and more. Click one, **+ Add graphic here**, then click it on the timeline to change its words. |
 | **Effects** | Effects, zooms and camera pushes, words on screen and stickers, added at the playhead. |
 | **Audio** | Clean up or isolate your voice, voice level, overall loudness, music (with ▶ Listen), ducking, sounds, fades. |
 | **Notes** | Anything you'd rather tell Claude than click, and a list of all your feedback. |
@@ -116,7 +117,7 @@ Ask Claude for titles, a description and hashtags.
 | **Captions** | 76 styles (word-by-word, boxes and markers, editorial, neon, retro 3D, glitch, handwritten, animated…), matching emoji, popped words, spelling fixes, best/top/middle/bottom or any spot |
 | **Look** | 35 recipe looks + basics + your own LUTs |
 | **Framing** | Face-centred punch-in and push-in zooms, automatic vertical reframing, hook title behind you |
-| **Graphics** | 14 animated templates (stat counter, checklist, prompt box, chat bubbles, app window, timer, bar chart, collage, CTA card…), progress bar |
+| **Graphics** | 25 animated templates (including comment drop, phone keyboard, incoming call, voice note, file drop, screenplay page, intertitle, word stamp, label pills and a running checklist) (stat counter, checklist, prompt box, chat bubbles, app window, timer, bar chart, collage, CTA card…), progress bar |
 | **Audio** | Voice clean-up, music with automatic ducking, sound effects, -14 LUFS loudness |
 | **Quality** | Automatic QC (loudness, clicks, black frames, text over your face, app safe zones, clutter) and frames from every cut |
 | **Export** | 9:16, 4:5, 1:1, 16:9; SRT; chapters; thumbnails |

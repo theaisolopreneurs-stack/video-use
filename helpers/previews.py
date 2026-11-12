@@ -9,6 +9,7 @@ on this video's own footage, before you choose it. Cached in <edit>/storyboard/p
 from __future__ import annotations
 
 import subprocess
+import threading
 from pathlib import Path
 
 import plan as planlib
@@ -36,6 +37,68 @@ def _shots(plan: dict, edit_dir: Path):
     return (src(a), mid(a, 0.3)), (src(b), mid(b, 0.6) if b is not a else mid(a, 0.8))
 
 
+_gfx_lock = threading.Lock()
+
+
+def _graphic_batch(plan: dict, edit_dir: Path, W: int, H: int) -> None:
+    """Every graphic in the kit, recorded in ONE HyperFrames run (the browser start-up is the slow
+    part), then laid over this video's own footage, one short clip per graphic."""
+    import os
+    import shutil
+    import graphics
+    out_dir = edit_dir / "storyboard" / "previews"
+    kit = [k for k in graphics.graphic_kit() if k["id"] != "running_list"]
+    if all((out_dir / f"graphic_{k['id']}.mp4").exists() for k in kit):
+        return
+    proj = out_dir / "_gfx_batch"
+    shutil.rmtree(proj, ignore_errors=True)
+    proj.mkdir(parents=True)
+    for f in ("templates.js", "templates.css"):
+        shutil.copyfile(graphics.GFX / f, proj / f)
+    shutil.copyfile(graphics.GFX / "node_modules" / "gsap" / "dist" / "gsap.min.js", proj / "gsap.min.js")
+    items, t, CLIP = [], 0.0, 2.6
+    for k in kit:
+        g = dict(k["defaults"], type=k["id"], _t0=round(t, 3), _dur=CLIP)
+        items.append(g)
+        t += CLIP
+    RW, RH = W * 2, H * 2  # drawn at twice the tile size so text stays crisp
+    (proj / "index.html").write_text(graphics.composition(items, graphics.load_brand(edit_dir), RW, RH, "24"), encoding="utf-8")
+    packed = proj / "packed.mov"
+    subprocess.run(graphics._hyperframes() + ["render", str(proj), "--format", "mov", "--quality", "draft", "--fps", "24",
+                                               "-o", str(packed)], capture_output=True, text=True,
+                   env={**os.environ, "HYPERFRAMES_SKIP_SKILLS": "1", "DO_NOT_TRACK": "1", "HYPERFRAMES_TELEMETRY_DISABLED": "1"})
+    if not packed.exists():
+        return
+    fit = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1,fps=24,format=yuv420p"
+    (pa, ta), _ = _shots(plan, edit_dir)
+    for g in items:
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{ta:.2f}", "-t", f"{CLIP}", "-i", str(pa),
+                        "-ss", f"{g['_t0']:.3f}", "-t", f"{CLIP}", "-i", str(packed),
+                        "-filter_complex", f"[0:v]{fit}[b];[1:v]scale={W}:{H}[g];[b][g]overlay=format=auto,format=yuv420p[v]",
+                        "-map", "[v]", "-t", f"{CLIP}", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "30",
+                        "-movflags", "+faststart", str(out_dir / f"graphic_{g['type']}.mp4")], capture_output=True)
+    shutil.rmtree(proj, ignore_errors=True)
+
+
+def _running_list_preview(plan: dict, edit_dir: Path, W: int, H: int, out: Path) -> None:
+    import graphics
+    items = [{"text": t, "at": i * 0.6} for i, t in enumerate(["The hook", "The problem", "The fix", "The proof", "Your turn"])]
+    fake = {"graphics": [{"type": "running_list", "title": "In this video", "items": items, "start_in_output": 0, "duration": 3}],
+            "total_duration_s": 3}
+    stills = graphics.running_list_overlays(fake, edit_dir, W * 2, H * 2)
+    fit = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1,fps=24,format=yuv420p"
+    (pa, ta), _ = _shots(plan, edit_dir)
+    inputs, chain, cur = ["-ss", f"{ta:.2f}", "-t", "3", "-i", str(pa)], [f"[0:v]{fit}[b0]"], "[b0]"
+    for i, st in enumerate(stills, 1):
+        inputs += ["-loop", "1", "-t", "3", "-i", st["file"]]
+        a, b = st["start_in_output"], st["start_in_output"] + st["duration"]
+        chain.append(f"[{i}:v]scale={W}:{H}[s{i}];{cur}[s{i}]overlay=enable='between(t,{a},{b})'[b{i}]")
+        cur = f"[b{i}]"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", ";".join(chain), "-map", cur, "-t", "3",
+                    "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", "-pix_fmt", "yuv420p",
+                    "-movflags", "+faststart", str(out)], capture_output=True)
+
+
 def preview(plan: dict, edit_dir: Path, kind: str, name: str) -> Path | None:
     out_dir = edit_dir / "storyboard" / "previews"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -48,6 +111,13 @@ def preview(plan: dict, edit_dir: Path, kind: str, name: str) -> Path | None:
     A = ["-ss", f"{ta:.2f}", "-t", "2", "-i", str(pa)]
     B = ["-ss", f"{tb:.2f}", "-t", "2", "-i", str(pb)]
     graph, inputs = None, A
+    if kind == "graphic":
+        if name == "running_list":
+            _running_list_preview(plan, edit_dir, W, H, out)
+        else:
+            with _gfx_lock:  # the first request records them all; the rest wait, then find their file
+                _graphic_batch(plan, edit_dir, W, H)
+        return out if out.exists() and out.stat().st_size > 0 else None
     if kind == "transition":
         from effects import CUT_EFFECTS, EFFECTS
         from render import TRANSITIONS
