@@ -205,10 +205,15 @@ def mix(base: Path, plan: dict, edit_dir: Path, out: Path) -> Path:
         idx, n_inputs = n_inputs, n_inputs + 1
         inputs += ["-stream_loop", "-1", "-i", str(mpath)]
         fi, fo = float(music.get("fade_in", 1.0)), float(music.get("fade_out", 2.0))
+        # The music can start later or stop earlier than the video ("start_in_output", "duration").
+        m0 = min(max(0.0, float(music.get("start_in_output") or 0)), max(0.0, total - 0.5))
+        mlen = min(float(music.get("duration") or total), total - m0)
+        fo = min(fo, mlen / 2)
+        delay = f",adelay={int(m0 * 1000)}:all=1" if m0 > 0 else ""
         parts.append(
-            f"[{idx}:a]aformat=sample_rates=48000:channel_layouts=stereo,atrim=0:{total:.3f},"
+            f"[{idx}:a]aformat=sample_rates=48000:channel_layouts=stereo,atrim=0:{mlen:.3f},"
             f"volume={float(music.get('volume_db', -20))}dB,"
-            f"afade=t=in:d={fi},afade=t=out:st={max(0.0, total - fo):.3f}:d={fo}[mus]")
+            f"afade=t=in:d={min(fi, mlen / 2)},afade=t=out:st={max(0.0, mlen - fo):.3f}:d={fo}{delay},apad,atrim=0:{total:.3f}[mus]")
         if music.get("duck", True):
             parts.append("[voice]asplit=2[vmain][key]")
             parts.append("[mus][key]sidechaincompress=threshold=0.03:ratio=6:attack=15:release=350[musd]")

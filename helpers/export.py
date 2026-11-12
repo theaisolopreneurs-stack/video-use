@@ -122,19 +122,23 @@ def thumbnails(plan: dict, edit_dir: Path, out_dir: Path, name: str, n: int = 3)
     from captions import load_brand
     from title import title_image
     cands = []
-    for r in plan["ranges"]:
+    # About 40 moments spread over the whole video is plenty to find 3 good frames (each one is a
+    # separate seek into the source, the slow part).
+    moments = [(r, float(t)) for r in plan["ranges"]
+               for t in np.arange(float(r["start"]) + 0.3, float(r["end"]) - 0.2, 0.5)]
+    step = max(1, len(moments) // 40)
+    for r, t in moments[::step]:
         src = planlib.resolve(plan["sources"][r["source"]], edit_dir)
-        for t in np.arange(float(r["start"]) + 0.3, float(r["end"]) - 0.2, 0.5):
-            img = framing.grab(src, float(t), width=540)
-            if img is None:
-                continue
-            f = framing._face_detector()
-            det = f[1].detect(f[0].Image(image_format=f[0].ImageFormat.SRGB, data=np.ascontiguousarray(img))).detections
-            if not det:
-                continue
-            bb = max(det, key=lambda d: d.bounding_box.width).bounding_box
-            score = sharpness(img) * (bb.height / img.shape[0]) * det[0].categories[0].score
-            cands.append((score, str(src), float(t)))
+        img = framing.grab(src, float(t), width=540)
+        if img is None:
+            continue
+        f = framing._face_detector()
+        det = f[1].detect(f[0].Image(image_format=f[0].ImageFormat.SRGB, data=np.ascontiguousarray(img))).detections
+        if not det:
+            continue
+        bb = max(det, key=lambda d: d.bounding_box.width).bounding_box
+        score = sharpness(img) * (bb.height / img.shape[0]) * det[0].categories[0].score
+        cands.append((score, str(src), float(t)))
     cands.sort(reverse=True)
     picked: list[tuple[float, str, float]] = []
     for c in cands:
@@ -181,6 +185,12 @@ def main() -> None:
     out_dir.mkdir(exist_ok=True)
 
     import qc
+    from concurrent.futures import ThreadPoolExecutor
+    # Thumbnails don't depend on the render, and each quality check can run while the next shape
+    # renders: side jobs, so the export only waits for whatever finishes last.
+    side = ThreadPoolExecutor(max_workers=1)  # one at a time: they share the face detector
+    thumbs_job = side.submit(thumbnails, plan, edit_dir, out_dir, name)
+    qc_jobs = []
     for aspect in [a.strip() for a in args.aspects.split(",") if a.strip()]:
         if aspect not in framing.OUTPUT_SIZES:
             print(f"skip {aspect}: use one of {', '.join(framing.OUTPUT_SIZES)}")
@@ -194,16 +204,27 @@ def main() -> None:
         if not args.no_qc:
             tmp = plan_path.with_name(f"plan.qc_{aspect.replace(':', 'x')}.json")
             planlib.save(tmp, dict(plan, target=dict(plan.get("target") or {}, aspect=aspect)))
-            r = qc.run(tmp, out)
-            tmp.unlink(missing_ok=True)
-            print(f"  QC {r['verdict'].upper()} ({len(r['findings'])} finding(s))")
-            for x in r["findings"]:
-                print(f"    {x['level']} {'' if x['at'] is None else f'@{x['at']:.1f}s '}{x['message']}")
+
+            # The shape the rough cut was reviewed and checked in only needs the technical checks again.
+            same = aspect == (plan.get("target") or {}).get("aspect") and not args.draft
+
+            def check(tmp=tmp, out=out, same=same):
+                try:
+                    return qc.run(tmp, out, quick=same)
+                finally:
+                    tmp.unlink(missing_ok=True)
+            qc_jobs.append((aspect, side.submit(check)))
+    for aspect, job in qc_jobs:
+        r = job.result()
+        print(f"  QC {aspect} {r['verdict'].upper()} ({len(r['findings'])} finding(s))")
+        for x in r["findings"]:
+            print(f"    {x['level']} {'' if x['at'] is None else f'@{x['at']:.1f}s '}{x['message']}")
 
     n = write_srt(plan, edit_dir, out_dir / f"{name}.srt")
     print(f"captions → {name}.srt ({n} cues)")
     print(f"chapters → {name}_chapters.txt ({write_chapters(plan, out_dir / f'{name}_chapters.txt')})")
-    thumbs = thumbnails(plan, edit_dir, out_dir, name)
+    thumbs = thumbs_job.result()
+    side.shutdown()
     print(f"thumbnails → {', '.join(p.name for p in thumbs)}")
     print(f"done → {out_dir}")
 

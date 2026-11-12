@@ -6,6 +6,7 @@
 <title>AI Video Editor</title>
 <link rel="stylesheet" href="/theme.css">
 <script src="/theme.js"></script>
+<script src="/account.js"></script>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -17,6 +18,11 @@
   main { max-width: 1000px; margin: 0 auto; padding: 20px 16px 60px; }
   button { font: inherit; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
   button:hover:not(:disabled) { border-color: var(--accent); }
+  #claudeAcct { font-weight: 600; white-space: nowrap; }
+  #claudeAcct.acct-off { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  #claudeAcct.acct-off:not(:disabled) { animation: acctPulse 2s ease-in-out 3; }
+  #claudeAcct.acct-on { color: var(--ok, #2e9d5b); }
+  @keyframes acctPulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 35%, transparent); } }
   button:disabled { opacity: .5; cursor: not-allowed; }
   button.big { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; font-size: 18px; padding: 14px 28px; border-radius: 14px; }
   button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
@@ -84,7 +90,7 @@
   <h1>🎬 AI Video Editor</h1>
   <label class="themepick" title="Colours of the editor (not your video)"><span aria-hidden="true">🎨</span> <span class="tp-l">Editor colours</span>
     <select id="themeSel" aria-label="Editor colours"></select></label>
-  <button id="connectHome" hidden title="So you can tell Claude what to change right inside the editor">🔑 Connect Claude</button>
+  <button id="claudeAcct" type="button">🔑 Connect Claude</button>
   <button id="openLib" title="See all your videos in a normal folder window">📁 Open my videos folder</button>
 </header>
 <main>
@@ -172,23 +178,6 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-document.addEventListener("DOMContentLoaded", () => {
-  const b = document.getElementById("connectHome");
-  b.onclick = async () => {
-    const r = await (await fetch("/api/claude-login", { method: "POST", body: "{}" })).json();
-    if (!r.ok) return toast(r.error);
-    b.textContent = "Waiting for you to approve…"; b.disabled = true;
-    toast("A Claude sign-in page is opening in your browser. Sign in if asked, click Authorize, then come back.");
-    const t0 = Date.now(), poll = setInterval(async () => {
-      const st = await (await fetch("/api/claude-status")).json();
-      if (st.signed_in || Date.now() - t0 > 360000) {
-        clearInterval(poll); b.disabled = false; b.textContent = "🔑 Connect Claude";
-        if (st.signed_in) { b.hidden = true; toast("Claude is connected ✓ You can now tell it what to change inside the editor."); }
-        else toast("Still not connected. Click Connect Claude to try again.");
-      }
-    }, 3000);
-  };
-});
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 5000); }
 const post = async (url, body) => (await fetch(url, { method: "POST", body: JSON.stringify(body || {}) })).json();
 
@@ -198,7 +187,6 @@ const FRIENDLY = { viral: "Viral", reel: "Reel / TikTok / Short", justyn: "Viral
 const STATUS = { new: "Not edited yet", draft: "Ready to review", plan_approved: "Plan approved", rough_approved: "Ready to export", final: "Finished" };
 
 async function load() {
-  fetch("/api/claude-status").then((r) => r.json()).then((st) => { $("connectHome").hidden = !(st.installed && st.signed_in === false); }).catch(() => {});
   fetch("/api/version").then((r) => { if (!r.ok) $("oldHome").hidden = false; }).catch(() => ($("oldHome").hidden = false));
   H = await (await fetch("/api/home")).json();
   $("libPath").textContent = `Saved in ${H.library}`;

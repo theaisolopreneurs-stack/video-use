@@ -49,6 +49,7 @@ HOME_HTML = HELPERS / "studio" / "home.html"
 THEME_CSS = HELPERS / "studio" / "theme.css"
 MIC_JS = HELPERS / "studio" / "mic.js"
 THEME_JS = HELPERS / "studio" / "theme.js"
+ACCOUNT_JS = HELPERS / "studio" / "account.js"
 # Changes whenever this file changes, so an editor left running from an older version can be spotted
 # (the pages show a "please reopen" banner) and replaced when the desktop icon is clicked again.
 SERVER_VERSION = __import__("hashlib").sha1(Path(__file__).read_bytes()).hexdigest()[:10]
@@ -79,7 +80,8 @@ class Studio:
         inv = self.edit_dir / "inventory.json"
         rough = self.edit_dir / "rough.mp4"
         stamp = self.edit_dir / "rough.json"
-        rendered_cut = json.loads(stamp.read_text(encoding="utf-8")).get("cut") if stamp.exists() else None
+        made = json.loads(stamp.read_text(encoding="utf-8")) if stamp.exists() else {}
+        rendered_cut = made.get("cut")
         return {
             "plan": plan,
             "problems": planlib.validate(plan, self.edit_dir),
@@ -90,9 +92,10 @@ class Studio:
             "notes": json.loads(self.notes_path.read_text(encoding="utf-8")) if self.notes_path.exists() else None,
             "rough": {"exists": rough.exists(),
                       "mtime": rough.stat().st_mtime if rough.exists() else None,
-                      # Stale = the cut (sources + ranges) changed since rough.mp4 was rendered.
-                      # Approving or adding notes rewrites plan.json but doesn't make it stale.
-                      "stale": rough.exists() and rendered_cut != self.cut_signature(plan),
+                      # Stale = the plan changed since rough.mp4 was made (any edit bumps the version;
+                      # approving or adding notes doesn't). Older previews have no version: compare the cut.
+                      "stale": rough.exists() and (rendered_cut != self.cut_signature(plan) or
+                                                   made.get("version", plan.get("version")) != plan.get("version")),
                       **self.render},
             "project": self.edit_dir.parent.name,
             "brand_captions": self.brand_captions(),
@@ -151,7 +154,7 @@ class Studio:
                 new_n = {e.get("type") for e in new_fx}
                 changed.append("effects: " + (", ".join(sorted(new_n)) or "none") +
                                (f" (removed {', '.join(sorted(old_n - new_n))})" if old_n - new_n else ""))
-            for field in ("texts", "stickers", "zooms"):
+            for field in ("texts", "stickers", "zooms", "broll", "graphics"):
                 new_list = body.get(field)
                 if new_list is not None and new_list != (plan.get(field) or []):
                     settings_changed[field] = new_list
@@ -260,7 +263,9 @@ Do it now by editing the plan:
 3. `{py} helpers/plan.py validate "{plan_rel}"` and fix anything it reports.
 Do not render, export, install anything, or touch files outside this project's folder. If they asked a question, just answer it. If the request is unclear, make your best sensible choice and say what you did.
 Finish with 1-3 short, friendly, plain-English sentences saying what you changed (no file names, no jargon)."""
+        # Lean start: none of the person's other connectors or skills, just this job.
         cmd = [claude, "-p", "--output-format", "json", "--permission-mode", "acceptEdits",
+               "--strict-mcp-config", "--disable-slash-commands",
                "--add-dir", str(self.edit_dir.parent),
                "--allowedTools", "Read", "Edit", "Write", "Glob", "Grep", f"Bash({py} helpers/plan.py:*)"]
         if self.chat["session"]:
@@ -268,6 +273,12 @@ Finish with 1-3 short, friendly, plain-English sentences saying what you changed
 
         def work():
             try:
+                t0 = time.time()
+                quick = self.quick_edit(claude, msg, ctx)
+                if quick:
+                    self._log("claude", quick)
+                    self.chat.update(state="done", seconds=round(time.time() - t0, 1))
+                    return
                 proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8",
                                       errors="replace", cwd=str(HELPERS.parent), timeout=900,
                                       env={**os.environ, "PYTHONUTF8": "1"})
@@ -277,19 +288,110 @@ Finish with 1-3 short, friendly, plain-English sentences saying what you changed
                 if proc.returncode or out.get("is_error") or not reply:
                     raise RuntimeError(reply or proc.stderr[-400:] or "no answer")
                 self._log("claude", reply)
-                self.chat.update(state="done")
+                self.chat.update(state="done", seconds=round(time.time() - t0, 1))
             except Exception as e:  # noqa: BLE001
                 err = str(e)
-                if any(k in err.lower() for k in ("authenticate", "login", "log in", "oauth", "api key")):
+                if any(k in err.lower() for k in ("authenticate", "login", "log in", "oauth", "api key", "expired")):
                     _AUTH["at"] = 0.0
-                    self._log("claude", "I need you to connect your Claude account once before I can edit from here. "
-                                        "Click “🔑 Connect Claude” under the video, approve it in your browser, then ask me again.")
+                    self._log("claude", "I couldn't reach your Claude account just now. Click “🔑 Connect Claude” at the "
+                                        "top of the editor, approve it in your browser, then send your message again.")
                     self.chat.update(state="failed", error="signin")
                 else:
                     self._log("claude", "Sorry, that didn't work. Try saying it another way, or ask in your Claude chat.")
                     self.chat.update(state="failed", error=err[-400:])
         threading.Thread(target=work, daemon=True).start()
         return {"ok": True}
+
+    # Quick edits: Claude gets the whole plan and what is said in each scene in one message and
+    # answers with the exact changes (no tools, no file reading), so most requests take seconds.
+    # Anything it can't do that way ("need_tools") goes to the full Claude Code run above.
+    QUICK_RULES = """You are the video editor inside the AI Video Editor's Review Studio, editing one video with its director (the person typing). They are not technical.
+You edit by changing the edit plan (plan.json, shown below). Reply with ONE JSON object and nothing else:
+{"reply": "1-3 short, friendly, plain-English sentences saying what you changed (no file names, no jargon)",
+ "change": "a few words for the version history",
+ "ops": [ ... ]}
+Each op changes the plan, in order (list positions count after the earlier ops):
+  {"op": "set", "path": ["captions", "size"], "value": 80}        set or replace a value (creates missing objects)
+  {"op": "delete", "path": ["texts", 2]}                           remove a list item or a key
+  {"op": "insert", "path": ["ranges", 3], "value": {...}}          insert into a list at that position
+  {"op": "append", "path": ["texts"], "value": {...}}              add to the end of a list (creates the list)
+Paths are lists of keys and list positions. Keep everything they didn't ask to change. Don't touch "status", "version" or "changes".
+Times: ranges start/end are SOURCE seconds; everything else (texts, zooms, effects, broll, sfx at...) is seconds in the FINISHED video ("out" times in the scene list below).
+If they only asked a question, answer it with "ops": [].
+If the request needs something you can't do from here (finding a moment you can't see in the scene list, new files, more footage), reply exactly {"need_tools": true}.
+
+How the plan works (from the editor's manual):
+"""
+
+    def quick_edit(self, claude: str, msg: str, ctx: dict) -> str | None:
+        """The fast path. Returns Claude's reply when it made (or didn't need) the change, else None."""
+        plan = planlib.load(self.plan_path)
+        manual = (HELPERS.parent / "SKILL.md").read_text(encoding="utf-8")
+        sections = []
+        for start, end in (("## Helpers", "## The process"), ("## EDL format", "## Memory")):
+            a = manual.find(start)
+            b = manual.find(end, a + 1)
+            if a >= 0:
+                sections.append(manual[a:b if b > a else None])
+        scenes, t = [], 0.0
+        words = {}
+        for name in plan.get("sources") or {}:
+            f = self.edit_dir / "transcripts" / f"{name}.json"
+            try:
+                words[name] = [w for w in json.loads(f.read_text(encoding="utf-8")).get("words", [])
+                               if w.get("type") == "word"]
+            except (OSError, ValueError):
+                words[name] = []
+        for i, r in enumerate(plan.get("ranges") or []):
+            d = planlib.range_len(r)
+            said = " ".join(w["text"].strip() for w in words.get(r["source"], [])
+                            if w.get("start") is not None and w["start"] < float(r["end"]) and w["end"] > float(r["start"]))
+            scenes.append(f"[{i}] out {t:.2f}-{t + d:.2f}  (source {float(r['start']):.2f}-{float(r['end']):.2f}): {said}")
+            t += d
+        recent = [f"{m['who']}: {m['text'][:300]}" for m in self.chat_log()[-7:-1]]
+        prompt = (self.QUICK_RULES + "\n".join(sections)
+                  + "\n\n=== THIS VIDEO ===\nplan.json:\n" + json.dumps(plan, ensure_ascii=False)
+                  + "\n\nScenes in order (what is said in each):\n" + "\n".join(scenes)
+                  + (("\n\nEarlier in this chat:\n" + "\n".join(recent)) if recent else "")
+                  + f"\n\nWhat they are looking at: {json.dumps(ctx, ensure_ascii=False)}"
+                  + "  (playhead = seconds into the finished video; selected = the timeline piece they clicked)"
+                  + f"\n\nThe director says: {msg}\n\nYour JSON:")
+        cmd = [claude, "-p", "--output-format", "json", "--model", os.environ.get("STUDIO_QUICK_MODEL", "sonnet"),
+               "--tools", "", "--strict-mcp-config", "--disable-slash-commands",
+               "--system-prompt", "You edit video plans and answer with a single JSON object."]
+        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              cwd=str(self.edit_dir), timeout=300, env={**os.environ, "PYTHONUTF8": "1"})
+        out = json.loads(proc.stdout or "{}")
+        text = (out.get("result") or "").strip()
+        if proc.returncode or out.get("is_error"):
+            raise RuntimeError(text or proc.stderr[-400:] or "no answer")
+        try:
+            ans = json.loads(text[text.index("{"):text.rindex("}") + 1])
+        except ValueError:
+            return None
+        if ans.get("need_tools") or not isinstance(ans.get("ops", []), list):
+            return None
+        ops = ans.get("ops") or []
+        if ops:
+            with self.lock:
+                plan = planlib.load(self.plan_path)
+                new = json.loads(json.dumps(plan))
+                try:
+                    for op in ops:
+                        apply_op(new, op)
+                except (KeyError, IndexError, TypeError, ValueError):
+                    return None
+                for k in ("status", "version", "changes"):
+                    new[k] = plan.get(k)
+                if planlib.validate(new, self.edit_dir):
+                    return None  # let the full run sort it out
+                v = int(plan.get("version", 1))
+                shutil.copyfile(self.plan_path, self.edit_dir / f"plan_v{v}.json")
+                new.update(version=v + 1, status="draft",
+                           changes=[f"v{v + 1}: {ans.get('change') or msg[:60]}"])
+                new["total_duration_s"] = planlib.total_duration(new)
+                planlib.save(self.plan_path, new)
+        return (ans.get("reply") or "Done.").strip()
 
     def approve(self, gate: str) -> dict:
         with self.lock:
@@ -302,7 +404,17 @@ Finish with 1-3 short, friendly, plain-English sentences saying what you changed
                 return {"ok": False, "error": "; ".join(problems)}
             plan["status"] = becomes
             planlib.save(self.plan_path, plan)
-            return {"ok": True, "status": becomes}
+        if becomes == "rough_approved":
+            self.prepare_export()
+        return {"ok": True, "status": becomes}
+
+    def prepare_export(self) -> None:
+        """Right after "Looks good": build the full-quality sections, cut and sound in the background,
+        while the person picks where the video is going. The export then only does the last pass."""
+        subprocess.Popen([__import__("library").worker_python(), str(HELPERS / "render.py"), str(self.plan_path),
+                          "-o", str(self.edit_dir / "export_ready.mp4"), "--prepare"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(HELPERS.parent),
+                         env={**os.environ, "PYTHONUTF8": "1"})
 
     def start_rough(self) -> dict:
         if self.render["state"] == "running":
@@ -494,10 +606,14 @@ def make_handler(app: App):
                 return self.send_file(THEME_CSS)
             if url.path == "/theme.js":
                 return self.send_file(THEME_JS)
+            if url.path == "/account.js":
+                return self.send_file(ACCOUNT_JS)
             if url.path == "/api/version":
                 return self.send_json({"version": SERVER_VERSION})
             if url.path == "/api/claude-status":
-                return self.send_json({"installed": bool(find_claude()), "signed_in": claude_signed_in(refresh=True)})
+                login = _AUTH["login"]
+                return self.send_json({"installed": bool(find_claude()), "signed_in": claude_signed_in(refresh=True),
+                                       "login_done": login is None or login.poll() is not None})
             if url.path == "/studio":
                 if not studio:
                     return self.redirect("/")
@@ -655,6 +771,38 @@ def run_windowless() -> None:
         subprocess.Popen.__init__ = hidden
 
 
+def apply_op(doc, op: dict) -> None:
+    """One change from a quick edit: set / delete / insert / append at a path of keys and positions."""
+    path, kind = list(op.get("path") or []), op.get("op")
+    if not path and kind != "append":
+        raise ValueError("empty path")
+    parent = doc
+    for i, k in enumerate(path[:-1]):
+        nxt = path[i + 1]
+        if isinstance(parent, dict) and k not in parent:
+            parent[k] = [] if isinstance(nxt, int) else {}
+        parent = parent[k]
+    last = path[-1] if path else None
+    if kind == "set":
+        if isinstance(parent, list) and last == len(parent):
+            parent.append(op["value"])
+        else:
+            parent[last] = op["value"]
+    elif kind == "delete":
+        del parent[last]
+    elif kind == "insert":
+        if not isinstance(parent, list):
+            raise TypeError("insert needs a list")
+        parent.insert(int(last), op["value"])
+    elif kind == "append":
+        target = parent.setdefault(last, []) if isinstance(parent, dict) else parent[last]
+        if not isinstance(target, list):
+            raise TypeError("append needs a list")
+        target.append(op["value"])
+    else:
+        raise ValueError(f"unknown op {kind}")
+
+
 def find_claude() -> str | None:
     """The person's Claude Code command, if it's installed (used by the Studio's "Tell Claude" box)."""
     found = shutil.which("claude")
@@ -679,10 +827,10 @@ def claude_signed_in(refresh: bool = False) -> bool | None:
     waiting = _AUTH["login"] is not None and _AUTH["login"].poll() is None
     if refresh or waiting or time.time() - _AUTH["at"] > 120 or _AUTH["signed_in"] is None:
         try:
-            out = subprocess.run([claude, "auth", "status", "--json"], capture_output=True, text=True, timeout=20).stdout
+            out = subprocess.run([claude, "auth", "status", "--json"], capture_output=True, text=True, timeout=30).stdout
             _AUTH["signed_in"] = bool(json.loads(out or "{}").get("loggedIn"))
         except Exception:
-            _AUTH["signed_in"] = False
+            pass  # a slow or busy computer: keep the last answer rather than claiming it's signed out
         _AUTH["at"] = time.time()
     return _AUTH["signed_in"]
 

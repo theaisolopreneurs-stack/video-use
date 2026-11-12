@@ -283,7 +283,10 @@ def cut_sheet(plan, video, out: Path) -> None:
     sheet.save(out, quality=85)
 
 
-def run(plan_path: Path, video: Path) -> dict:
+def run(plan_path: Path, video: Path, quick: bool = False) -> dict:
+    """quick: only the technical checks (length, loudness, clicks, black frames, captions). For an
+    export in the shape the rough cut was already checked in, where the layout checks (text over
+    the face, app safe zones) would only repeat what was looked at before approval."""
     plan = planlib.load(plan_path)
     edit_dir = plan_path.parent
     findings: list[tuple[str, float | None, str]] = []
@@ -292,12 +295,13 @@ def run(plan_path: Path, video: Path) -> dict:
     report["loudness"] = check_loudness(video, findings, plan)
     report["clicks"] = check_clicks(plan, video, findings)
     report["black"] = check_black(video, findings, plan)
-    report["overlays"] = check_overlays(plan, edit_dir, video, findings)
+    report["overlays"] = {} if quick else check_overlays(plan, edit_dir, video, findings)
     report["captions"] = check_captions(plan, edit_dir, findings)
     report["clutter"] = check_clutter(plan, edit_dir, findings)
     qc_dir = edit_dir / "qc"
     qc_dir.mkdir(exist_ok=True)
-    cut_sheet(plan, video, qc_dir / "cuts.jpg")
+    if not quick:
+        cut_sheet(plan, video, qc_dir / "cuts.jpg")
     order = {"fail": 0, "warn": 1, "info": 2}
     findings.sort(key=lambda x: (order[x[0]], x[1] or 0))
     report["findings"] = [{"level": l, "at": t, "message": m} for l, t, m in findings]

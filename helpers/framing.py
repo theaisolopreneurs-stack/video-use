@@ -59,8 +59,23 @@ def model_file(name: str, url: str) -> Path:
 
 # ---- frames ---------------------------------------------------------------
 
+def _sig(video) -> tuple:
+    p = Path(video)
+    try:
+        st = p.stat()
+        return (str(p.resolve()), st.st_mtime_ns, st.st_size)
+    except OSError:
+        return (str(p), 0, 0)
+
+
 def probe_size(video: Path) -> tuple[int, int]:
     """Display size (rotation applied)."""
+    return _probe_size(_sig(video))
+
+
+@lru_cache(maxsize=256)
+def _probe_size(sig: tuple) -> tuple[int, int]:
+    video = sig[0]
     out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams",
                           "-of", "json", str(video)], capture_output=True, text=True, encoding="utf-8").stdout
     st = json.loads(out)["streams"][0]
@@ -95,9 +110,36 @@ def _face_detector():
     return mp, vision.FaceDetector.create_from_options(opts)
 
 
-@lru_cache(maxsize=256)
+# Where the face is in each stretch of a clip, remembered between renders (finding it means
+# grabbing and scanning dozens of frames, the slowest part of starting a preview).
+FACE_CACHE = Path.home() / ".cache" / "ai-video-editor" / "faces.json"
+_faces: dict | None = None
+
+
 def face(video: str, start: float = 0.0, end: float | None = None, samples: int = 6) -> dict | None:
     """Median face centre (x, y as 0-1 of the frame) and face height (0-1) over a time range."""
+    global _faces
+    if _faces is None:
+        try:
+            _faces = json.loads(FACE_CACHE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            _faces = {}
+    key = json.dumps([*_sig(video), round(start, 3), None if end is None else round(end, 3), samples])
+    if key not in _faces:
+        _faces[key] = _find_face(video, start, end, samples)
+        try:
+            if len(_faces) > 20000:
+                _faces = dict(list(_faces.items())[-10000:])
+            FACE_CACHE.parent.mkdir(parents=True, exist_ok=True)
+            tmp = FACE_CACHE.with_suffix(".tmp")
+            tmp.write_text(json.dumps(_faces), encoding="utf-8")
+            tmp.replace(FACE_CACHE)
+        except OSError:
+            pass
+    return _faces[key]
+
+
+def _find_face(video: str, start: float = 0.0, end: float | None = None, samples: int = 6) -> dict | None:
     mp, detector = _face_detector()
     v = Path(video)
     if end is None:
@@ -151,7 +193,7 @@ def zoom_center(plan: dict, edit_dir: Path, t_out: float) -> tuple[float, float]
     return 0.5, 0.4
 
 
-def zoom_filter(plan: dict, edit_dir: Path, W: int, H: int, fps: str) -> str | None:
+def zoom_filter(plan: dict, edit_dir: Path, W: int, H: int, fps: str, headroom: int = 2) -> str | None:
     """A zoompan chain implementing every zoom; None if there are none.
 
     Each zoom shows a window (1/scale of the frame) centred on the face, clamped to the
@@ -203,8 +245,42 @@ def zoom_filter(plan: dict, edit_dir: Path, W: int, H: int, fps: str) -> str | N
     x = f"min(max(0,{CX}*iw-iw/zoom/2),iw-iw/zoom)"
     y = f"min(max(0,{CY}*ih-ih/zoom/2),ih-ih/zoom)"
     # zoompan works in whole input pixels; 2x headroom keeps push zooms from stepping.
-    return (f"scale={W * 2}:{H * 2}:flags=bicubic,"
-            f"zoompan=z='{Z}':x='{x}':y='{y}':d=1:s={W}x{H}:fps={fps},setsar=1")
+    # (headroom 1 for quick drafts: a touch less smooth, a lot faster)
+    def zp(off: float = 0.0) -> str:
+        sh = (lambda e: e.replace("it", f"(it+{off:.5f})")) if off else (lambda e: e)
+        return (f"scale={W * headroom}:{H * headroom}:flags=bicubic,"
+                f"zoompan=z='{sh(Z)}':x='{sh(x)}':y='{sh(y)}':d=1:s={W}x{H}:fps={fps},setsar=1")
+
+    # Only the zoomed moments go through zoompan (blowing every frame up to 2x is the slowest part of
+    # the last pass); the rest passes straight through. Pieces are cut on exact frames and rejoined.
+    from fractions import Fraction
+    import math
+    rate = Fraction(fps)
+    wins = sorted([(float(z["start_in_output"]), float(z["start_in_output"]) + float(z["duration"])) for z in zooms]
+                  + [(t, t + 0.18) for t, _ in pulses])
+    frames: list[list[int]] = []
+    for a0, b0 in wins:
+        fa, fb = max(0, math.floor(a0 * rate) - 1), math.ceil(b0 * rate) + 2
+        if frames and fa <= frames[-1][1] + 6:
+            frames[-1][1] = max(frames[-1][1], fb)
+        else:
+            frames.append([fa, fb])
+    if not frames or len(frames) > 40:
+        return zp()
+    pieces, cur = [], 0
+    for fa, fb in frames:
+        if fa > cur:
+            pieces.append((cur, fa, False))
+        pieces.append((fa, fb, True))
+        cur = fb
+    pieces.append((cur, None, False))
+    n = len(pieces)
+    graph = [f"split={n}" + "".join(f"[zp{i}]" for i in range(n))]
+    for i, (fa, fb, zoomed) in enumerate(pieces):
+        cut = f"trim=start_frame={fa}" + (f":end_frame={fb}" if fb is not None else "") + ",setpts=PTS-STARTPTS"
+        graph.append(f"[zp{i}]{cut}," + (zp(float(Fraction(fa) / rate)) if zoomed else "setsar=1") + f"[zq{i}]")
+    graph.append("".join(f"[zq{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=0")
+    return ";".join(graph)
 
 
 def beat_pulses(plan: dict, edit_dir: Path) -> list[tuple[float, float]]:

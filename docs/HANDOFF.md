@@ -68,6 +68,7 @@ of Claude editing raw footage (video-use, justyn.ai's viral reel). Forked from
 | 11d | Hand swipe reveal and hand swipe transition (MediaPipe hand model, follows the hand, look picked from the words); CLAUDE.md; plugin installed from GitHub and set up in its own folder (smoke test PASS, ~1 GB) | `helpers/handwipe.py`, `CLAUDE.md` |
 | 11e | Trending edits: crash / eased push zooms, freeze-frame meme (freezeframes filter + record scratch), boomerang, bounce, blackout, split screen centred on the face, person cutout (clone), day-to-night look, SFX scratch/boom/shutter; captions in 9:16 always clear of the side buttons | `framing.py`, `effects.py`, `background.py`, `render.py`, `audio.py` |
 | 11f | Studio rebuilt CapCut-style: Claude's plan panel, multi-track clickable timeline with per-piece feedback (`review_notes.json` `items[]`), ✎ Selected inspector, 3 steps (Make preview approves the plan + renders), caption font/size/colour/case, zoom editing (`zooms` saved), theme picker on Home via shared `theme.js` | `helpers/studio/index.html`, `theme.js`, `home.html`, `review_server.py`, `captions.py` |
+| 11h | Speed: render reuses unchanged sections, the joined cut and the sound (content-fingerprinted files + `.key` stamps), cuts 3 sections at a time, tone-maps iPhone HDR after the crop, remembers face positions on disk (`~/.cache/ai-video-editor/faces.json`), loudness folded into the last pass; previews auto-update and swap in at the same moment; `--prepare` builds the export's pieces after "Looks good"; Tell Claude quick mode (one `claude -p --tools ""` call answering with JSON ops, full run as fallback); always-visible Claude button; timeline ▶ and resizable panels; every timeline piece has drag edges (voice edges trim their scene; music `start_in_output`/`duration`; B-roll and graphics are now saved from the Studio); exports: hardware encoder, quick QC for the already-reviewed shape, thumbnails alongside | `helpers/render.py`, `framing.py`, `review_server.py`, `studio/index.html`, `studio/account.js` |
 | 11g | Studio: Tell Claude box + Chat tab (headless `claude -p` on plan.json), looping previews for transitions/effects/zooms (`previews.py`), drag/resize/reorder/trim on the timeline, split/duplicate/delete/undo/redo, inline feedback in Claude's plan, caption words always visible, outdated-server auto-replace | `helpers/studio/index.html`, `review_server.py`, `previews.py` |
 | Later | 21 Studio colour themes; in-app How-to; **Home screen** (drag clips, pick style, Make my video), library, Export dialog, desktop icon | `helpers/studio/theme.css`, `home.html`, `helpers/library.py`, `shortcut.py` |
 
@@ -173,6 +174,17 @@ It is not in the Home library (that folder is empty).
 - Long inline Python heredocs with quotes/backticks can break the Bash tool: write the script to the
   scratchpad and run it.
 - Bash `cd` can persist and change the session's working directory; prefer absolute paths.
+- The user's laptop is a Snapdragon X (ARM64) and FFmpeg is the x64 Gyan build running under emulation: everything video is
+  roughly 2x slower than it could be. `-hwaccel auto` (d3d11va) is faster for one decode but STALLS for minutes when
+  several FFmpegs decode at once, so it's opt-in only (`RENDER_HWDEC=1`). Timings swing a lot on battery.
+- Render cache: section files are `clips_*/seg_<source>_<fingerprint>.mp4`; `base*.mp4` and `*_mixed.mp4` carry a
+  `.key` stamp. Bump `CACHE_VERSION` in render.py when a change to extract/join/mix should invalidate old pieces.
+  Exports encode on the hardware encoder when `render.hardware_encoder()` passes its self-test (Windows `h264_mf`
+  with `-hw_encoding true -rate_control quality -quality 88`, a standard `-r`, `format=nv12`). Bitrate modes DROP
+  frames at hard picture changes on the Snapdragon encoder, and odd frame rates (29.974) fail outright; the frame
+  count is checked after and the software encoder redoes it if frames are missing. `RENDER_SOFTWARE_ENCODER=1` forces x264.
+  Zooms run zoompan only on the zoomed stretches (trim/concat by frame), the rest passes through.
+  Renders take a per-project lock (`<edit>/.render_<draft|final>.lock`), so the background `--prepare` and the export queue.
 - `.python-version` is `3.12`; on Windows use `UV_PYTHON_INSTALL_DIR=<repo>/.python` (see section 4).
 - `rm -rf "$(...)"` is blocked by a safety check: use literal paths.
 
@@ -193,7 +205,7 @@ It is not in the Home library (that folder is empty).
 - A true-peak of -0.9 on drafts is normal (1-pass loudnorm); QC allows 0.15 dB.
 - FFmpeg's blend filter has a wrong `T` (time) on some phone footage; `handwipe.py` uses `N / fps` instead.
 - The desktop icon's editor keeps running until the computer restarts; older copies didn't serve new routes (`/theme.js`, `/mic.js`, `caption_fonts`), which showed up as an empty colour menu, no fonts and no mic. Now `replace_old_editor` stops an older `review_server.py` on the port (version from `/api/version`) and the pages show a "please reopen" banner if one is still answering.
-- Connect Claude: `claude auth status --json` (`loggedIn`) is checked by the server (cached 2 min); the button runs `claude auth login` in its own console window (CREATE_NEW_CONSOLE beats the no-window patch) and the page polls `/api/claude-status`.
+- Connect Claude: `claude auth status --json` (`loggedIn`) is checked by the server (cached 2 min); the button runs `claude auth login` in its own console window (CREATE_NEW_CONSOLE beats the no-window patch) and the page polls `/api/claude-status`. The button is `#claudeAcct` in both top bars (helpers/studio/account.js), always visible: "✓ Claude connected" or "🔑 Connect Claude"; clicking when connected signs in again (`login_done` tells when that window closed). `auth status` can say loggedIn while a request still fails on an expired token, so never hide the only way to reconnect.
 - The Studio's Tell Claude box needs the command-line Claude Code to be signed in; the desktop app's sign-in is separate (`claude -p` failed with "OAuth session expired" on this machine on 2026-11-08).
 - FFmpeg's `anlmdn` crashes (heap corruption) on joined base files with small timestamp jumps; voice isolate uses two `afftdn` passes instead.
 - Effect chains use `@` as a label placeholder, so never write `color=black@0.5` inside one (blackout uses lutyuv).

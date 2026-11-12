@@ -22,12 +22,137 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import functools
+import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from fractions import Fraction
 from pathlib import Path
+
+# Speed: pieces that haven't changed since the last render are reused (each file is named after a
+# fingerprint of everything that goes into it), and sections are cut several at a time.
+CACHE_VERSION = "3"
+WORKERS = max(1, min(int(os.environ.get("RENDER_WORKERS", 0)) or 3, os.cpu_count() or 3))
+
+
+def _fingerprint(*parts) -> str:
+    return hashlib.sha1(json.dumps([CACHE_VERSION, *parts], sort_keys=True, default=str).encode()).hexdigest()[:12]
+
+
+def _file_sig(p: Path) -> list:
+    try:
+        st = Path(p).stat()
+        return [str(Path(p).resolve()), st.st_mtime_ns, st.st_size]
+    except OSError:
+        return [str(p)]
+
+
+def _per_file(fn):
+    """Remember an ffprobe answer per file (and per change to it): a render asks the same few
+    questions about the source dozens of times."""
+    cache: dict = {}
+
+    @functools.wraps(fn)
+    def wrapper(video, *a):
+        key = (*_file_sig(video), *a)
+        if len(key) < 3:
+            return fn(video, *a)
+        if key not in cache:
+            cache[key] = fn(video, *a)
+        return cache[key]
+    return wrapper
+
+
+def _reuse(out: Path, key: str) -> bool:
+    """True when `out` was built from exactly these inputs last time."""
+    k = out.with_name(out.name + ".key")
+    return out.exists() and out.stat().st_size > 0 and k.exists() and k.read_text() == key
+
+
+def _stamp(out: Path, key: str) -> None:
+    out.with_name(out.name + ".key").write_text(key)
+
+
+STANDARD_RATES = ["24000/1001", "24", "25", "30000/1001", "30", "50", "60000/1001", "60"]
+
+
+def _standard_rate(rate: str) -> str:
+    """The nearest everyday frame rate (phones record 29.97-and-a-bit; hardware encoders want 29.97)."""
+    f = float(Fraction(rate))
+    best = min(STANDARD_RATES, key=lambda r: abs(float(Fraction(r)) - f))
+    return best if abs(float(Fraction(best)) - f) / f < 0.005 else f"{f:.3f}"
+
+
+@functools.lru_cache(maxsize=1)
+def hardware_encoder() -> list[str] | None:
+    """The computer's own video-encoder chip, if it has one that works (what phone and desktop editing
+    apps use to export in seconds). Quality-based mode: every frame kept, no size cap. None means
+    "use the software encoder". RENDER_SOFTWARE_ENCODER=1 turns it off."""
+    if os.environ.get("RENDER_SOFTWARE_ENCODER"):
+        return None
+    if os.name == "nt":
+        cands = [["-c:v", "h264_mf", "-hw_encoding", "true", "-rate_control", "quality", "-quality", "88"]]
+    elif sys.platform == "darwin":
+        cands = [["-c:v", "h264_videotoolbox", "-q:v", "62", "-allow_sw", "0"]]
+    else:
+        cands = []
+    for c in cands:
+        try:
+            r = subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=1080x1920:r=30:d=1",
+                                "-vf", "format=nv12", *c, "-f", "mp4", "-movflags", "frag_keyframe+empty_moov",
+                                "-"], capture_output=True, timeout=40)
+            if r.returncode == 0 and len(r.stdout) > 20000:
+                return c
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return None
+
+
+def _frame_count(video: Path) -> int:
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=nb_frames",
+                          "-of", "default=nw=1:nk=1", str(video)], capture_output=True, text=True).stdout.strip()
+    return int(out) if out.isdigit() else -1
+
+
+class _RenderLock:
+    """One render at a time per project and quality (preview or export), so a background
+    "get the export ready" render and the real export share their pieces instead of colliding."""
+
+    def __init__(self, edit_dir: Path, mode: str):
+        self.path = edit_dir / f".render_{mode}.lock"
+
+    def __enter__(self):
+        self.f = open(self.path, "a+b")
+        if os.name == "nt":
+            import msvcrt
+            import time as _t
+            while True:
+                try:
+                    self.f.seek(0)
+                    msvcrt.locking(self.f.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    _t.sleep(0.5)
+        else:
+            import fcntl
+            fcntl.flock(self.f, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            if os.name == "nt":
+                import msvcrt
+                self.f.seek(0)
+                msvcrt.locking(self.f.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(self.f, fcntl.LOCK_UN)
+        finally:
+            self.f.close()
 
 try:
     from grade import get_preset, auto_grade_for_clip  # same directory
@@ -126,6 +251,7 @@ def resolve_subtitles_path(maybe_path: str, edit_dir: Path) -> Path:
 # Fix: detect HDR via color_transfer and prepend a zscale+tonemap chain to the
 # vf graph so the output is clean Rec.709 SDR.
 
+HWDEC = ["-hwaccel", "auto"] if os.environ.get("RENDER_HWDEC") else []  # opt-in: several at once can stall the GPU decoder
 HDR_TRANSFERS = {"smpte2084", "arib-std-b67"}  # PQ (HDR10) and HLG
 
 TONEMAP_CHAIN = (
@@ -138,6 +264,7 @@ TONEMAP_CHAIN = (
 )
 
 
+@_per_file
 def is_hdr_source(video: Path) -> bool:
     """Return True if the source uses a PQ or HLG transfer function."""
     try:
@@ -152,6 +279,7 @@ def is_hdr_source(video: Path) -> bool:
         return False
 
 
+@_per_file
 def is_portrait_source(video: Path) -> bool:
     """Return True if the displayed video is portrait, including rotation."""
     try:
@@ -218,6 +346,7 @@ def parse_fps(value: str) -> str:
     return f"{rate.numerator}/{rate.denominator}"
 
 
+@_per_file
 def probe_source_fps(video: Path) -> str | None:
     """Return an ffmpeg-ready source rate, preferring the average frame rate.
 
@@ -316,7 +445,7 @@ def extract_segment(
         a_tail = f",apad,atrim=0:{total / Fraction(out_rate):.5f}" if total else (f",apad=pad_dur={hold:.3f}" if hold else "")
         graph = (f"[0:v]split[f][b];[b]reverse[r];[f][r]concat=n=2:v=1:a=0{v_tail}[v];"
                  f"[0:a]asplit[x][y];[y]areverse[ry];[x][ry]concat=n=2:v=0:a=1{a_tail}[a]")
-        preset, crf = ("ultrafast", "28") if draft else (("medium", "22") if preview else ("fast", "20"))
+        preset, crf = ("ultrafast", "28") if draft else (("medium", "22") if preview else ("veryfast", "18"))
         subprocess.run(["ffmpeg", "-y", "-i", str(fwd), "-filter_complex", graph, "-map", "[v]", "-map", "[a]",
                         "-c:v", "libx264", "-preset", preset, "-crf", crf, "-pix_fmt", "yuv420p", "-r", out_rate,
                         *(["-frames:v", str(total)] if total else []),
@@ -351,8 +480,6 @@ def extract_segment(
     vf_parts: list[str] = []
     if fx.get("stabilize"):
         vf_parts.append("deshake=rx=32:ry=32")
-    if is_hdr_source(source):
-        vf_parts.append(TONEMAP_CHAIN)
     if fx.get("flip") in ("h", "both"):
         vf_parts.append("hflip")
     if fx.get("flip") in ("v", "both"):
@@ -370,6 +497,10 @@ def extract_segment(
         vf_parts.append(f"scale=iw*{grow:.3f}:-2,crop=iw/{grow:.3f}:ih/{grow:.3f}")
     if crop:
         vf_parts.append(crop)
+    if is_hdr_source(source):
+        # iPhone HDR -> normal colour. After the crop, so it works on the part of the picture we keep
+        # (about a third of a landscape frame for a vertical video): the slowest step, done 2-3x faster.
+        vf_parts.append(TONEMAP_CHAIN)
     vf_parts.append(scale)
     if fx.get("gains"):
         r_, g_, b_ = fx["gains"]
@@ -424,16 +555,14 @@ def extract_segment(
     if exact:
         af_parts.append(f"apad,atrim=0:{exact / Fraction(out_rate):.5f}")
     af = ",".join(af_parts)
-    has_audio = not is_image and bool(subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
-         "stream=index", "-of", "csv=p=0", str(source)], capture_output=True, text=True).stdout.strip())
+    has_audio = not is_image and has_audio_stream(source)
 
     if draft:
         preset, crf = "ultrafast", "28"
     elif preview:
         preset, crf = "medium", "22"
     else:
-        preset, crf = "fast", "20"
+        preset, crf = "veryfast", "18"  # an in-between file: quick, with quality to spare for the last pass
 
     # -t is an *input* option so speed changes and freezes can make the output longer.
     # Clips without sound (B-roll, screen recordings) get silence so every segment concats.
@@ -449,7 +578,8 @@ def extract_segment(
         audio_args = ["-filter_complex", ";".join(parts), "-map", "0:v:0", "-map", "[aout]"]
     else:
         audio_args = ["-map", "0:v:0", "-map", a_in, "-af", af]
-    image_in = ["-loop", "1", "-framerate", out_rate] if is_image else ["-ss", f"{seg_start:.3f}"]
+    # The graphics chip decodes phone video (HEVC) when it can; FFmpeg falls back to the CPU if not.
+    image_in = ["-loop", "1", "-framerate", out_rate] if is_image else [*HWDEC, "-ss", f"{seg_start:.3f}"]
     cmd = [
         "ffmpeg", "-y",
         *image_in, "-t", f"{duration:.3f}",
@@ -464,6 +594,12 @@ def extract_segment(
         str(out_path),
     ]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+
+
+@_per_file
+def has_audio_stream(source: Path) -> bool:
+    return bool(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
+                                "stream=index", "-of", "csv=p=0", str(source)], capture_output=True, text=True).stdout.strip())
 
 
 def motion_filter(kind: str, play: float, size: tuple[int, int], rate: str) -> str:
@@ -515,6 +651,7 @@ def extract_all_segments(
         out_rate = "24"
 
     seg_paths: list[Path] = []
+    jobs: list[tuple] = []
     print(f"extracting {len(ranges)} segment(s) → {clips_dir.name}/  @ {out_rate} fps"
           f"{' (forced)' if fps is not None else ' (from source)'}")
     if is_auto:
@@ -586,10 +723,6 @@ def extract_all_segments(
                     crop = reframe_crop(src_path, start, end, aspect) or reframe_pad(src_path, aspect, *out_size)
 
         note = r.get("beat") or r.get("note") or ""
-        print(f"  [{i:02d}] {src_name}  {start:7.2f}-{end:7.2f}  ({duration:5.2f}s)  {note}"
-              + (f"  reframe {crop}" if crop else ""))
-        if is_auto:
-            print(f"        grade: {seg_filter or '(none)'}")
         fx = {k: r.get(k) for k in ("speed", "hold", "stabilize", "reverse", "speed_curve", "smooth", "flip",
                                     "rotate", "volume", "motion", "boomerang")}
         fx["voice_fx"] = r.get("voice_fx") or (edl.get("audio") or {}).get("voice_fx")
@@ -598,19 +731,57 @@ def extract_all_segments(
         if edl.get("color_match") and "status" in edl:
             from grade import match_gains
             fx["gains"] = match_gains(edl, edit_dir, i)
-        extract_segment(src_path, start, duration, seg_filter, out_path, preview=preview, draft=draft,
-                        rate=out_rate, crop=crop, out_size=out_size, fx=fx)
         spec = r.get("background") or edl.get("background")
-        if spec and (spec.get("mode") if isinstance(spec, dict) else spec) not in (None, "keep"):
-            from background import replace_background
-            replace_background(out_path, spec, edit_dir, draft)
+        if spec and (spec.get("mode") if isinstance(spec, dict) else spec) in (None, "keep"):
+            spec = None
+        key = _fingerprint(_file_sig(src_path), round(start, 4), round(duration, 4), seg_filter, crop, out_size,
+                           fx, out_rate, preview, draft, spec)
+        out_path = clips_dir / f"seg_{src_name}_{key}.mp4"
+        reused = out_path.exists() and out_path.stat().st_size > 0
+        print(f"  [{i:02d}] {src_name}  {start:7.2f}-{end:7.2f}  ({duration:5.2f}s)  {note}"
+              + ("  (unchanged, reused)" if reused else (f"  reframe {crop}" if crop else "")))
+        if is_auto and not reused:
+            print(f"        grade: {seg_filter or '(none)'}")
+        if not reused and all(j[4] != out_path for j in jobs):
+            jobs.append((src_path, start, duration, seg_filter, out_path, crop, out_size, fx, spec))
         seg_paths.append(out_path)
+
+    def build(job):
+        src_path, start, duration, seg_filter, out_path, crop, out_size, fx, spec = job
+        part = out_path.with_name(f"{out_path.stem}_part{os.getpid()}.mp4")
+        extract_segment(src_path, start, duration, seg_filter, part, preview=preview, draft=draft,
+                        rate=out_rate, crop=crop, out_size=out_size, fx=fx)
+        if spec:
+            from background import replace_background
+            replace_background(part, spec, edit_dir, draft)
+        part.replace(out_path)
+
+    if jobs:
+        print(f"  cutting {len(jobs)} changed section(s), {min(WORKERS, len(jobs))} at a time"
+              + (f"; {len(ranges) - len(jobs)} reused" if len(jobs) < len(ranges) else ""))
+        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            list(pool.map(build, jobs))  # list() re-raises the first failure
+    else:
+        print("  every section unchanged, reused")
+    _tidy_clips(clips_dir, set(seg_paths))
 
     extract_all_segments.joins = joins  # read by main() to pick lossless concat vs transitions
     extract_all_segments.rate = out_rate
     return seg_paths
 
 
+def _tidy_clips(clips_dir: Path, keep: set[Path]) -> None:
+    """Keep recent versions of sections (so undo is quick too), but don't let the folder grow forever."""
+    import time as _t
+    for p in clips_dir.glob("*_part*.mp4"):
+        if _t.time() - p.stat().st_mtime > 3600:  # a crashed render's leftovers
+            p.unlink(missing_ok=True)
+    old = sorted((p for p in clips_dir.glob("seg_*.mp4") if p not in keep), key=lambda p: p.stat().st_mtime)
+    for p in old[:max(0, len(old) - 3 * len(keep) - 20)]:
+        p.unlink(missing_ok=True)
+
+
+@_per_file
 def _duration(p: Path) -> float:
     out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
                           "-of", "default=nw=1:nk=1", str(p)], capture_output=True, text=True)
@@ -653,7 +824,7 @@ def join_with_transitions(segment_paths: list[Path], joins: list[tuple[str, floa
                          f"{acur}[a{i}]acrossfade=d={d:.3f}[aj{i}]")
             length += nxt - d
         vcur, acur = f"[vj{i}]", f"[aj{i}]"
-    preset, crf = ("ultrafast", "28") if draft else ("fast", "18")
+    preset, crf = ("ultrafast", "28") if draft else ("veryfast", "17")
     subprocess.run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", ";".join(parts),
                     "-map", vcur, "-map", acur, "-c:v", "libx264", "-preset", preset, "-crf", crf,
                     "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
@@ -808,7 +979,7 @@ def build_master_srt(edl: dict, edit_dir: Path, out_path: Path) -> None:
 # Social-media standard: -14 LUFS integrated, -1 dBTP peak, LRA 11 LU.
 # Matches YouTube / Instagram / TikTok / X / LinkedIn normalization targets.
 LOUDNORM_I = -14.0
-LOUDNORM_TP = -1.0
+LOUDNORM_TP = -1.5  # the AAC encode adds a few tenths back; QC wants -1 or lower
 LOUDNORM_LRA = 11.0
 
 
@@ -844,6 +1015,18 @@ def measure_loudness(video_path: Path) -> dict[str, str] | None:
     if not needed.issubset(data.keys()):
         return None
     return data
+
+
+def loudnorm_filter(audio_source: Path, quick: bool) -> str:
+    """The loudness filter for the last pass. Quick: one-pass estimate. Otherwise measured first
+    (sound only, so it's fast), for exact two-pass levels."""
+    base = f"loudnorm=I={LOUDNORM_I}:TP={LOUDNORM_TP}:LRA={LOUDNORM_LRA}"
+    m = None if quick else measure_loudness(audio_source)
+    if not m:
+        return base
+    print(f"    measured: I={m['input_i']} LUFS  TP={m['input_tp']}  LRA={m['input_lra']}")
+    return (f"{base}:measured_I={m['input_i']}:measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}"
+            f":measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true")
 
 
 def apply_loudnorm_two_pass(
@@ -918,6 +1101,8 @@ def build_final_composite(
     out_path: Path,
     edit_dir: Path,
     base_filter: str | None = None,
+    audio_filter: str | None = None,
+    draft: bool = False,
 ) -> None:
     """Final pass: base → zooms (base_filter) → overlays (PTS-shifted) → subtitles LAST → out.
 
@@ -926,9 +1111,12 @@ def build_final_composite(
     has_overlays = bool(overlays)
     has_subs = subtitles_path is not None and subtitles_path.exists()
 
+    audio_out = (["-af", audio_filter, "-c:a", "aac", "-b:a", "192k", "-ar", "48000"] if audio_filter
+                 else ["-c:a", "copy"])
     if not has_overlays and not has_subs and not base_filter:
-        # Nothing to do — just rename/copy base to final name
-        run(["ffmpeg", "-y", "-i", str(base_path), "-c", "copy", str(out_path)], quiet=True)
+        # Nothing to draw: keep the picture as it is
+        run(["ffmpeg", "-y", "-i", str(base_path), "-map", "0:v", "-map", "0:a", "-c:v", "copy", *audio_out,
+             "-movflags", "+faststart", str(out_path)], quiet=True)
         return
 
     inputs: list[str] = ["-i", str(base_path)]
@@ -990,21 +1178,30 @@ def build_final_composite(
 
     filter_complex = ";".join(filter_parts)
 
-    cmd = [
-        "ffmpeg", "-y",
-        *inputs,
-        "-filter_complex", filter_complex,
-        "-map", out_label,
-        "-map", "0:a",
-        "-c:v", "libx264", "-preset", "fast", "-crf", "18",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "copy",
-        "-movflags", "+faststart",
-        str(out_path),
-    ]
+    def command(video_args: list[str], graph: str) -> list[str]:
+        return ["ffmpeg", "-y", *inputs, "-filter_complex", graph, "-map", out_label, "-map", "0:a",
+                *video_args, *audio_out, "-movflags", "+faststart", str(out_path)]
+
     print(f"compositing → {out_path.name}")
     print(f"  overlays: {len(overlays)}, subtitles: {'yes' if has_subs else 'no'}")
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    # The export: the computer's encoder chip when it has one (about 3x faster for the whole pass),
+    # checked afterwards: if it lost frames or failed, the software encoder does it again.
+    hw = None if draft or out_label == "[0:v]" else hardware_encoder()
+    if hw:
+        want = _frame_count(base_path)
+        graph = filter_complex[:filter_complex.rindex("[outv]")] + ",format=nv12[outv]"
+        r = subprocess.run(command([*hw, "-r", _standard_rate(probe_source_fps(base_path) or "30")], graph),
+                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        got = _frame_count(out_path) if r.returncode == 0 else -1
+        if r.returncode == 0 and (want < 0 or abs(got - want) <= 2):
+            print("  encoded on the graphics chip")
+            return
+        print(f"  the graphics chip's encoder didn't work out ({'error' if r.returncode else f'{got} of {want} frames'}); "
+              "using the software encoder")
+    # The draft only has to look right in the Studio; the export keeps full quality.
+    soft = ["-c:v", "libx264", *(["-preset", "ultrafast", "-crf", "25"] if draft else ["-preset", "faster", "-crf", "18"]),
+            "-pix_fmt", "yuv420p"]
+    subprocess.run(command(soft, filter_complex), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 
 
 # -------- Main ---------------------------------------------------------------
@@ -1048,6 +1245,12 @@ def main() -> None:
              "--fps 30000/1001 to force.",
     )
     ap.add_argument(
+        "--prepare",
+        action="store_true",
+        help="Only build the sections, the joined cut and the sound (no output video): run in the "
+             "background after the rough cut is approved, so the export itself is quick.",
+    )
+    ap.add_argument(
         "--force",
         action="store_true",
         help="Render above draft quality even if plan.json status is not rough_approved.",
@@ -1070,6 +1273,12 @@ def main() -> None:
         sys.exit(f"plan status is '{status}': only --draft renders are allowed until the rough cut "
                  "is approved (helpers/plan.py approve <plan> rough). Use --force to override.")
 
+    mode = "draft" if args.draft else ("preview" if args.preview else "final")
+    with _RenderLock(edit_dir, mode):
+        _render(args, edl, edit_dir, out_path, status)
+
+
+def _render(args, edl: dict, edit_dir: Path, out_path: Path, status) -> None:
     # 1. Extract per-segment (auto-grade per range if EDL grade is "auto")
     segment_paths = extract_all_segments(
         edl, edit_dir, preview=args.preview, draft=args.draft, fps=args.fps
@@ -1084,18 +1293,39 @@ def main() -> None:
         base_name = "base.mp4"
     base_path = edit_dir / base_name
     joins = getattr(extract_all_segments, "joins", [])
-    if any(kind != "cut" for kind, _ in joins):
+    base_key = _fingerprint([p.name for p in segment_paths], joins, getattr(extract_all_segments, "rate", None))
+    if _reuse(base_path, base_key):
+        print(f"cut unchanged → reusing {base_name}")
+    elif any(kind != "cut" for kind, _ in joins):
         print(f"joining with {sum(k != 'cut' for k, _ in joins)} transition(s) → {base_name}")
         join_with_transitions(segment_paths, joins, base_path, extract_all_segments.rate, args.draft)
+        _stamp(base_path, base_key)
     else:
         concat_segments(segment_paths, base_path, edit_dir)
+        _stamp(base_path, base_key)
 
     # 2b. plan.json: audio polish on the continuous voice track (cleanup, music, SFX).
     if status is not None:
         import audio
         if audio.has_work(edl):
-            base_path = audio.mix(base_path, edl, edit_dir,
-                                  base_path.with_name(base_path.stem + "_mixed.mp4"))
+            mixed = base_path.with_name(base_path.stem + "_mixed.mp4")
+            # Only the sound settings matter here: a caption or title change keeps this file.
+            visual = {"title", "texts", "broll", "stickers", "graphics", "status", "version", "changes", "notes",
+                      "overlays", "grade", "adjust", "color_match", "background", "total_duration_s", "preset", "look"}
+            if not (edl.get("audio") or {}).get("sfx_on_emphasis"):
+                visual.add("captions")
+            mix_key = _fingerprint(base_key, {k: v for k, v in edl.items() if k not in visual and not k.startswith("_")},
+                                   [_file_sig(f) for f in (Path(__file__).with_name("audio.py"),)])
+            if _reuse(mixed, mix_key):
+                print(f"sound unchanged → reusing {mixed.name}")
+                base_path = mixed
+            else:
+                base_path = audio.mix(base_path, edl, edit_dir, mixed)
+                _stamp(mixed, mix_key)
+
+    if args.prepare:
+        print(f"ready: sections, cut and sound are built ({base_path.name}); the export will reuse them")
+        return
 
     # 3. Subtitles: build if requested, resolve final path
     subs_path: Path | None = None
@@ -1119,7 +1349,7 @@ def main() -> None:
     if status is not None:
         from framing import probe_size, zoom_filter
         bw, bh = probe_size(base_path)
-        zoom = zoom_filter(edl, edit_dir, bw, bh, probe_source_fps(base_path) or "30")
+        zoom = zoom_filter(edl, edit_dir, bw, bh, probe_source_fps(base_path) or "30", 1 if args.draft else 2)
         # Effects (and glitch/shake/flash cuts) act on the picture after zooms, before any text.
         from effects import build_broll_overlays, effects_chain
         edl["_edit_dir"] = str(edit_dir)
@@ -1159,19 +1389,16 @@ def main() -> None:
             if bar:
                 zoom = f"{zoom or 'null'}{bar}"
         overlays += sticker_ovs  # on top of graphics, under the captions
-    if args.no_loudnorm:
-        # Composite directly to final output
-        build_final_composite(base_path, overlays, subs_path, out_path, edit_dir, zoom)
-    else:
-        # Composite to a temp file, then run loudnorm → final output
-        tmp_composite = out_path.with_suffix(".prenorm.mp4")
-        build_final_composite(base_path, overlays, subs_path, tmp_composite, edit_dir, zoom)
+    loud = None
+    if not args.no_loudnorm:
+        # Loudness goes into the same last pass: the composite's sound is the voice track as it is.
         from audio import loudness_target
         globals()["LOUDNORM_I"] = loudness_target(edl)  # audio "loudness": quieter ... louder (normal = -14)
         print(f"loudness normalization → {LOUDNORM_I:g} LUFS / -1 dBTP / LRA 11"
               + (" (social-ready)" if LOUDNORM_I == -14 else ""))
-        apply_loudnorm_two_pass(tmp_composite, out_path, preview=args.draft)
-        tmp_composite.unlink(missing_ok=True)
+        loud = loudnorm_filter(base_path, quick=args.draft)
+    build_final_composite(base_path, overlays, subs_path, out_path, edit_dir, zoom,
+                          audio_filter=loud, draft=args.draft)
 
     # For plan.json renders, record which cut this file shows, so the Review Studio
     # can tell when the plan has moved on (rough.mp4 -> rough.json).

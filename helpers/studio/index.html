@@ -6,6 +6,7 @@
 <title>Review Studio</title>
 <link rel="stylesheet" href="/theme.css">
 <script src="/theme.js"></script>
+<script src="/account.js"></script>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -31,7 +32,25 @@
   ol.steps li.now { color: var(--ink); font-weight: 600; background: var(--accent-soft); }
   ol.steps li.now .dot { border-color: var(--accent); color: var(--accent); }
   .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  /* big screens: one slim top bar, so the video gets the height */
+  @media (min-width: 1100px) {
+    header.top { flex-wrap: nowrap; padding: 6px 14px; }
+    .actions { flex-wrap: nowrap; }
+    .actions .hint { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    ol.steps { flex-wrap: nowrap; }
+  }
+  @media (min-width: 1100px) and (max-width: 1599px) {
+    ol.steps li:not(.now) .lab { display: none; }
+    ol.steps li:not(.now) { padding-right: 3px; }
+    .themepick select { max-width: 110px; }
+    .brand .meta { display: none; }
+  }
   .actions .hint { max-width: 220px; text-align: right; }
+  #claudeAcct { white-space: nowrap; font-weight: 600; }
+  #claudeAcct.acct-off { background: var(--accent); color: var(--accent-ink, #fff); border-color: var(--accent); }
+  #claudeAcct.acct-off:not(:disabled) { animation: acctPulse 2s ease-in-out 3; }
+  #claudeAcct.acct-on { color: var(--ok, #2e9d5b); }
+  @keyframes acctPulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 35%, transparent); } }
   .themepick { display: inline-flex; align-items: center; gap: 4px; }
   .themepick select { max-width: 170px; }
   .homelink { font-weight: 700; text-decoration: none; color: var(--accent); padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); }
@@ -66,13 +85,23 @@
   .panel-h h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; }
   @media (min-width: 1100px) {
     body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-    main { flex: 1; min-height: 0; grid-template-columns: var(--lw, 320px) minmax(0, 1fr) var(--rw, 360px); grid-template-rows: minmax(0, 1fr) var(--th, 300px);
+    main { flex: 1; min-height: 0; grid-template-columns: var(--lw, 290px) minmax(0, 1fr) var(--rw, 330px); grid-template-rows: minmax(0, 1fr) var(--th, 240px);
       grid-template-areas: "left stage insp" "tl tl tl"; }
     .col { min-height: 0; display: flex; flex-direction: column; }
     .col > .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .scroll { flex: 1; min-height: 0; overflow-y: auto; }
     #stageCol { overflow: hidden; }
+    #leftCol, #inspCol, #tlCol { position: relative; }
+    main .rsz { display: block; }
   }
+  /* drag handles between the panels (double-click one to reset) */
+  .rsz { display: none; position: absolute; z-index: 6; touch-action: none; }
+  .rsz.v { top: 0; bottom: 0; width: 10px; cursor: col-resize; }
+  .rsz.h { left: 0; right: 0; height: 10px; cursor: row-resize; top: -9px; }
+  #leftCol > .rsz { right: -9px; } #inspCol > .rsz { left: -9px; }
+  .rsz::after { content: ""; position: absolute; border-radius: 3px; background: var(--line); opacity: 0; transition: opacity .15s; }
+  .rsz.v::after { top: 45%; bottom: 45%; left: 4px; width: 3px; } .rsz.h::after { left: 45%; right: 45%; top: 4px; height: 3px; }
+  .rsz:hover::after, .rsz.drag::after { opacity: 1; background: var(--accent); }
   /* panels you can fold away, for a bigger video */
   body.hide-left main { --lw: 0px; } body.hide-right main { --rw: 0px; } body.hide-tl main { --th: 0px; }
   body.hide-left #leftCol, body.hide-right #inspCol, body.hide-tl #tlCol { display: none !important; }
@@ -82,6 +111,10 @@
   .viewbar button { font-size: 12px; padding: 3px 9px; }
   .viewbar button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
   .viewbar .big { margin-left: auto; font-weight: 600; }
+  .viewbar .vsep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
+  .viewbar .clock { margin-right: 4px; }
+  .viewbar .chk { font-size: 12px; }
+  #roughMsg:empty { display: none; }
   .connect { display: flex; gap: 10px; align-items: center; background: var(--panel-2); border: 2px dashed var(--accent); border-radius: 10px; padding: 8px 10px; flex-wrap: wrap; }
   .connect .txt { flex: 1; min-width: 180px; font-size: 13px; }
   .connect .txt b { display: block; }
@@ -107,7 +140,7 @@
   .empty b { color: #fff; display: block; font-size: 16px; margin-bottom: 4px; }
   .stale { position: absolute; top: 10px; left: 10px; right: 10px; background: rgba(0,0,0,.72); color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 13px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; z-index: 2; }
   .stale button { background: #fff; color: #111; border-color: #fff; }
-  .transport { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); }
+  .transport { padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line); }
   .clock { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
   .tnotes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 84px; overflow-y: auto; }
   .tnotes li { display: flex; gap: 8px; align-items: center; font-size: 13px; background: var(--panel-2); border-radius: 7px; padding: 3px 4px; }
@@ -149,7 +182,9 @@
   .trm.noted { box-shadow: 0 0 0 3px var(--warn); }
   .tl-ph { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--warn); z-index: 5; pointer-events: none; }
   .tl-ph::before { content: ""; position: absolute; top: 0; left: -5px; border: 6px solid transparent; border-top-color: var(--warn); }
-  .ti .rz { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 2; }
+  .ti .rz { position: absolute; top: 0; bottom: 0; width: 9px; cursor: ew-resize; z-index: 2; touch-action: none; }
+  .ti.sel .rz, .ti.dragging .rz { background: rgba(255,255,255,.55); }
+  .ti.sel .rz::after { content: ""; position: absolute; top: 25%; bottom: 25%; left: 4px; width: 1px; background: rgba(0,0,0,.55); }
   .ti .rz.l { left: 0; } .ti .rz.r { right: 0; }
   .ti:hover .rz { background: rgba(255,255,255,.4); }
   .ti.dragging { opacity: .85; z-index: 6; box-shadow: 0 4px 14px rgba(0,0,0,.35); cursor: grabbing; }
@@ -262,6 +297,11 @@
   .lastmsg { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: baseline; }
   .lastmsg b { color: var(--ink); }
   .chips2 { display: flex; flex-wrap: wrap; gap: 4px; }
+  /* keep the video big: suggestions only while you're typing, Claude's last reply on one line */
+  .transport:not(:focus-within) .chips2 { display: none; }
+  .lastmsg > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  .tlplay { font-size: 15px; line-height: 1; padding: 4px 12px; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); border-radius: 99px; }
+  .tl-tools .clock { min-width: 92px; }
   .chips2 button { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--panel-2); }
   .chatlog { list-style: none; margin: 0; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
   .chatlog li { max-width: 92%; padding: 7px 10px; border-radius: 12px; font-size: 13px; white-space: pre-wrap; }
@@ -315,6 +355,7 @@
     <span id="dirtyMsg" class="meta hint">No unsaved changes</span>
     <button id="saveBtn">Save</button>
     <button id="approveBtn" class="primary">Make preview</button>
+    <button id="claudeAcct" type="button">🔑 Connect Claude</button>
     <button id="howtoBtn" title="How to use the Studio">How To Use</button>
     <label class="themepick" title="Colours of the editor (not your video)"><span aria-hidden="true">🎨</span><select id="themeSel" class="field" aria-label="Editor colours"></select></label>
   </div>
@@ -323,6 +364,7 @@
 <main>
   <!-- left: Claude's plan and the scenes -->
   <div class="col" id="leftCol">
+    <div class="rsz v" data-var="lw" title="Drag to resize"></div>
     <section class="panel">
       <div class="tabs" role="tablist" id="ltabs">
         <button role="tab" data-ltab="plan">🎬 Claude's plan</button>
@@ -347,16 +389,15 @@
         <button type="button" id="vLeft" title="Show or hide Claude's plan (left)">◧ Plan</button>
         <button type="button" id="vTl" title="Show or hide the timeline (bottom)">▤ Timeline</button>
         <button type="button" id="vRight" title="Show or hide the tools (right)">Tools ◨</button>
+        <span class="vsep"></span>
+        <span class="clock" id="clock">0:00.00</span>
+        <label class="chk meta" title="Make a new preview by itself after every change"><input type="checkbox" id="autoPv"> Auto-update</label>
+        <button id="tnoteBtn" disabled title="Pause and leave a note at this exact moment">💬 Note here</button>
+        <button id="roughBtn">Make preview</button>
         <button type="button" class="big" id="vBig" title="Hide everything and make the video as big as possible (F). Press F or Esc to come back.">⛶ Big video</button>
       </div>
       <div class="screen" id="roughArea"></div>
       <div class="transport">
-        <div class="row">
-          <span class="clock" id="clock">0:00.00</span>
-          <span class="grow"></span>
-          <button id="tnoteBtn" disabled title="Pause and leave a note at this exact moment">💬 Note at this moment</button>
-          <button id="roughBtn">Make preview</button>
-        </div>
         <div id="roughMsg" class="meta"></div>
         <form id="tnoteForm" hidden>
           <div class="row">
@@ -384,6 +425,7 @@
 
   <!-- right: what you clicked, and the style tabs -->
   <div class="col" id="inspCol">
+    <div class="rsz v" data-var="rw" title="Drag to resize"></div>
     <section class="panel">
       <div class="tabs" role="tablist" id="tabs">
         <button role="tab" data-tab="selected">✎ Selected</button>
@@ -565,16 +607,19 @@
 
   <!-- bottom: the timeline -->
   <div class="col" id="tlCol">
+    <div class="rsz h" data-var="th" title="Drag to make the timeline taller or shorter"></div>
     <section class="panel">
       <div class="tl-tools">
         <h2>Timeline</h2>
+        <button class="tlplay" id="tlPlay" title="Play or pause (Space)" aria-label="Play">▶</button>
+        <span class="clock" id="tlClock">0:00 / 0:00</span>
         <button class="sm" id="undoBtn" title="Undo (Ctrl+Z)">↶ Undo</button>
         <button class="sm" id="redoBtn" title="Redo (Ctrl+Y)">↷ Redo</button>
         <span class="sep"></span>
         <button class="sm" id="splitBtn" title="Split the scene at the playhead (Ctrl+B)">✂ Split</button>
         <button class="sm" id="dupBtn" title="Duplicate the selected piece (Ctrl+D)">⧉ Duplicate</button>
         <button class="sm" id="delBtn" title="Delete the selected piece (Delete)">🗑 Delete</button>
-        <span class="meta grow" id="tlHint">Drag pieces to move them, drag their edges to make them longer or shorter, drag scenes to reorder. Click anything to change it or give feedback.</span>
+        <span class="meta grow" id="tlHint">Drag pieces to move them. Drag the edges of any piece (scenes, voice, music, text, effects, B-roll) to make it longer or shorter. Drag scenes to reorder.</span>
         <button class="sm" id="tlOut" title="Zoom out">−</button>
         <button class="sm" id="tlFit" title="Fit the whole video">Fit</button>
         <button class="sm" id="tlIn" title="Zoom in">+</button>
@@ -629,7 +674,7 @@
       <h3>The 3 steps (top bar)</h3>
       <ol>
         <li><b>Review &amp; give notes</b>: look at Claude's plan and the timeline, give feedback, change things, <b>Save</b>.</li>
-        <li><b>Watch the preview</b>: click <b>Make preview</b> for a quick draft with the real cuts, captions, effects and sound.</li>
+        <li><b>Watch the preview</b>: click <b>Make preview</b> for a quick draft with the real cuts, captions, effects and sound. After that it <b>updates by itself</b> after every change (only what changed is redone, so it takes seconds) and swaps in at the same moment.</li>
         <li><b>Export</b>: when it looks right, click <b>Looks good</b> (twice, so it can't happen by accident), then export.</li>
       </ol>
       <p>The orange button in the top bar is always the next step. Changing something after that takes you back to step 1, so the video always matches what you saw.</p>
@@ -651,7 +696,7 @@
         <li><b>✂ Split</b> (Ctrl+B) cuts the scene at the playhead in two. <b>⧉ Duplicate</b> (Ctrl+D), <b>🗑 Delete</b> (Delete key), <b>↶ Undo</b> (Ctrl+Z) and <b>↷ Redo</b> (Ctrl+Y) work like any editor. Ctrl+S saves.</li>
         <li><b>Bigger video:</b> the buttons above the video hide the <b>Plan</b>, <b>Timeline</b> or <b>Tools</b>. <b>⛶ Big video</b> (or the F key) hides everything; F or Esc brings it all back.</li>
         <li>Click the time ruler (or any empty spot) to move the playhead. <b>+ / − / Fit</b> zoom the timeline. <b>Space</b> plays and pauses.</li>
-        <li><b>💬 Note at this moment</b> pins a note to an exact time (red pins on the ruler).</li>
+        <li><b>💬 Note here</b> pins a note to an exact time (red pins on the ruler). The round <b>▶</b> on the timeline plays and pauses. Drag the edges between panels to make the video bigger (double-click to reset).</li>
       </ul>
     </section>
     <section id="ht-tabs">
@@ -670,7 +715,7 @@
       <p><b>Right here:</b> type or say (🎤) what you want in the <b>Tell Claude</b> box under the video, e.g. <i>“make the hook punchier”</i>,
         <i>“add a whip transition here”</i>, <i>“bigger captions”</i>. Claude sees what you've selected and where the playhead is, makes the change,
         and answers in a sentence. The <b>💬 Chat</b> tab on the left keeps the conversation. Your changes are saved first, automatically.
-        This uses your own Claude account: the first time, click <b>🔑 Connect Claude</b> (here or on the Home screen), approve it in the browser page that opens, and come back.</p>
+        This uses your own Claude account: the first time, click <b>🔑 Connect Claude</b> at the top right (it turns into <b>✓ Claude connected</b>), approve it in the browser page that opens, and come back.</p>
       <p><b>Or with notes:</b> leave 💬 feedback on any piece (timeline, Claude's plan, scenes), <b>Save</b>, then tell Claude <b>“check my notes”</b> in your Claude chat.</p>
     </section>
     <section id="ht-export">
@@ -702,7 +747,7 @@ let caps = {};         // working copy of plan.captions
 let dirty = false;
 let sel = -1;          // selected scene (range index)
 let selKey = null;     // selected timeline piece
-let look = "none", ttl = {}, fxs = [], adj = {}, beat = {}, fade = {}, txts = [], stks = [], zms = [], aud = {}, capGroup = "All";
+let look = "none", ttl = {}, fxs = [], adj = {}, beat = {}, fade = {}, txts = [], stks = [], zms = [], brs = [], grs = [], aud = {}, capGroup = "All";
 
 const rlen = (r) => (r.end - r.start) * (r.speed_curve && S ? (S.speed_curves[r.speed_curve] ?? 1) : 1) / (r.speed || 1) * (r.boomerang ? 2 : 1) + (r.hold || 0);
 const fmt = (t) => { const m = Math.floor(t / 60); return `${m}:${(t - m * 60).toFixed(2).padStart(5, "0")}`; };
@@ -810,13 +855,14 @@ async function load() {
   caps = clone(S.plan.captions, {}); aud = clone(S.plan.audio, {}); look = S.plan.grade || "none";
   ttl = clone(S.plan.title, {}); fxs = clone(S.plan.effects, []); adj = clone(S.plan.adjust, {});
   beat = clone(S.plan.beat_sync, {}); fade = clone(S.plan.fade, {}); txts = clone(S.plan.texts, []);
-  stks = clone(S.plan.stickers, []); zms = clone(S.plan.zooms, []);
+  stks = clone(S.plan.stickers, []); zms = clone(S.plan.zooms, []); brs = clone(S.plan.broll, []); grs = clone(S.plan.graphics, []);
   $("oldBox").hidden = !!S.server_version;
   hist = [getState()]; hi = 0; savedState = hist[0];
   setDirty(false);
   renderChat();
   render();
   renderCaptions(); renderAudio(); renderLook(); renderTitle(); renderEffects(); renderCapLines();
+  maybeAutoPreview();
 }
 function changedAll() { render(); renderEffects(); }
 
@@ -1081,10 +1127,10 @@ function buildItems() {
   fxs.forEach((x, k) => items.push({ key: `fx:${k}`, track: "fx", t: x.duration ? x.start_in_output || 0 : 0, d: x.duration || total, kind: "fx", k, label: fxName(x.type) }));
   zms.forEach((x, k) => items.push({ key: `zm:${k}`, track: "fx", t: x.start_in_output || 0, d: x.duration || 1, kind: "zm", k, label: `🔍 ${nice(x.style || "punch")}` }));
   stks.forEach((x, k) => items.push({ key: `stk:${k}`, track: "over", t: x.start_in_output || 0, d: x.duration || 1.5, kind: "stk", k, label: x.emoji || "sticker" }));
-  (S.plan.broll || []).forEach((x, k) => items.push({ key: `br:${k}`, track: "over", t: x.start_in_output || 0, d: x.duration || 2, kind: "br", k,
+  brs.forEach((x, k) => items.push({ key: `br:${k}`, track: "over", t: x.start_in_output || 0, d: x.duration || 2, kind: "br", k,
     label: x.cutout ? "clone / cut-out" : x.mode && x.mode.startsWith("split") ? "split screen" : `B-roll${x.mode === "pip" ? " (small)" : ""}` }));
-  (S.plan.graphics || []).forEach((x, k) => items.push({ key: `gr:${k}`, track: "over", t: x.start_in_output ?? 0, d: x.duration || (x.type === "progress" ? total : 2), kind: "gr", k, label: x.type === "progress" ? "progress bar" : nice(x.type || "graphic"), under: x.type === "progress" }));
-  if ((aud.music || {}).file) items.push({ key: "music", track: "audio", t: 0, d: total, kind: "music", label: `♪ ${aud.music.file.split(/[\\/]/).pop()}`, under: true });
+  grs.forEach((x, k) => items.push({ key: `gr:${k}`, track: "over", t: x.start_in_output ?? 0, d: x.duration || (x.type === "progress" ? total : 2), kind: "gr", k, label: x.type === "progress" ? "progress bar" : nice(x.type || "graphic"), under: x.type === "progress" }));
+  if ((aud.music || {}).file) items.push({ key: "music", track: "audio", t: Math.min(total, aud.music.start_in_output || 0), d: Math.max(0.5, Math.min(aud.music.duration || total, total - (aud.music.start_in_output || 0))), kind: "music", label: `♪ ${aud.music.file.split(/[\\/]/).pop()}`, under: true });
   (aud.sfx || []).forEach((x, k) => items.push({ key: `sfx:${k}`, track: "audio", t: x.at || 0, d: 0.4, kind: "sfx", k, label: x.name || "sound" }));
   return items;
 }
@@ -1134,16 +1180,19 @@ function tiHtml(x, p) {
       <div class="strip">${imgs}</div><div class="bar" style="background:${beatColor(r.beat)}"></div><span class="lab">${x.n}. ${esc(x.label)}</span>
       <i class="rz l" data-edge="l" title="Drag to trim the start"></i><i class="rz r" data-edge="r" title="Drag to trim the end"></i></div>`;
   }
-  const handles = movable(x) ? `<i class="rz l" data-edge="l"></i><i class="rz r" data-edge="r"></i>` : "";
+  const stretch = x.kind === "voice" || (movable(x) && x.kind !== "sfx");
+  const handles = stretch ? `<i class="rz l" data-edge="l" title="Drag to change where it starts"></i><i class="rz r" data-edge="r" title="Drag to make it longer or shorter"></i>` : "";
   return `<div class="${cls}" style="${style}" data-key="${x.key}" title="${esc(x.label)}" onpointerdown="tiDown(event,'${x.key}')"><span>${esc(x.label)}</span>${handles}</div>`;
 }
 // ---- dragging on the timeline: move pieces, stretch them, reorder and trim scenes ----------------
-const movable = (x) => ["txt", "zm", "stk", "title", "sfx"].includes(x.kind) || (x.kind === "fx" && fxs[x.k] && fxs[x.k].duration);
+const movable = (x) => ["txt", "zm", "stk", "title", "sfx", "br", "music", "fx"].includes(x.kind) || (x.kind === "gr" && (grs[x.k] || {}).type !== "progress");
 function pieceRef(x) {   // the object behind a piece, and the names of its time fields
-  const o = { txt: txts, zm: zms, stk: stks, fx: fxs, sfx: aud.sfx || [] }[x.kind];
+  const o = { txt: txts, zm: zms, stk: stks, fx: fxs, sfx: aud.sfx || [], br: brs, gr: grs }[x.kind];
+  if (x.kind === "music") return { obj: aud.music, s: "start_in_output", d: "duration", dd: totals() };
+  if (x.kind === "fx") return { obj: o[x.k], s: "start_in_output", d: "duration", dd: totals(), whole: !o[x.k].duration };
   if (x.kind === "title") return { obj: ttl, s: "start_in_output", d: "duration", dd: 2.5 };
   if (x.kind === "sfx") return { obj: o[x.k], s: "at", d: null, dd: 0.4 };
-  return o ? { obj: o[x.k], s: "start_in_output", d: "duration", dd: 1.5 } : null;
+  return o ? { obj: o[x.k], s: "start_in_output", d: "duration", dd: x.kind === "br" || x.kind === "gr" ? 2 : 1.5 } : null;
 }
 function snapT(t, p) {   // stick to the playhead and scene edges when within 7 pixels
   const v = $("player"), marks = [v ? v.currentTime : playT, ...Object.values(sceneStarts()), totals()];
@@ -1155,11 +1204,13 @@ function tiDown(e, key) {
   e.stopPropagation();
   const x = itemByKey(key); if (!x) return;
   const el = e.currentTarget, edge = e.target.dataset.edge, x0 = e.clientX, p = pps();
-  const canMove = x.kind === "sec" || movable(x);
+  // A voice piece is its scene's sound: its edges trim the scene (picture and sound stay together).
+  const canMove = x.kind === "sec" || movable(x) || (x.kind === "voice" && edge);
   let moved = false, snapLine = null;
   const ref = movable(x) ? pieceRef(x) : null;
   const orig = ref ? { s: +ref.obj[ref.s] || 0, d: ref.d ? +ref.obj[ref.d] || ref.dd : ref.dd } : null;
-  const r = x.kind === "sec" ? ranges[x.i] : null, r0 = r ? { start: r.start, end: r.end } : null;
+  const r = x.kind === "sec" || x.kind === "voice" ? ranges[x.i] : null, r0 = r ? { start: r.start, end: r.end } : null;
+  const maxT = totals();
   const sp = r ? (r.speed || 1) : 1;
   el.setPointerCapture(e.pointerId);
   const showSnap = (t) => { snapLine?.remove(); snapLine = document.createElement("div"); snapLine.className = "tl-snap"; snapLine.style.left = `${LABEL_W + t * p}px`; $("tlInner").appendChild(snapLine); };
@@ -1170,7 +1221,8 @@ function tiDown(e, key) {
     moved = true; el.classList.add("dragging");
     const dt = dx / p;
     if (ref) {
-      if (edge === "r" && ref.d) { ref.obj[ref.d] = Math.max(0.2, Math.round((orig.d + dt) * 100) / 100); }
+      if (ref.whole && !edge) return;   // an effect over the whole video: drag an edge to give it a start and an end
+      if (edge === "r" && ref.d) { ref.obj[ref.d] = Math.max(0.2, Math.round(Math.min(orig.d + dt, Math.max(0.2, maxT - orig.s)) * 100) / 100); if (ref.whole) ref.obj[ref.s] = orig.s; }
       else if (edge === "l" && ref.d) {
         const s = Math.min(orig.s + orig.d - 0.2, Math.max(0, orig.s + dt));
         ref.obj[ref.s] = Math.round(s * 100) / 100; ref.obj[ref.d] = Math.round((orig.d - (s - orig.s)) * 100) / 100;
@@ -1222,7 +1274,7 @@ function movePH() {
   const ph = $("tlPh"); if (!ph) return;
   const v = $("player"); const t = v ? v.currentTime : playT;
   ph.style.left = `${LABEL_W + t * pps()}px`;
-  $("clock").textContent = `${fmt(t)} / ${fmt(totals())}`;
+  $("clock").textContent = $("tlClock").textContent = `${fmt(t)} / ${fmt(totals())}`;
   // keep the playhead in view while playing
   if (v && !v.paused) {
     const sc = $("tlScroll"), x = LABEL_W + t * pps();
@@ -1248,8 +1300,9 @@ function selectKey(key) {
 }
 function removeKey(key) {
   const [kind, k] = key.split(":");
-  const lists = { fx: fxs, zm: zms, txt: txts, stk: stks, sfx: aud.sfx || [] };
+  const lists = { fx: fxs, zm: zms, txt: txts, stk: stks, sfx: aud.sfx || [], br: brs, gr: grs };
   if (kind === "title") { ttl = {}; renderTitle(); }
+  else if (kind === "music") { delete aud.music; renderAudio(); }
   else if (lists[kind]) lists[kind].splice(+k, 1);
   delete itemNotes[key];
   if (selKey === key) selKey = null;
@@ -1329,9 +1382,9 @@ function renderSel() {
   } else if (it.kind === "sfx") {
     body = `<div class="why"><b>Sound effect</b>${esc(it.label)} at ${fmt(it.t)}</div><button onclick="removeKey('${it.key}')">Delete</button>`;
   } else {
-    const x = (it.kind === "br" ? S.plan.broll : S.plan.graphics)[it.k] || {};
+    const x = (it.kind === "br" ? brs : grs)[it.k] || {};
     body = `<div class="why"><b>What it is</b>${esc(it.label)}${x.source || x.file ? ` from ${esc(x.source || x.file)}` : ""}${x.text ? `: “${esc(x.text)}”` : ""}.
-      ${it.kind === "br" ? "Claude placed this; ask for changes below." : ""}</div>`;
+      ${it.kind === "br" ? "Claude placed this. Drag it on the timeline to move it, or drag its edges to make it longer or shorter." : ""}</div>`;
   }
   const note = noteFor(it.key);
   P.innerHTML = head + body + `<div class="feedback"><b>💬 Feedback for Claude about this ${kname.toLowerCase()}</b>
@@ -1434,14 +1487,14 @@ function setDirty(v) {
 
 // ---- undo / redo: every change you make (not your typed notes) can be stepped back ----------
 let hist = [], hi = 0, savedState = "", restoring = false;
-const getState = () => JSON.stringify({ ranges, caps, aud, look, ttl, fxs, adj, beat, fade, txts, stks, zms });
+const getState = () => JSON.stringify({ ranges, caps, aud, look, ttl, fxs, adj, beat, fade, txts, stks, zms, brs, grs });
 function pushHistory() {
   const s = getState(); if (s === hist[hi]) return;
   hist = hist.slice(0, hi + 1); hist.push(s); if (hist.length > 150) hist.shift(); hi = hist.length - 1;
 }
 function applyState(s) {
   const o = JSON.parse(s);
-  ({ ranges, caps, aud, look, ttl, fxs, adj, beat, fade, txts, stks, zms } = o);
+  ({ ranges, caps, aud, look, ttl, fxs, adj, beat, fade, txts, stks, zms } = o); brs = o.brs || []; grs = o.grs || [];
   restoring = true; setDirty(s !== savedState); restoring = false;
   if (selKey && !itemByKey(selKey)) selKey = null;
   render(); renderCaptions(); renderAudio(); renderLook(); renderTitle(); renderEffects(); renderCapLines(); renderSel();
@@ -1473,7 +1526,7 @@ function deleteSelected() {
 }
 function duplicateSelected() {
   const it = selKey && itemByKey(selKey);
-  const lists = { txt: txts, zm: zms, stk: stks, fx: fxs };
+  const lists = { txt: txts, zm: zms, stk: stks, fx: fxs, br: brs, gr: grs };
   if (!it || !lists[it.kind]) return toast("Select a text, zoom, sticker or effect to duplicate it.", true);
   const src = lists[it.kind][it.k], copy = clone(src, {});
   if (copy.duration) copy.start_in_output = Math.round(((src.start_in_output || 0) + src.duration) * 100) / 100;
@@ -1642,11 +1695,15 @@ function renderRough() {
     const src = `/media/rough.mp4?v=${r.mtime}`;
     const v = area.querySelector("video");
     if (!v || v.dataset.src !== src) {
+      // A new preview arrived: carry on from the same moment (and keep playing if it was)
+      const at = v ? v.currentTime : null, wasPlaying = v && !v.paused;
       area.innerHTML = `<video id="player" controls playsinline preload="metadata" src="${src}" data-src="${src}"></video><div class="stale" id="staleBar" hidden></div>`;
       const p = $("player");
       ["timeupdate", "seeked", "loadedmetadata"].forEach((e) => p.addEventListener(e, movePH));
       p.addEventListener("loadedmetadata", drawCapDot);
-      p.addEventListener("play", () => { const tick = () => { movePH(); if (!p.paused) requestAnimationFrame(tick); }; tick(); });
+      if (at !== null) p.addEventListener("loadedmetadata", () => { p.currentTime = Math.min(at, p.duration || at); if (wasPlaying) p.play().catch(() => {}); }, { once: true });
+      p.addEventListener("play", () => { syncPlay(); const tick = () => { movePH(); if (!p.paused) requestAnimationFrame(tick); }; tick(); });
+      ["pause", "ended"].forEach((e) => p.addEventListener(e, syncPlay));
     }
     $("tnoteBtn").disabled = false;
   } else {
@@ -1657,10 +1714,10 @@ function renderRough() {
   const bar = $("staleBar");
   if (bar) {
     bar.hidden = !(r.stale || r.state === "running");
-    bar.innerHTML = r.state === "running" ? "Making a new preview…" :
+    bar.innerHTML = r.state === "running" ? "⏳ Updating the preview with your latest changes… keep watching, it swaps in by itself." :
       `This preview is from before your latest changes. <button class="sm" onclick="primaryPreview()" ${dirty ? "disabled title='Save first'" : ""}>Make a new one</button>`;
   }
-  $("roughMsg").textContent = r.state === "running" ? "Making the preview… (a minute or two)" : r.state === "failed" ? "The preview failed. Ask Claude: “the preview failed, can you fix it?”" :
+  $("roughMsg").textContent = r.state === "running" ? (r.exists ? "Updating the preview… only the parts you changed are redone." : "Making the first preview… (the next ones are much quicker)") : r.state === "failed" ? "The preview failed. Ask Claude: “the preview failed, can you fix it?”" :
     dirty ? "Save your changes to make a new preview." : "";
   $("roughBtn").disabled = r.state === "running" || dirty || S.problems.length > 0;
   $("roughBtn").title = dirty ? "Save first" : "";
@@ -1668,12 +1725,22 @@ function renderRough() {
   $("tnotes").innerHTML = tnotes.map((n, k) => `<li><button class="sm t" onclick="seekRaw(${n.t})" title="Jump to ${fmt(n.t)}">${fmt(n.t)}</button><span>${esc(n.note)}</span><button class="sm" onclick="tnotes.splice(${k},1);setDirty(true);renderRough();renderTL()" aria-label="Delete note">✕</button></li>`).join("");
   movePH(); updateApprove();
 }
+function syncPlay() {
+  const v = $("player"), b = $("tlPlay"); if (!b) return;
+  const playing = v && !v.paused && !v.ended;
+  b.textContent = playing ? "❚❚" : "▶"; b.setAttribute("aria-label", playing ? "Pause" : "Play");
+}
+function togglePlay() {
+  const v = $("player");
+  if (!v) return toast(S && S.rough.state === "running" ? "The preview is on its way…" : "Make a preview to watch it", true);
+  v.paused || v.ended ? v.play() : v.pause();
+}
+$("tlPlay").onclick = togglePlay;
 function seek(t) { const v = $("player"); if (!v) { playT = t; movePH(); return toast("Make a preview to watch it", true); } v.currentTime = t; v.play(); }
 function seekRaw(t) { const v = $("player"); playT = t; if (v) { v.currentTime = t; v.pause(); } movePH(); }
 document.addEventListener("keydown", (e) => {
   if (e.code !== "Space" || e.target.closest?.("input,textarea,select,button,[contenteditable]")) return;
-  const v = $("player"); if (!v) return;
-  e.preventDefault(); v.paused ? v.play() : v.pause();
+  e.preventDefault(); togglePlay();
 });
 
 // ---- the 3 steps: review → preview → export ----------------------------------------------
@@ -1704,6 +1771,20 @@ function updateApprove() {
     return `<li class="${done ? "done" : k === step ? "now" : ""}" ${k === step ? 'aria-current="step"' : ""}><span class="dot">${done ? "✓" : k + 1}</span><span class="lab">${n}</span></li>`;
   }).join("");
 }
+// After every saved change (yours or Claude's) a new preview starts by itself; unchanged parts are
+// reused, so it's quick. You keep watching the old one until the new one swaps in.
+let autoT = null; const autoTried = new Set();
+const autoOn = () => store.get("studio-auto") !== "off";
+function maybeAutoPreview() {
+  clearTimeout(autoT);
+  if (!S || !autoOn() || dirty || S.problems.length || S.rough.state === "running") return;
+  if (S.rough.exists && !S.rough.stale) return;
+  const key = S.plan.version + ":" + (S.rough.mtime || 0);
+  if (autoTried.has(key)) return;  // one try per version, so a failing render can't loop
+  autoT = setTimeout(() => { if (!dirty && S.rough.state !== "running") { autoTried.add(key); primaryPreview(); } }, 900);
+}
+$("autoPv").checked = autoOn();
+$("autoPv").onchange = () => { store.set("studio-auto", $("autoPv").checked ? "on" : "off"); if ($("autoPv").checked) maybeAutoPreview(); };
 async function primaryPreview() {
   if (dirty) return toast("Save first", true);
   if (S.plan.status === "draft") {
@@ -1756,27 +1837,19 @@ function renderChat() {
 let connectPoll = null;
 function showConnect() {
   const c = S.chat || {};
-  $("connectBox").hidden = !(S.server_version && c.available && c.signed_in === false);
+  $("connectBox").hidden = !(S.server_version && c.available && (c.signed_in === false || c.error === "signin"));
   // while it's showing, keep the video big: no suggestion chips or old replies
   $("askChips").hidden = $("lastMsg").hidden = !$("connectBox").hidden;
 }
-$("connectBtn").onclick = async () => {
-  const r = await (await fetch("/api/claude-login", { method: "POST", body: "{}" })).json();
-  if (!r.ok) return toast(r.error, true);
-  $("connectBtn").textContent = "Waiting for you to approve…"; $("connectBtn").disabled = true;
-  toast("A Claude sign-in page is opening in your browser. Sign in if asked, click Authorize, then come back here.");
-  clearInterval(connectPoll);
-  const t0 = Date.now();
-  connectPoll = setInterval(async () => {
-    const st = await (await fetch("/api/claude-status")).json();
-    if (st.signed_in || Date.now() - t0 > 6 * 60000) {
-      clearInterval(connectPoll);
-      $("connectBtn").textContent = "Connect Claude"; $("connectBtn").disabled = false;
-      if (st.signed_in) { S.chat = { ...(S.chat || {}), signed_in: true }; showConnect(); renderChat(); toast("Claude is connected ✓ Tell it what to change."); $("askText").focus(); }
-      else toast("Still not connected. Click Connect Claude to try again.", true);
-    }
-  }, 3000);
-};
+$("connectBtn").onclick = () => window.connectClaude();
+document.addEventListener("claude-status", (e) => {
+  if (!S) return;
+  const was = (S.chat || {}).signed_in;
+  S.chat = { ...(S.chat || {}), signed_in: e.detail.signed_in, available: e.detail.installed ?? (S.chat || {}).available };
+  if (e.detail.signed_in && S.chat.error === "signin") S.chat.error = null;
+  showConnect();
+  if (was !== e.detail.signed_in) renderChat();
+});
 
 // ---- fold panels away for a bigger video ---------------------------------------------------------
 const view = (() => { try { return JSON.parse(store.get("studio-view") || "{}"); } catch { return {}; } })();
@@ -1808,6 +1881,28 @@ document.addEventListener("keydown", (e) => {
 });
 applyView();
 
+// Resize the panels by dragging their edges; sizes are remembered. Double-click an edge to reset.
+const SIZES = { lw: [200, 560], rw: [240, 620], th: [110, 0.62] };
+let sizes = {}; try { sizes = JSON.parse(store.get("studio-sizes") || "{}"); } catch {}
+function applySizes() { for (const k of Object.keys(SIZES)) { if (sizes[k]) document.body.style.setProperty("--" + k, sizes[k] + "px"); else document.body.style.removeProperty("--" + k); } }
+applySizes();
+document.querySelectorAll(".rsz").forEach((h) => {
+  const k = h.dataset.var;
+  h.addEventListener("dblclick", () => { delete sizes[k]; applySizes(); store.set("studio-sizes", JSON.stringify(sizes)); setTimeout(() => { renderTL(); drawCapDot(); }, 30); });
+  h.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); h.setPointerCapture(e.pointerId); h.classList.add("drag");
+    const col = h.parentElement.getBoundingClientRect();
+    const move = (ev) => {
+      let v = k === "lw" ? ev.clientX - col.left : k === "rw" ? col.right - ev.clientX : col.bottom - ev.clientY;
+      const [lo, hi] = SIZES[k];
+      v = Math.round(Math.max(lo, Math.min(hi < 1 ? window.innerHeight * hi : hi, v)));
+      sizes[k] = v; applySizes(); drawCapDot();
+    };
+    const up = () => { h.classList.remove("drag"); h.removeEventListener("pointermove", move); store.set("studio-sizes", JSON.stringify(sizes)); renderTL(); drawCapDot(); };
+    h.addEventListener("pointermove", move); h.addEventListener("pointerup", up, { once: true }); h.addEventListener("pointercancel", up, { once: true });
+  });
+});
+
 let askPoll = null;
 $("askForm").onsubmit = async (e) => {
   e.preventDefault();
@@ -1819,7 +1914,7 @@ $("askForm").onsubmit = async (e) => {
   const context = { playhead: Math.round(nowT() * 100) / 100,
     selected: it ? { what: (KIND[it.kind] || ["piece"])[0], label: it.label, at: Math.round(it.t * 100) / 100, key: it.key } : null };
   const res = await (await fetch("/api/ask", { method: "POST", body: JSON.stringify({ message, context }) })).json();
-  if (res.signin) { S.chat = { ...(S.chat || {}), signed_in: false }; showConnect(); $("connectBox").scrollIntoView({ block: "nearest" }); }
+  if (res.signin) { S.chat = { ...(S.chat || {}), signed_in: false }; showConnect(); window.checkClaude?.(); }
   if (!res.ok) return toast(res.error, true);
   $("askText").value = "";
   S.chat = { ...(S.chat || {}), state: "running", log: [...((S.chat || {}).log || []), { who: "you", text: message, at: "now" }] };
@@ -1835,7 +1930,7 @@ function watchChat() {
     const versionBefore = S.plan.version;
     await load(); renderSel();
     const last = [...(S.chat.log || [])].reverse().find((m) => m.who === "claude");
-    toast(S.plan.version !== versionBefore ? "Claude made the change. Make a new preview to see it." : (last ? last.text.slice(0, 140) : "Done."), S.chat.state === "failed");
+    toast(S.plan.version !== versionBefore ? (autoOn() ? "Claude made the change. Updating the preview…" : "Claude made the change. Make a new preview to see it.") : (last ? last.text.slice(0, 140) : "Done."), S.chat.state === "failed");
   }, 2500);
 }
 
@@ -1850,7 +1945,7 @@ async function doSave() {
     return { key, kind: choice ? "Overall choice" : (KIND[it.kind] || [key.split(":")[0]])[0], label: choice ? `the ${choice}` : it.label || key,
       at: it.t !== undefined ? Math.round(it.t * 100) / 100 : null, note: note.trim() };
   });
-  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, title: ttl, effects: fxs, zooms: zms, adjust: adj, beat_sync: beat, fade, texts: txts, stickers: stks, grade: look === "none" ? null : look, notes: { overall: $("overall").value.trim(), cards, items, timestamped: tnotes } }) })).json();
+  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, title: ttl, effects: fxs, zooms: zms, adjust: adj, beat_sync: beat, fade, texts: txts, stickers: stks, broll: brs, graphics: grs, grade: look === "none" ? null : look, notes: { overall: $("overall").value.trim(), cards, items, timestamped: tnotes } }) })).json();
   sel = -1;
   await load(); renderSel();
   return res;
@@ -1875,11 +1970,14 @@ async function makeRough() {
   if (dirty) return toast("Save first", true);
   const res = await (await fetch("/api/rough", { method: "POST", body: "{}" })).json();
   if (!res.ok) return toast(res.error, true);
+  const wasShowing = S.rough.exists;
   S.rough.state = "running"; renderRough();
   const poll = setInterval(async () => {
     const st = await (await fetch("/api/state")).json();
-    if (st.rough.state !== "running") { clearInterval(poll); S = { ...S, rough: st.rough, plan: st.plan }; render();
-      toast(st.rough.state === "done" ? "Preview ready. Press play." : "The preview failed: " + (st.rough.error || "").slice(-200), st.rough.state !== "done"); }
+    if (st.rough.state !== "running") { clearInterval(poll); S = { ...S, rough: st.rough, plan: st.plan, problems: st.problems }; render();
+      const secs = st.rough.finished && st.rough.started ? ` (${Math.round(st.rough.finished - st.rough.started)} s)` : "";
+      toast(st.rough.state === "done" ? (wasShowing ? "Preview updated ✓" + secs : "Preview ready. Press play." + secs) : "The preview failed: " + (st.rough.error || "").slice(-200), st.rough.state !== "done");
+      maybeAutoPreview(); }
   }, 1500);
 }
 $("roughBtn").onclick = primaryPreview;
