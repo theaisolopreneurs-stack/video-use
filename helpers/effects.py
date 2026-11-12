@@ -114,7 +114,8 @@ CUT_EFFECTS = {"glitch": ("glitch", 0.25), "shake": ("shake", 0.3), "flash_cut":
 
 
 def effect_list() -> list[dict]:
-    return ([{"id": "hand_wipe", "label": "Hand swipe reveal"}] + SPECIAL
+    from layers import kit  # the person-aware ones carry example settings and editable fields
+    return ([{"id": "hand_wipe", "label": "Hand swipe reveal"}] + SPECIAL + kit()
             + [{"id": k, "label": v[0]} for k, v in EFFECTS.items()])
 
 

@@ -1128,7 +1128,8 @@ function setGfxField(k, field, kind, value) {
   setDirty(true); renderTL(); renderEffects();
 }
 $("fxAdd").onclick = () => {
-  const d = +$("fxDur").value, e = { type: $("fxType").value };
+  const k = S.effects_kit.find((x) => x.id === $("fxType").value) || {};
+  const d = k.duration ? (+$("fxDur").value || k.duration) : +$("fxDur").value, e = { type: $("fxType").value, ...clone(k.defaults, {}) };
   if (d) { e.start_in_output = nowT(); e.duration = d; }
   fxs.push(e); setDirty(true); changedAll(); selectKey(`fx:${fxs.length - 1}`);
 };
@@ -1399,6 +1400,7 @@ function renderSel() {
     body = `<div class="meta">Hover to preview; click to switch this effect.</div>
       <div class="pvgrid">${pvGrid("effect", S.effects_kit.map((e) => [e.id, e.label]), x.type, "pickSelFx")}</div>
       ${x.duration ? `<div class="grid2">${t("Starts at (s)", x.start_in_output || 0, `fxs[${it.k}].start_in_output=num(this.value,0);edited()`)}${t("Lasts (s)", x.duration, `fxs[${it.k}].duration=num(this.value,1);edited()`)}</div>` : `<div class="meta">Runs for the whole video.</div>`}
+      ${fxFields(it.k)}
       <button onclick="removeKey('${it.key}')">Delete</button>`;
   } else if (it.kind === "zm") {
     const x = zms[it.k];
@@ -1442,6 +1444,24 @@ function renderSel() {
   armPreviews(P);
 }
 function pickTr(id) { const it = itemByKey(selKey); if (it && it.kind === "tr") setTrans(it.i, id || null, null); }
+// Words and settings for effects that have them (orbit ring text, head stack labels...).
+function fxFields(k) {
+  const x = fxs[k], kit = S.effects_kit.find((e) => e.id === x.type);
+  if (!kit || !kit.fields) return "";
+  const val = (f, kind) => kind === "lines" ? (x[f] || []).map((v) => (typeof v === "string" ? v : v.text || "")).join("\n") : (x[f] ?? kit.defaults?.[f] ?? "");
+  return Object.entries(kit.fields).map(([f, kind]) => `<label class="lbl">${esc(nice(f).replace(/^./, (c) => c.toUpperCase()))}${kind === "lines" ? " (one per line)" : ""}
+    ${kind === "lines" ? `<textarea class="field" rows="3" onchange="setFxField(${k}, '${f}', 'lines', this.value)">${esc(val(f, kind))}</textarea>`
+      : `<input class="field" ${kind === "number" ? 'type="number" step="0.1"' : ""} value="${esc(val(f, kind))}" onchange="setFxField(${k}, '${f}', '${kind}', this.value)">`}</label>`).join("");
+}
+function setFxField(k, f, kind, value) {
+  const x = fxs[k]; if (!x) return;
+  if (kind === "number") x[f] = +value || 0;
+  else if (kind === "lines") {
+    const lines = value.split("\n").map((l) => l.trim()).filter(Boolean);
+    x[f] = f === "labels" ? lines.map((text, j) => ({ text, at: Math.round(j * (x.duration || 2) / Math.max(1, lines.length) * 100) / 100 })) : lines;
+  } else x[f] = value;
+  edited();
+}
 function pickSelFx(id) { const it = itemByKey(selKey); if (it && it.kind === "fx") { fxs[it.k].type = id; edited(); } }
 function pickSelZm(id) { const it = itemByKey(selKey); if (it && it.kind === "zm") { zms[it.k].style = id; edited(); } }
 function edited() { setDirty(true); changedAll(); renderSel(); }

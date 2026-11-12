@@ -66,6 +66,7 @@ takes, order, hook, graphics) when you ask it to.
 | **Captions** | Font, colour, size and letter case on top of any of the 76 styles; **✨ Best / Top / Middle / Bottom / Custom** position; words to pop; emoji; **✏️ Fix the caption words**. |
 | **Look** | 40+ colour looks previewed on your footage, plus hand sliders and any `.cube` LUTs you add. |
 | **Title** | Hook title text, font, length, and "behind me". |
+| **Effects → behind and around you** | In the Effects picker: rack focus, dolly zoom, video backdrop, day dial, post wall, sketch words, orbit ring, clone row, head stack and live cursor. They find you in the picture, so artwork goes behind you or follows your head. Click one on the timeline to change its words. |
 | **Effects → Graphics** | Animated graphics with looping previews on your own video: corner tags, stacked label pills, word stamp, comment drop, voice note, incoming call, phone keyboard, file drop, screenplay page, intertitle card, a running checklist down the side, plus text cards, numbers, checklists and more. Click one, **+ Add graphic here**, then click it on the timeline to change its words. |
 | **Effects** | Effects, zooms and camera pushes, words on screen and stickers, added at the playhead. |
 | **Audio** | Clean up or isolate your voice, voice level, overall loudness, music (with ▶ Listen), ducking, sounds, fades. |

@@ -1357,6 +1357,10 @@ def _render(args, edl: dict, edit_dir: Path, out_path: Path, status) -> None:
         fx = effects_chain(edl, bw, bh)
         if fx:
             zoom = f"{zoom or 'null'}{fx}"
+        # Person-aware effects (things behind you, around your head) replace the picture for their
+        # window, so they go under everything else.
+        from layers import build_layer_overlays
+        overlays = build_layer_overlays(edl, edit_dir, base_path, args.draft) + overlays
         # B-roll cutaways sit under titles and graphics, so they go first in the overlay stack.
         if edl.get("broll"):
             overlays = build_broll_overlays(edl, edit_dir, bw, bh, probe_source_fps(base_path) or "30",

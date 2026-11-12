@@ -138,6 +138,12 @@ def preview(plan: dict, edit_dir: Path, kind: str, name: str) -> Path | None:
                      f"[o][c]overlay=enable='between(t,{0.9 - d / 2:.2f},{0.9 + d / 2:.2f})'[v]")
     elif kind == "effect":
         from effects import EFFECTS
+        import layers
+        if name in layers.FX:
+            spec = dict(layers.KIT[name][2], type=name, duration=1.8)
+            spec.pop("src", None)
+            layers.render_window(pa, ta, 1.8, spec, out, "24", size=(W, H), quality="draft")
+            return out if out.exists() else None
         if name in EFFECTS:
             chain = EFFECTS[name][1](W, H, 1.0).replace("@", "p")
             a, b = (0.6, 0.9) if name in ("blackout", "flash") else (0.45, 2)
