@@ -505,6 +505,13 @@ import layers_picture as _picture  # noqa: E402
 EFFECTS.update(_picture.EFFECTS)
 KIT.update(_picture.KIT)
 FX.update(_picture.KIT)
+# Phase 4, transitions and 3D moves (letter dive, paper tear, title card dive...).
+import layers_motion as _motion  # noqa: E402
+
+EFFECTS.update(_motion.EFFECTS)
+KIT.update(_motion.KIT)
+FX.update(_motion.KIT)
+TRANSITION_FX = dict(_motion.TRANSITIONS)  # name -> (seconds before the cut, length)
 
 
 # ---- rendering a window -----------------------------------------------------------------------------
@@ -525,6 +532,12 @@ def render_window(video: Path, t0: float, dur: float, spec: dict, out: Path, fps
     draw = EFFECTS[spec["type"]]
     tr, st = Tracker(W, H), {"n": int(round(dur * float(eval_fps(fps)))) + 2}
     rate = eval_fps(fps)
+    if spec["type"] in _motion.NEEDS_PREV:  # the picture just before the window (what tears away)
+        raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{max(0.0, t0 - 1.5 / rate):.3f}", "-i", str(video),
+                              "-frames:v", "1", "-vf", fit, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                             capture_output=True).stdout
+        if len(raw) >= W * H * 3:
+            st["prev"] = np.frombuffer(raw[:W * H * 3], np.uint8).reshape(H, W, 3).astype(np.float32)
     i = 0
     try:
         while True:
@@ -546,6 +559,21 @@ def render_window(video: Path, t0: float, dur: float, spec: dict, out: Path, fps
     return out
 
 
+def _thumbs(video: Path, edit_dir: Path, n: int) -> list[str]:
+    out = []
+    total = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of",
+                                  "default=nw=1:nk=1", str(video)], capture_output=True, text=True).stdout.strip() or 0)
+    for k in range(n):
+        p = edit_dir / "animations" / f"deck_{video.stem}_{k}.jpg"
+        if not p.exists():
+            p.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{total * (k + 0.5) / n:.2f}", "-i", str(video),
+                            "-frames:v", "1", "-vf", "scale=360:-2", str(p)], capture_output=True)
+        if p.exists():
+            out.append(str(p))
+    return out
+
+
 def eval_fps(fps: str) -> float:
     n, _, d = str(fps).partition("/")
     return float(n) / float(d or 1)
@@ -554,6 +582,17 @@ def eval_fps(fps: str) -> float:
 def build_layer_overlays(plan: dict, edit_dir: Path, base: Path, draft: bool = False) -> list[dict]:
     """One overlay clip per person-aware effect in the plan ([] if none)."""
     wanted = [e for e in plan.get("effects") or [] if e.get("type") in FX and float(e.get("duration") or 0) > 0]
+    # Scene transitions that are really effects (paper tear, letter dive...), placed on their cut.
+    from plan import range_len
+    t_cut = 0.0
+    for i, r in enumerate(plan.get("ranges") or []):
+        tr = r.get("transition") or {}
+        kind = tr.get("type") if isinstance(tr, dict) else tr
+        if i and kind in TRANSITION_FX:
+            pre, length = TRANSITION_FX[kind]
+            extra = {k: v for k, v in tr.items() if k not in ("type", "duration")} if isinstance(tr, dict) else {}
+            wanted.append({"type": kind, "start_in_output": round(max(0.0, t_cut - pre), 3), "duration": length, **extra})
+        t_cut += range_len(r)
     if not wanted:
         return []
     fps = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate",
@@ -567,6 +606,8 @@ def build_layer_overlays(plan: dict, edit_dir: Path, base: Path, draft: bool = F
         if spec.get("src"):
             from background import _resolve
             spec["_src_path"] = str(_resolve(spec["src"], edit_dir))
+        if e["type"] == "storyboard_deck":  # frames from across your own video for the cards
+            spec["_thumbs"] = _thumbs(base, edit_dir, 4)
         a, d = float(e.get("start_in_output", 0)), float(e["duration"])
         key = hashlib.sha1(json.dumps([spec, str(base), st.st_mtime_ns, st.st_size, draft, Path(__file__).stat().st_mtime],
                                       sort_keys=True, default=str).encode()).hexdigest()[:12]

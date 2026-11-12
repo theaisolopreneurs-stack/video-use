@@ -130,6 +130,19 @@ def preview(plan: dict, edit_dir: Path, kind: str, name: str) -> Path | None:
                 graph = f"[0:v]{fit}[a];[1:v]{fit}[b];[a][b]xfade=transition=custom:duration=0.6:offset=0.8:expr='{expr}'[v]"
             else:
                 graph = f"[0:v]{fit}[a];[1:v]{fit}[b];[a][b]xfade=transition={x}:duration={d}:offset=0.8[v]"
+        elif name in __import__("layers").TRANSITION_FX:  # paper tear, letter dive...: drawn on the cut
+            import layers
+            pre, length = layers.TRANSITION_FX[name]
+            tmp = out.with_name(out.stem + "_cut.mp4")
+            subprocess.run(["ffmpeg", "-v", "error", "-y", *A, *B, "-filter_complex",
+                            f"[0:v]{fit},trim=0:1,setpts=PTS-STARTPTS[a];[1:v]{fit},trim=0:1.4,setpts=PTS-STARTPTS[b];"
+                            "[a][b]concat=n=2:v=1:a=0[v]", "-map", "[v]", "-an", "-c:v", "libx264", "-preset", "veryfast",
+                            "-crf", "20", str(tmp)], capture_output=True)
+            spec = dict(layers.KIT[name][2], type=name, duration=length)
+            start = max(0.0, 1.0 - pre)
+            layers.render_window(tmp, start, min(length, 2.4 - start), spec, out, "24", size=(W, H), quality="draft")
+            tmp.unlink(missing_ok=True)
+            return out if out.exists() else None
         elif name in CUT_EFFECTS:
             fx, d = CUT_EFFECTS[name]
             chain = EFFECTS[fx][1](W, H, 1.0).replace("@", "p")

@@ -104,7 +104,8 @@ class Studio:
             "looks": self.look_list(),
             "effects_kit": __import__("effects").effect_list(),
             "graphics_kit": __import__("graphics").graphic_kit(),
-            "transitions": sorted(__import__("render").TRANSITIONS) + sorted(__import__("effects").CUT_EFFECTS),
+            "transitions": sorted(__import__("render").TRANSITIONS) + sorted(__import__("effects").CUT_EFFECTS)
+            + sorted(__import__("layers").TRANSITION_FX),
             "caption_styles": __import__("captions").style_list(),
             "caption_groups": __import__("captions").STYLE_GROUPS,
             "caption_lines": __import__("captions").caption_lines(plan, self.edit_dir),
