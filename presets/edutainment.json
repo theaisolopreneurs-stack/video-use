@@ -1,0 +1,19 @@
+{
+  "label": "Edutainment (you over the topic)",
+  "about": "The local-expert explainer: you cut out in the bottom corner, the topic full-screen behind you (aerial shots, renders, maps, listings, screen recordings), a bold headline up top and calm captions. Drop pictures or clips in a 'backdrops' folder next to your video and they're spread across it; Claude then times each one to the words.",
+  "target": {"aspect": "9:16", "max_duration_s": 60},
+  "cuts": {"max_gap": 0.5, "min_section": 1.5},
+  "pace": 1.0,
+  "hook": {"teaser": false, "auto_title": true},
+  "captions": {"style": "clean", "position": {"x": 0.3, "y": 0.66}, "max_words": 3, "auto_emphasis": true},
+  "audio": {"voice": "isolate", "music_volume_db": -26, "music": "auto"},
+  "grade": "look:clean_bright",
+  "zooms": {"auto": false},
+  "graphics": {"progress": false, "cta": false},
+  "title": {"behind_subject": false, "font": "sans", "position": "upper", "duration": 4.0, "size": 120},
+  "presenter": {"position": "bottom_right", "size": 0.58},
+  "backdrops": "auto",
+  "hand_swipes": false,
+  "exports": ["9:16"],
+  "editor_notes": "Edutainment pass. (1) Headline: a 3-6 word title with the number or claim (\"$500M EAST END MAKEOVER\") for the first 3-4 s. (2) Backdrops: one per idea, 4-10 s each, switched on the sentence that introduces the thing it shows (the street name, the price, the building); stills get a slow zoom or pan, screen recordings 'none'. If the person has no backdrops yet, list exactly what to gather for each beat (an aerial of X, the listing page for Y, a map of Z) rather than inventing images. (3) Numbered lists: a text card per item ('#2 KATY') at the top while that item is on. (4) Captions stay small and to the left of the presenter so they never cover the picture's subject. (5) If the presenter is an AI clone, say so in the post (Instagram's 'AI info' label) and keep the claims factual and sourced."
+}

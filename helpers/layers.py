@@ -34,16 +34,14 @@ from PIL import Image, ImageDraw, ImageFont
 
 import framing
 
-FONTS = Path("C:/Windows/Fonts")
 
 
 def _font(name: str, size: int) -> ImageFont.FreeTypeFont:
-    for f in (FONTS / name, Path(name)):
-        try:
-            return ImageFont.truetype(str(f), max(6, int(size)))
-        except OSError:
-            continue
-    return ImageFont.load_default()
+    import fonts  # the same font, or its closest look-alike, on Windows, Mac or Linux
+    try:
+        return ImageFont.truetype(fonts.path(name), max(6, int(size)))
+    except OSError:
+        return ImageFont.load_default(size=max(6, int(size)))
 
 
 SERIF, SERIF_I, SANS, SANS_B, MONO, HAND = ("georgia.ttf", "georgiai.ttf", "segoeui.ttf", "segoeuib.ttf",

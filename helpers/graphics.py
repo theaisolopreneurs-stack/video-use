@@ -199,12 +199,10 @@ def running_list_overlays(plan: dict, edit_dir: Path, W: int, H: int) -> list[di
         folder.mkdir(parents=True, exist_ok=True)
         u = min(W, H) / 1080
         fs = max(10, int(26 * u))
-        bold = ImageFont.truetype("C:/Windows/Fonts/segoeuib.ttf" if Path("C:/Windows/Fonts/segoeuib.ttf").exists()
-                                  else "DejaVuSans-Bold.ttf", fs)
-        reg = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf" if Path("C:/Windows/Fonts/segoeui.ttf").exists()
-                                 else "DejaVuSans.ttf", fs)
-        mono = ImageFont.truetype("C:/Windows/Fonts/consolab.ttf" if Path("C:/Windows/Fonts/consolab.ttf").exists()
-                                  else "DejaVuSansMono-Bold.ttf", max(9, int(19 * u)))
+        import fonts
+        bold = ImageFont.truetype(fonts.path("segoeuib.ttf"), fs)
+        reg = ImageFont.truetype(fonts.path("segoeui.ttf"), fs)
+        mono = ImageFont.truetype(fonts.path("consolab.ttf"), max(9, int(19 * u)))
         line = int(fs * 1.42)
         pw = int(W * 0.31) if W < H else int(W * 0.2)
         ph = int(line * n + 110 * u + (line * 1.4 if g.get("footer") else 0))

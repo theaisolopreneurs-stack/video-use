@@ -304,8 +304,30 @@ def apply_preset(plan: dict, preset: dict, edit_dir: Path, title: str | None, mu
         for s in swipes:
             plan["effects"].append({"type": "hand_wipe", "start_in_output": s["start_in_output"], "reveal": "auto"})
             notes.append(f"hand swipe at {s['start_in_output']:.1f}s: the video changes behind your hand")
+    if preset.get("presenter"):  # the "green screen explainer" layout (presenter.py)
+        plan["presenter"] = dict(preset["presenter"], **(plan.get("presenter") or {}))
+        notes.append("you in the bottom corner over the topic (presenter layout)")
+    if preset.get("backdrops") == "auto" and not plan.get("backdrops"):
+        plan["backdrops"] = auto_backdrops(plan, edit_dir)
+        notes.append(f"{len(plan['backdrops'])} backdrop(s) from the 'backdrops' folder, spread evenly (Claude times them to the words)"
+                     if plan["backdrops"] else "no backdrops yet: put pictures or clips in a 'backdrops' folder next to the video")
     plan["preset"] = preset.get("_name")
     return notes
+
+
+def auto_backdrops(plan: dict, edit_dir: Path) -> list[dict]:
+    """Every picture or clip in <video>/backdrops, in name order, sharing the video's length evenly."""
+    folder = edit_dir.parent / "backdrops"
+    exts = {".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".m4v", ".webm"}
+    files = sorted(p for p in folder.glob("*") if p.suffix.lower() in exts) if folder.is_dir() else []
+    if not files:
+        return []
+    total = planlib.total_duration(plan)
+    step = total / len(files)
+    moves = ["zoom_in", "pan_right", "zoom_out", "pan_left"]
+    return [{"file": f"backdrops/{f.name}", "start_in_output": round(k * step, 2), "duration": round(step, 2),
+             "motion": "none" if f.suffix.lower() in (".mp4", ".mov", ".m4v", ".webm") else moves[k % 4],
+             "transition": "cut" if k == 0 else "whip"} for k, f in enumerate(files)]
 
 
 def apply_inspiration(preset: dict, videos: Path, edit: Path, source: str | None, title: str | None) -> tuple[list[str], list[str]]:

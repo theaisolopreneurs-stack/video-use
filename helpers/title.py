@@ -40,7 +40,8 @@ def title_image(t: dict, brand: dict, W: int, H: int) -> Image.Image:
     font_spec = fonts.get(t.get("font", "serif")) or {}
     size = int(t.get("size", 150) * W / 1080)
     try:
-        font = ImageFont.truetype(font_spec.get("file", "C:/Windows/Fonts/georgiaz.ttf"), size)
+        import fonts
+        font = ImageFont.truetype(fonts.path(font_spec.get("file") or "georgiaz.ttf"), size)
     except OSError:
         font = ImageFont.load_default(size=size)
     text = t["text"].upper() if t.get("uppercase", True) else t["text"]

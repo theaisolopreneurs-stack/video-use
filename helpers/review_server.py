@@ -171,12 +171,12 @@ class Studio:
                 new_n = {e.get("type") for e in new_fx}
                 changed.append("effects: " + (", ".join(sorted(new_n)) or "none") +
                                (f" (removed {', '.join(sorted(old_n - new_n))})" if old_n - new_n else ""))
-            for field in ("texts", "stickers", "zooms", "broll", "graphics"):
+            for field in ("texts", "stickers", "zooms", "broll", "graphics", "backdrops"):
                 new_list = body.get(field)
                 if new_list is not None and new_list != (plan.get(field) or []):
                     settings_changed[field] = new_list
                     changed.append(f"{field}: {len(new_list)} on screen")
-            for field in ("captions", "audio", "title", "adjust", "beat_sync", "fade", "background"):
+            for field in ("captions", "audio", "title", "adjust", "beat_sync", "fade", "background", "presenter"):
                 new = body.get(field)
                 old = plan.get(field) or {}
                 if new is None or new == old:
@@ -889,18 +889,30 @@ def running_version(port: int) -> str | None:
 def replace_old_editor(port: int, handler):
     """If the editor on `port` is an older version of this one, stop it and start fresh here.
     Returns the new server, or None to leave the running one alone (same version, or not ours)."""
-    if running_version(port) == SERVER_VERSION or os.name != "nt":
+    if running_version(port) == SERVER_VERSION:
         return None
-    out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True).stdout
-    pids = {line.split()[-1] for line in out.splitlines()
-            if f"127.0.0.1:{port} " in line and "LISTEN" in line.upper()}
+    if os.name == "nt":
+        out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True).stdout
+        pids = {line.split()[-1] for line in out.splitlines()
+                if f"127.0.0.1:{port} " in line and "LISTEN" in line.upper()}
+    else:  # Mac / Linux
+        out = subprocess.run(["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"], capture_output=True, text=True).stdout
+        pids = {p.strip() for p in out.split() if p.strip().isdigit()}
+    if not pids:
+        return None
     for pid in pids:
-        cmd = subprocess.run(["powershell", "-NoProfile", "-Command",
-                              f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"],
-                             capture_output=True, text=True).stdout
+        if os.name == "nt":
+            cmd = subprocess.run(["powershell", "-NoProfile", "-Command",
+                                  f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"],
+                                 capture_output=True, text=True).stdout
+        else:
+            cmd = subprocess.run(["ps", "-o", "command=", "-p", pid], capture_output=True, text=True).stdout
         if "review_server.py" not in cmd:
             return None  # something else owns the port: don't touch it
-        subprocess.run(["taskkill", "/PID", pid, "/T", "/F"], capture_output=True)
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", pid, "/T", "/F"], capture_output=True)
+        else:
+            subprocess.run(["kill", pid], capture_output=True)
     for _ in range(20):
         try:
             return ThreadingHTTPServer(("127.0.0.1", port), handler)

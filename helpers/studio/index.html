@@ -752,7 +752,7 @@ let caps = {};         // working copy of plan.captions
 let dirty = false;
 let sel = -1;          // selected scene (range index)
 let selKey = null;     // selected timeline piece
-let look = "none", ttl = {}, fxs = [], adj = {}, beat = {}, fade = {}, txts = [], stks = [], zms = [], brs = [], grs = [], aud = {}, capGroup = "All";
+let look = "none", ttl = {}, fxs = [], adj = {}, beat = {}, fade = {}, txts = [], stks = [], zms = [], brs = [], grs = [], bds = [], pres = null, aud = {}, capGroup = "All";
 
 const rlen = (r) => (r.end - r.start) * (r.speed_curve && S ? (S.speed_curves[r.speed_curve] ?? 1) : 1) / (r.speed || 1) * (r.boomerang ? 2 : 1) + (r.hold || 0);
 const fmt = (t) => { const m = Math.floor(t / 60); return `${m}:${(t - m * 60).toFixed(2).padStart(5, "0")}`; };
@@ -860,7 +860,7 @@ async function load() {
   caps = clone(S.plan.captions, {}); aud = clone(S.plan.audio, {}); look = S.plan.grade || "none";
   ttl = clone(S.plan.title, {}); fxs = clone(S.plan.effects, []); adj = clone(S.plan.adjust, {});
   beat = clone(S.plan.beat_sync, {}); fade = clone(S.plan.fade, {}); txts = clone(S.plan.texts, []);
-  stks = clone(S.plan.stickers, []); zms = clone(S.plan.zooms, []); brs = clone(S.plan.broll, []); grs = clone(S.plan.graphics, []);
+  stks = clone(S.plan.stickers, []); zms = clone(S.plan.zooms, []); brs = clone(S.plan.broll, []); grs = clone(S.plan.graphics, []); bds = clone(S.plan.backdrops, []); pres = clone(S.plan.presenter, null);
   $("oldBox").hidden = !!S.server_version;
   hist = [getState()]; hi = 0; savedState = hist[0];
   setDirty(false);
@@ -1168,6 +1168,8 @@ function buildItems() {
   fxs.forEach((x, k) => items.push({ key: `fx:${k}`, track: "fx", t: x.duration ? x.start_in_output || 0 : 0, d: x.duration || total, kind: "fx", k, label: fxName(x.type) }));
   zms.forEach((x, k) => items.push({ key: `zm:${k}`, track: "fx", t: x.start_in_output || 0, d: x.duration || 1, kind: "zm", k, label: `🔍 ${nice(x.style || "punch")}` }));
   stks.forEach((x, k) => items.push({ key: `stk:${k}`, track: "over", t: x.start_in_output || 0, d: x.duration || 1.5, kind: "stk", k, label: x.emoji || "sticker" }));
+  bds.forEach((x, k) => items.push({ key: `bd:${k}`, track: "over", t: x.start_in_output || 0, d: x.duration || 4, kind: "bd", k,
+    label: `🖼 ${String(x.file || "backdrop").split(/[\\/]/).pop()}` }));
   brs.forEach((x, k) => items.push({ key: `br:${k}`, track: "over", t: x.start_in_output || 0, d: x.duration || 2, kind: "br", k,
     label: x.cutout ? "clone / cut-out" : x.mode && x.mode.startsWith("split") ? "split screen" : `B-roll${x.mode === "pip" ? " (small)" : ""}` }));
   grs.forEach((x, k) => items.push({ key: `gr:${k}`, track: "over", t: x.start_in_output ?? 0, d: x.duration || (x.type === "progress" ? total : 2), kind: "gr", k, label: x.type === "progress" ? "progress bar" : gfxLabel(x), under: x.type === "progress" }));
@@ -1226,9 +1228,9 @@ function tiHtml(x, p) {
   return `<div class="${cls}" style="${style}" data-key="${x.key}" title="${esc(x.label)}" onpointerdown="tiDown(event,'${x.key}')"><span>${esc(x.label)}</span>${handles}</div>`;
 }
 // ---- dragging on the timeline: move pieces, stretch them, reorder and trim scenes ----------------
-const movable = (x) => ["txt", "zm", "stk", "title", "sfx", "br", "music", "fx"].includes(x.kind) || (x.kind === "gr" && (grs[x.k] || {}).type !== "progress");
+const movable = (x) => ["txt", "zm", "stk", "title", "sfx", "br", "music", "fx", "bd"].includes(x.kind) || (x.kind === "gr" && (grs[x.k] || {}).type !== "progress");
 function pieceRef(x) {   // the object behind a piece, and the names of its time fields
-  const o = { txt: txts, zm: zms, stk: stks, fx: fxs, sfx: aud.sfx || [], br: brs, gr: grs }[x.kind];
+  const o = { txt: txts, zm: zms, stk: stks, fx: fxs, sfx: aud.sfx || [], br: brs, gr: grs, bd: bds }[x.kind];
   if (x.kind === "music") return { obj: aud.music, s: "start_in_output", d: "duration", dd: totals() };
   if (x.kind === "fx") return { obj: o[x.k], s: "start_in_output", d: "duration", dd: totals(), whole: !o[x.k].duration };
   if (x.kind === "title") return { obj: ttl, s: "start_in_output", d: "duration", dd: 2.5 };
@@ -1341,7 +1343,7 @@ function selectKey(key) {
 }
 function removeKey(key) {
   const [kind, k] = key.split(":");
-  const lists = { fx: fxs, zm: zms, txt: txts, stk: stks, sfx: aud.sfx || [], br: brs, gr: grs };
+  const lists = { fx: fxs, zm: zms, txt: txts, stk: stks, sfx: aud.sfx || [], br: brs, gr: grs, bd: bds };
   if (kind === "title") { ttl = {}; renderTitle(); }
   else if (kind === "music") { delete aud.music; renderAudio(); }
   else if (lists[kind]) lists[kind].splice(+k, 1);
@@ -1351,7 +1353,7 @@ function removeKey(key) {
 }
 const KIND = { sec: ["Scene", "var(--accent)"], voice: ["Voice", "#2c7a5b"], cap: ["Caption", "#6c5ce7"], title: ["Title", "#d35400"], txt: ["Text", "#e67e22"],
   fx: ["Effect", "#8e44ad"], zm: ["Zoom", "#2980b9"], stk: ["Sticker", "#c0392b"], br: ["Overlay", "#16a085"], gr: ["Graphic", "#27ae60"],
-  music: ["Music", "#1f6f8b"], sfx: ["Sound", "#b7950b"], tr: ["Transition", "var(--accent)"] };
+  music: ["Music", "#1f6f8b"], bd: ["Backdrop", "#5d6d7e"], sfx: ["Sound", "#b7950b"], tr: ["Transition", "var(--accent)"] };
 const num = (v, d) => (isFinite(+v) ? +v : d);
 function renderSel() {
   const it = selKey && itemByKey(selKey), P = $("selPanel");
@@ -1555,14 +1557,14 @@ function setDirty(v) {
 
 // ---- undo / redo: every change you make (not your typed notes) can be stepped back ----------
 let hist = [], hi = 0, savedState = "", restoring = false;
-const getState = () => JSON.stringify({ ranges, caps, aud, look, ttl, fxs, adj, beat, fade, txts, stks, zms, brs, grs });
+const getState = () => JSON.stringify({ ranges, caps, aud, look, ttl, fxs, adj, beat, fade, txts, stks, zms, brs, grs, bds, pres });
 function pushHistory() {
   const s = getState(); if (s === hist[hi]) return;
   hist = hist.slice(0, hi + 1); hist.push(s); if (hist.length > 150) hist.shift(); hi = hist.length - 1;
 }
 function applyState(s) {
   const o = JSON.parse(s);
-  ({ ranges, caps, aud, look, ttl, fxs, adj, beat, fade, txts, stks, zms } = o); brs = o.brs || []; grs = o.grs || [];
+  ({ ranges, caps, aud, look, ttl, fxs, adj, beat, fade, txts, stks, zms } = o); brs = o.brs || []; grs = o.grs || []; bds = o.bds || []; pres = o.pres ?? null;
   restoring = true; setDirty(s !== savedState); restoring = false;
   if (selKey && !itemByKey(selKey)) selKey = null;
   render(); renderCaptions(); renderAudio(); renderLook(); renderTitle(); renderEffects(); renderCapLines(); renderSel();
@@ -2013,7 +2015,7 @@ async function doSave() {
     return { key, kind: choice ? "Overall choice" : (KIND[it.kind] || [key.split(":")[0]])[0], label: choice ? `the ${choice}` : it.label || key,
       at: it.t !== undefined ? Math.round(it.t * 100) / 100 : null, note: note.trim() };
   });
-  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, title: ttl, effects: fxs, zooms: zms, adjust: adj, beat_sync: beat, fade, texts: txts, stickers: stks, broll: brs, graphics: grs, grade: look === "none" ? null : look, notes: { overall: $("overall").value.trim(), cards, items, timestamped: tnotes } }) })).json();
+  const res = await (await fetch("/api/save", { method: "POST", body: JSON.stringify({ ranges: kept, captions: caps, audio: aud, title: ttl, effects: fxs, zooms: zms, adjust: adj, beat_sync: beat, fade, texts: txts, stickers: stks, broll: brs, graphics: grs, backdrops: bds, presenter: pres, grade: look === "none" ? null : look, notes: { overall: $("overall").value.trim(), cards, items, timestamped: tnotes } }) })).json();
   sel = -1;
   await load(); renderSel();
   return res;

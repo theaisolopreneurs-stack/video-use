@@ -99,7 +99,9 @@ def hardware_encoder() -> list[str] | None:
     if os.name == "nt":
         cands = [["-c:v", "h264_mf", "-hw_encoding", "true", "-rate_control", "quality", "-quality", "88"]]
     elif sys.platform == "darwin":
-        cands = [["-c:v", "h264_videotoolbox", "-q:v", "62", "-allow_sw", "0"]]
+        # Apple-chip Macs: quality mode. Intel Macs' encoder has no quality mode: a generous bitrate.
+        cands = [["-c:v", "h264_videotoolbox", "-q:v", "62", "-allow_sw", "0"],
+                 ["-c:v", "h264_videotoolbox", "-b:v", "14M", "-maxrate", "20M", "-allow_sw", "0"]]
     else:
         cands = []
     for c in cands:
@@ -1325,6 +1327,11 @@ def _render(args, edl: dict, edit_dir: Path, out_path: Path, status) -> None:
             else:
                 base_path = audio.mix(base_path, edl, edit_dir, mixed)
                 _stamp(mixed, mix_key)
+
+    # 2c. The "green screen explainer" layout: you in a corner over changing backdrops (presenter.py).
+    if status is not None and edl.get("presenter"):
+        import presenter
+        base_path = presenter.apply(base_path, edl, edit_dir, args.draft)
 
     if args.prepare:
         print(f"ready: sections, cut and sound are built ({base_path.name}); the export will reuse them")

@@ -44,7 +44,8 @@ from pathlib import Path
 from PIL import ImageFont
 
 REPO = Path(__file__).resolve().parent.parent
-FONTS_DIR = "C:/Windows/Fonts"
+import fonts as _fonts  # fonts that exist on this computer (Windows, Mac or Linux)
+FONTS_DIR = _fonts.folder() or "C:/Windows/Fonts"
 POSITIONS = {"lower": 0.70, "bottom": 0.70, "middle": 0.50, "center": 0.50, "upper": 0.25, "top": 0.25}
 
 
@@ -634,6 +635,8 @@ class Writer:
                                         "file": f"{FONTS_DIR}/georgiaz.ttf"},
             **SYSTEM_FONTS,
         }
+        # Windows font names and files swapped for the closest ones on a Mac or Linux machine.
+        self.fonts = {k: _fonts.resolve(v) for k, v in self.fonts.items()}
         if s.get("font") in self.fonts:
             self.p["font"] = s["font"]
         self.font = self.fonts[self.p["font"]]
