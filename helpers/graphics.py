@@ -297,59 +297,73 @@ def build_graphics_overlays(plan: dict, edit_dir: Path, base: Path, draft: bool 
 
     lists = [g for g in plan.get("graphics") or [] if g.get("type") == "running_list"]
     list_side = (lists[0].get("side") or "right") if lists and W < H else None
-    key_src = json.dumps([graphics, list_side, brand.get("colors"), brand.get("fonts"), W, H, fps, draft,
-                          (plan.get("target") or {}).get("aspect"), (Path(__file__)).stat().st_mtime,
-                          (GFX / "templates.js").stat().st_mtime, (GFX / "templates.css").stat().st_mtime],
-                         sort_keys=True)
-    proj = edit_dir / "animations" / f"gfx_{hashlib.sha1(key_src.encode()).hexdigest()[:10]}"
-    manifest = proj / "clips.json"
-    if manifest.exists():
-        return json.loads(manifest.read_text(encoding="utf-8")) + stills
+    # Each graphic is cached on its own (by its content, not where it sits on the timeline), so moving
+    # one or changing one's words re-records only that one.
+    common = [list_side, brand.get("colors"), brand.get("fonts"), W, H, fps, draft, (plan.get("target") or {}).get("aspect"),
+              Path(__file__).stat().st_mtime, (GFX / "templates.js").stat().st_mtime, (GFX / "templates.css").stat().st_mtime]
+    cache = edit_dir / "animations" / "gfx"
+    cache.mkdir(parents=True, exist_ok=True)
 
-    proj.mkdir(parents=True, exist_ok=True)
-    for f in ("templates.js", "templates.css"):
-        shutil.copyfile(GFX / f, proj / f)
-    shutil.copyfile(GFX / "node_modules" / "gsap" / "dist" / "gsap.min.js", proj / "gsap.min.js")
+    def file_sig(f):
+        try:
+            q = Path(f) if Path(f).is_absolute() else edit_dir.parent / f
+            return [str(f), q.stat().st_mtime_ns]
+        except OSError:
+            return [str(f)]
 
-    items, t = [], 0.0
+    want = []
     for g in graphics:
-        g = dict(g)
         dur = max(0.5, min(float(g.get("duration", 2.5)), total_out or 1e9))
-        if g.get("src"):
-            g["src"] = _asset(g["src"], edit_dir, proj / "assets")
-        if g.get("srcs"):
-            g["srcs"] = [s for s in (_asset(s, edit_dir, proj / "assets") for s in g["srcs"]) if s]
-        if g["type"] == "file_drop" and not g.get("src"):  # the card shows a frame of your own video
-            still = proj / "assets" / f"frame_{len(items)}.jpg"
-            if _frame_at(plan, edit_dir, float(g.get("start_in_output", 0)) + 1.5, still):
-                g["src"] = f"assets/{still.name}"
-        g["_t0"], g["_dur"] = round(t, 3), dur
-        items.append(g)
-        t += dur
-    first = plan["ranges"][0]
-    src = Path(plan["sources"][first["source"]])
-    src = src if src.is_absolute() else edit_dir / src
-    aspect = (plan.get("target") or {}).get("aspect") or ""
-    padded = bool(aspect) and framing.reframe_pad(src, aspect, W, H) is not None
-    (proj / "index.html").write_text(composition(items, brand, W, H, fps, layout(W, H, padded), list_side), encoding="utf-8")
-
-    packed = proj / "packed.mov"
-    print(f"graphics: rendering {len(items)} graphic(s) with HyperFrames ({t:.1f}s of animation)…", flush=True)
-    res = subprocess.run(_hyperframes() + ["render", str(proj), "--format", "mov", "--quality",
-                                           "draft" if draft else "looks", "--fps", fps, "-o", str(packed)],
-                         capture_output=True, text=True, encoding="utf-8", errors="replace",
-                         env={**os.environ, "HYPERFRAMES_SKIP_SKILLS": "1", "DO_NOT_TRACK": "1",
-                              "HYPERFRAMES_TELEMETRY_DISABLED": "1"})
-    if res.returncode != 0 or not packed.exists():
-        raise RuntimeError(f"HyperFrames render failed:\n{(res.stderr or res.stdout)[-1500:]}")
-
-    clips = []
-    for i, g in enumerate(items):
-        out = proj / f"g{i:02d}_{g['type']}.mov"
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{g['_t0']:.3f}", "-i", str(packed),
-                        "-t", f"{g['_dur']:.3f}", "-c", "copy", str(out)], check=True)
-        clips.append({"file": str(out), "start_in_output": float(g.get("start_in_output", 0.0)),
-                      "duration": g["_dur"], "type": g["type"]})
-    manifest.write_text(json.dumps(clips, indent=2), encoding="utf-8")
-    print(f"graphics → {proj.name} ({len(clips)} clip(s))")
+        body = {k: v for k, v in g.items() if k != "start_in_output" or g["type"] == "file_drop"}
+        files = [file_sig(f) for f in ([g["src"]] if g.get("src") else []) + list(g.get("srcs") or [])]
+        key = hashlib.sha1(json.dumps([body, dur, files, common], sort_keys=True, default=str).encode()).hexdigest()[:12]
+        want.append((g, dur, cache / f"{key}_{g['type']}.mov"))
+    missing = [w for w in want if not w[2].exists()]
+    if missing:
+        proj = edit_dir / "animations" / "gfx_work"
+        shutil.rmtree(proj, ignore_errors=True)
+        proj.mkdir(parents=True)
+        for f in ("templates.js", "templates.css"):
+            shutil.copyfile(GFX / f, proj / f)
+        shutil.copyfile(GFX / "node_modules" / "gsap" / "dist" / "gsap.min.js", proj / "gsap.min.js")
+        items, t = [], 0.0
+        for g, dur, _ in missing:
+            g = dict(g)
+            if g.get("src"):
+                g["src"] = _asset(g["src"], edit_dir, proj / "assets")
+            if g.get("srcs"):
+                g["srcs"] = [s_ for s_ in (_asset(s_, edit_dir, proj / "assets") for s_ in g["srcs"]) if s_]
+            if g["type"] == "file_drop" and not g.get("src"):  # the card shows a frame of your own video
+                still = proj / "assets" / f"frame_{len(items)}.jpg"
+                if _frame_at(plan, edit_dir, float(g.get("start_in_output", 0)) + 1.5, still):
+                    g["src"] = f"assets/{still.name}"
+            g["_t0"], g["_dur"] = round(t, 3), dur
+            items.append(g)
+            t += dur
+        first = plan["ranges"][0]
+        src = Path(plan["sources"][first["source"]])
+        src = src if src.is_absolute() else edit_dir / src
+        aspect = (plan.get("target") or {}).get("aspect") or ""
+        padded = bool(aspect) and framing.reframe_pad(src, aspect, W, H) is not None
+        (proj / "index.html").write_text(composition(items, brand, W, H, fps, layout(W, H, padded), list_side), encoding="utf-8")
+        packed = proj / "packed.mov"
+        print(f"graphics: rendering {len(items)} new graphic(s) with HyperFrames ({t:.1f}s of animation)"
+              + (f"; {len(want) - len(missing)} unchanged, reused" if len(want) > len(missing) else "") + "…", flush=True)
+        res = subprocess.run(_hyperframes() + ["render", str(proj), "--format", "mov", "--quality",
+                                               "draft" if draft else "looks", "--fps", fps, "-o", str(packed)],
+                             capture_output=True, text=True, encoding="utf-8", errors="replace",
+                             env={**os.environ, "HYPERFRAMES_SKIP_SKILLS": "1", "DO_NOT_TRACK": "1",
+                                  "HYPERFRAMES_TELEMETRY_DISABLED": "1"})
+        if res.returncode != 0 or not packed.exists():
+            raise RuntimeError("HyperFrames render failed: " + (res.stderr or res.stdout)[-1500:])
+        for g, (_, _, out) in zip(items, missing):
+            part = out.with_name(out.stem + "_part.mov")
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{g['_t0']:.3f}", "-i", str(packed),
+                            "-t", f"{g['_dur']:.3f}", "-c", "copy", str(part)], check=True)
+            part.replace(out)
+        shutil.rmtree(proj, ignore_errors=True)
+    else:
+        print(f"graphics: all {len(want)} unchanged, reused")
+    clips = [{"file": str(out), "start_in_output": float(g.get("start_in_output", 0.0)), "duration": dur, "type": g["type"]}
+             for g, dur, out in want]
     return clips + stills

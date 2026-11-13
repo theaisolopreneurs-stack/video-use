@@ -21,6 +21,8 @@ for Claude to look at). Prints a one-line summary per finding.
 
 from __future__ import annotations
 
+import tools_path  # noqa: F401  (the fastest FFmpeg on this computer goes first on PATH)
+
 import argparse
 import json
 import re

@@ -8,6 +8,8 @@ on this video's own footage, before you choose it. Cached in <edit>/storyboard/p
 
 from __future__ import annotations
 
+import tools_path  # noqa: F401  (the fastest FFmpeg on this computer goes first on PATH)
+
 import subprocess
 import threading
 from pathlib import Path

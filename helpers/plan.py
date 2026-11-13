@@ -28,6 +28,8 @@ Usage:
 
 from __future__ import annotations
 
+import tools_path  # noqa: F401  (the fastest FFmpeg on this computer goes first on PATH)
+
 import argparse
 import json
 import shutil
@@ -61,7 +63,25 @@ def save(path: Path, plan: dict) -> None:
     path.write_text(json.dumps(plan, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+_durations: dict = {}
+
+
 def source_duration(path: Path) -> float | None:
+    """A clip's length, remembered per file (the Studio asks on every refresh)."""
+    try:
+        st = Path(path).stat()
+        key = (str(path), st.st_mtime_ns, st.st_size)
+    except OSError:
+        key = None
+    if key and key in _durations:
+        return _durations[key]
+    d = _probe_duration(path)
+    if key:
+        _durations[key] = d
+    return d
+
+
+def _probe_duration(path: Path) -> float | None:
     out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
                           "-of", "default=nw=1:nk=1", str(path)],
                          capture_output=True, text=True)

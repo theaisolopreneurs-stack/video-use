@@ -1992,7 +1992,7 @@ $("askText").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.sh
 function watchChat() {
   clearInterval(askPoll);
   askPoll = setInterval(async () => {
-    const st = await (await fetch("/api/state")).json();
+    const st = await (await fetch("/api/status")).json();
     if (st.chat.state === "running") return;
     clearInterval(askPoll);
     const versionBefore = S.plan.version;
@@ -2041,8 +2041,8 @@ async function makeRough() {
   const wasShowing = S.rough.exists;
   S.rough.state = "running"; renderRough();
   const poll = setInterval(async () => {
-    const st = await (await fetch("/api/state")).json();
-    if (st.rough.state !== "running") { clearInterval(poll); S = { ...S, rough: st.rough, plan: st.plan, problems: st.problems }; render();
+    const st = await (await fetch("/api/status")).json();
+    if (st.rough.state !== "running") { clearInterval(poll); S = { ...S, rough: st.rough, plan: { ...S.plan, version: st.version, status: st.status } }; render();
       const secs = st.rough.finished && st.rough.started ? ` (${Math.round(st.rough.finished - st.rough.started)} s)` : "";
       toast(st.rough.state === "done" ? (wasShowing ? "Preview updated ✓" + secs : "Preview ready. Press play." + secs) : "The preview failed: " + (st.rough.error || "").slice(-200), st.rough.state !== "done");
       maybeAutoPreview(); }

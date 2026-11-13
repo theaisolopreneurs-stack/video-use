@@ -83,17 +83,28 @@ def envelope(t: float, dur: float, fin: float = 0.35, fout: float = 0.3) -> floa
     return _ease(t / fin) * _ease((dur - t) / fout)
 
 
-def comp(bg: np.ndarray, fg: np.ndarray, a: np.ndarray) -> np.ndarray:
+def comp(bg: np.ndarray, fg: np.ndarray, a) -> np.ndarray:
+    """bg where a=0, fg where a=1 (a: a number, or a per-pixel map). OpenCV's blend: ~4x quicker."""
     if not isinstance(a, np.ndarray):
-        return bg if a <= 0 else (fg if a >= 1 else bg * (1 - a) + fg * a)
-    a = a[..., None] if a.ndim == 2 else a
-    return bg * (1 - a) + fg * a
+        return bg if a <= 0 else (fg if a >= 1 else cv2.addWeighted(bg, 1 - a, fg, a, 0))
+    if a.ndim == 3:
+        a = a[..., 0]
+    a = np.ascontiguousarray(a, dtype=np.float32)
+    bg = np.ascontiguousarray(bg, dtype=np.float32)
+    fg = np.ascontiguousarray(np.broadcast_to(fg, bg.shape), dtype=np.float32)
+    return cv2.blendLinear(bg, fg, 1.0 - a, a)
 
 
 def over(img: np.ndarray, layer: Image.Image) -> np.ndarray:
-    """An RGBA PIL layer drawn over a float RGB frame."""
-    la = np.asarray(layer, dtype=np.float32)
-    return comp(img, la[..., :3], la[..., 3] / 255.0)
+    """An RGBA PIL layer drawn over a float RGB frame (only where the layer has something)."""
+    box = layer.getchannel("A").getbbox()
+    if not box:
+        return img
+    x0, y0, x1, y1 = box
+    la = np.asarray(layer.crop(box), dtype=np.float32)
+    out = img.copy()
+    out[y0:y1, x0:x1] = comp(img[y0:y1, x0:x1], la[..., :3], la[..., 3] / 255.0)
+    return out
 
 
 def _rgb(h: str) -> tuple[int, int, int]:
@@ -275,14 +286,21 @@ def fx_day_dial(img, a, face, t, dur, g, st):
     sweep = 360 * min(_ease(t / 0.45), _ease((dur - t) / 0.4))
     if sweep < 1:
         return img
-    rot = st["dial"].rotate(-55 * t, resample=Image.BILINEAR)
-    pie = Image.new("L", rot.size, 0)
-    ImageDraw.Draw(pie).pieslice([0, 0, rot.width - 1, rot.height - 1], -90, -90 + sweep, fill=255)
-    rot.putalpha(Image.fromarray(np.minimum(np.asarray(rot.getchannel("A")), np.asarray(pie))))
-    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    cx, cy = int(W * float(g.get("x", 0.45))), int(H * float(g.get("y", 0.55)))
-    layer.paste(rot, (cx - R, cy - R), rot)
-    return comp(over(img, layer), img, a)
+    # Placed and turned in one OpenCV warp straight onto the frame (the image library's rotate was
+    # the slowest step), then cut to the sweeping pie with a precomputed angle map.
+    if "dial_np" not in st:
+        st["dial_np"] = np.asarray(st["dial"], np.float32)
+        yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+        cx, cy = W * float(g.get("x", 0.45)), H * float(g.get("y", 0.55))
+        st["angle"] = (np.degrees(np.arctan2(yy - cy, xx - cx)) + 90) % 360  # 0 at 12 o'clock, clockwise
+        st["centre"] = (cx, cy)
+    cx, cy = st["centre"]
+    M = cv2.getRotationMatrix2D((R, R), 55 * t, 1.0)
+    M[0, 2] += cx - R
+    M[1, 2] += cy - R
+    dial = cv2.warpAffine(st["dial_np"], M, (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+    alpha = dial[..., 3] / 255.0 * (st["angle"] <= sweep)
+    return comp(comp(img, dial[..., :3], alpha), img, a)
 
 
 def fx_post_wall(img, a, face, t, dur, g, st):

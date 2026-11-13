@@ -21,6 +21,8 @@ Usage:
 
 from __future__ import annotations
 
+import tools_path  # noqa: F401  (the fastest FFmpeg on this computer goes first on PATH)
+
 import argparse
 import functools
 import hashlib
@@ -757,6 +759,7 @@ def extract_all_segments(
         part.replace(out_path)
 
     if jobs:
+        jobs.sort(key=lambda j: -j[2])  # longest first, so the last one to finish isn't a long one
         print(f"  cutting {len(jobs)} changed section(s), {min(WORKERS, len(jobs))} at a time"
               + (f"; {len(ranges) - len(jobs)} reused" if len(jobs) < len(ranges) else ""))
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:

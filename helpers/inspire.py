@@ -20,6 +20,8 @@ sheet (inspiration/<name>_sheet.jpg) and transcript: see the "Style samples" par
 
 from __future__ import annotations
 
+import tools_path  # noqa: F401  (the fastest FFmpeg on this computer goes first on PATH)
+
 import argparse
 import hashlib
 import json

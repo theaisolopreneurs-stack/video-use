@@ -27,6 +27,8 @@ Usage:
 
 from __future__ import annotations
 
+import tools_path  # noqa: F401  (the fastest FFmpeg on this computer goes first on PATH)
+
 import argparse
 import json
 import mimetypes
@@ -117,6 +119,19 @@ class Studio:
             "chat": {"state": self.chat["state"], "error": self.chat["error"], "log": self.chat_log()[-40:],
                      "available": bool(find_claude()), "signed_in": claude_signed_in()},
         }
+
+    def status(self) -> dict:
+        """Just what changes while a preview renders or Claude works: polled every second or two."""
+        plan = planlib.load(self.plan_path)
+        rough = self.edit_dir / "rough.mp4"
+        stamp = self.edit_dir / "rough.json"
+        made = json.loads(stamp.read_text(encoding="utf-8")) if stamp.exists() else {}
+        return {"version": plan.get("version"), "status": plan.get("status"),
+                "rough": {"exists": rough.exists(), "mtime": rough.stat().st_mtime if rough.exists() else None,
+                          "stale": rough.exists() and (made.get("cut") != self.cut_signature(plan) or
+                                                       made.get("version", plan.get("version")) != plan.get("version")),
+                          **self.render},
+                "chat": {"state": self.chat["state"], "error": self.chat["error"]}}
 
     def music_files(self) -> list[Path]:
         import audio
@@ -351,8 +366,14 @@ How the plan works (from the editor's manual):
             scenes.append(f"[{i}] out {t:.2f}-{t + d:.2f}  (source {float(r['start']):.2f}-{float(r['end']):.2f}): {said}")
             t += d
         recent = [f"{m['who']}: {m['text'][:300]}" for m in self.chat_log()[-7:-1]]
-        prompt = (self.QUICK_RULES + "\n".join(sections)
-                  + "\n\n=== THIS VIDEO ===\nplan.json:\n" + json.dumps(plan, ensure_ascii=False)
+        # The rules and the manual never change between requests: sent as the system prompt, so Claude's
+        # service reuses them (prompt caching) and only this video's details are new each time.
+        rules = self.edit_dir / "storyboard" / "quick_rules.txt"
+        text = "You edit video plans and answer with a single JSON object.\n\n" + self.QUICK_RULES + "\n".join(sections)
+        if not rules.exists() or rules.read_text(encoding="utf-8") != text:
+            rules.parent.mkdir(parents=True, exist_ok=True)
+            rules.write_text(text, encoding="utf-8")
+        prompt = ("=== THIS VIDEO ===\nplan.json:\n" + json.dumps(plan, ensure_ascii=False)
                   + "\n\nScenes in order (what is said in each):\n" + "\n".join(scenes)
                   + (("\n\nEarlier in this chat:\n" + "\n".join(recent)) if recent else "")
                   + f"\n\nWhat they are looking at: {json.dumps(ctx, ensure_ascii=False)}"
@@ -360,7 +381,7 @@ How the plan works (from the editor's manual):
                   + f"\n\nThe director says: {msg}\n\nYour JSON:")
         cmd = [claude, "-p", "--output-format", "json", "--model", os.environ.get("STUDIO_QUICK_MODEL", "sonnet"),
                "--tools", "", "--strict-mcp-config", "--disable-slash-commands",
-               "--system-prompt", "You edit video plans and answer with a single JSON object."]
+               "--system-prompt-file", str(rules)]
         proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
                               cwd=str(self.edit_dir), timeout=300, env={**os.environ, "PYTHONUTF8": "1"})
         out = json.loads(proc.stdout or "{}")
@@ -632,6 +653,8 @@ def make_handler(app: App):
                 return self.send_json(j or {"state": "missing"})
             if not studio:
                 return self.send_error(404)
+            if url.path == "/api/status":  # the small, cheap answer the Studio checks while it waits
+                return self.send_json(studio.status())
             if url.path == "/api/state":
                 st = studio.state()
                 st["home"] = bool(lib)

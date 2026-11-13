@@ -17,6 +17,8 @@ defaults; Claude still does the editing judgement on top (see each preset's edit
 
 from __future__ import annotations
 
+import tools_path  # noqa: F401  (the fastest FFmpeg on this computer goes first on PATH)
+
 import argparse
 import json
 import os
@@ -420,8 +422,13 @@ def main() -> None:
     print("4/5 rough cut (draft)")
     step([str(HELPERS / "render.py"), str(plan_path), "-o", str(edit / "rough.mp4"), "--draft"])
 
-    print("5/5 quality check")
-    step([str(HELPERS / "qc.py"), str(plan_path), str(edit / "rough.mp4")])
+    if args.studio:  # open the Studio now; the quality check runs alongside and writes its report
+        print("5/5 quality check (running alongside the Studio)")
+        subprocess.Popen([sys.executable, str(HELPERS / "qc.py"), str(plan_path), str(edit / "rough.mp4")],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env={**os.environ, "PYTHONUTF8": "1"})
+    else:
+        print("5/5 quality check")
+        step([str(HELPERS / "qc.py"), str(plan_path), str(edit / "rough.mp4")])
 
     total = planlib.total_duration(plan)
     over = tgt.get("max_duration_s") and total > tgt["max_duration_s"]

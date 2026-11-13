@@ -35,6 +35,17 @@ uv sync --project "ROOT"
 
 x64 is deliberate on ARM: several audio/AI packages have no ARM wheels, and it runs under emulation.
 
+**Windows on ARM (Snapdragon) only: the faster FFmpeg.** The winget FFmpeg is an Intel/AMD build that
+runs under emulation. Ask the person first (it downloads ~136 MB from the FFmpeg-Builds project on
+GitHub), then:
+
+```bash
+"ROOT/.venv/Scripts/python.exe" "ROOT/helpers/tools_path.py" install
+```
+
+It goes to `~/.cache/ai-video-editor/ffmpeg-arm64/` (kept across plugin updates) and the editor uses it
+automatically from then on (25-30% faster everywhere, same picture). Keep the winget FFmpeg too.
+
 **macOS / Linux:**
 
 ```bash
